@@ -24,6 +24,7 @@ router.get('/', async (req, res) => {
     );
     res.render('dashboard', { user: req.user, corporations: corps.rows });
   } catch (err) {
+    console.error('Dashboard error:', err.message, err.stack);
     res.render('error', { message: 'Erro ao carregar dashboard', user: req.user });
   }
 });
@@ -84,6 +85,7 @@ router.get('/corp/:corpId', async (req, res) => {
       isHighRank,
     });
   } catch (err) {
+    console.error('Corp manage error:', err.message, err.stack);
     res.render('error', { message: 'Erro ao carregar corporação', user: req.user });
   }
 });

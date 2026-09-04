@@ -78,6 +78,11 @@ async function start() {
       );
       CREATE INDEX IF NOT EXISTS idx_session_expire ON session(expire);
     `);
+    // Adiciona colunas que podem faltar em tabelas já existentes
+    await pool.query(`
+      ALTER TABLE corporations ADD COLUMN IF NOT EXISTS icon_data BYTEA;
+      ALTER TABLE corporations ADD COLUMN IF NOT EXISTS icon_mime VARCHAR(64);
+    `);
     console.log('✅ Banco migrado');
   } catch (err) {
     console.error('❌ Migração falhou:', err.message);
