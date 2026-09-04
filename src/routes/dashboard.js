@@ -17,9 +17,7 @@ router.get('/', async (req, res) => {
             SELECT m.corporation_id FROM members m
             JOIN ranks r ON m.rank_id = r.id
             WHERE m.user_id = $1
-            AND r.level IN (
-              SELECT level FROM ranks r2 WHERE r2.corporation_id = m.corporation_id ORDER BY level DESC LIMIT 2
-            )
+            AND (SELECT COUNT(DISTINCT r2.level) FROM ranks r2 WHERE r2.corporation_id = m.corporation_id AND r2.level > r.level) < 2
           )
        ORDER BY c.name`,
       [req.user.id]
@@ -42,9 +40,7 @@ router.get('/corp/:corpId', async (req, res) => {
            SELECT m.corporation_id FROM members m
            JOIN ranks r ON m.rank_id = r.id
            WHERE m.user_id = $2
-           AND r.level IN (
-             SELECT level FROM ranks r2 WHERE r2.corporation_id = m.corporation_id ORDER BY level DESC LIMIT 2
-           )
+           AND (SELECT COUNT(DISTINCT r2.level) FROM ranks r2 WHERE r2.corporation_id = m.corporation_id AND r2.level > r.level) < 2
          )
        )`,
       [req.params.corpId, req.user.id]
