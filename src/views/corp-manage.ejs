@@ -171,7 +171,6 @@
         </table>
       </div>
     </div>
-  </div>
 
     <!-- CONFIGURAÇÕES -->
     <div class="panel" id="panel-config">
@@ -209,7 +208,23 @@
         </div>
       </div>
       <button class="btn" onclick="saveConfig()">Salvar</button>
+
+      <div style="margin-top:2rem;padding-top:1.5rem;border-top:1px solid #1e2a40">
+        <h3 style="font-size:0.9rem;margin-bottom:1rem;color:#00d4ff">Co-Gerentes</h3>
+        <div class="form-row">
+          <div class="form-group">
+            <label>ID do Usuário</label>
+            <input type="number" id="mgr-user-id" placeholder="Ex: 2">
+          </div>
+          <div class="form-group" style="max-width:140px;justify-content:flex-end">
+            <button class="btn" onclick="addManager()">Adicionar</button>
+          </div>
+        </div>
+        <div id="managers-list" style="display:flex;flex-direction:column;gap:0.5rem"></div>
+      </div>
     </div>
+
+  </div>
 
   <script>
     const CORP_ID = '<%= corporation.id %>';
@@ -289,6 +304,55 @@
       showAlert('Configurações salvas!', 'success');
       setTimeout(() => location.reload(), 500);
     }
+
+    // Co-gerentes
+    async function loadManagers() {
+      const res = await fetch('/api/corps/' + CORP_ID + '/managers');
+      const data = await res.json();
+      const list = document.getElementById('managers-list');
+      if (!data.managers || data.managers.length === 0) {
+        list.innerHTML = '<div class="empty">Nenhum co-gerente adicionado.</div>';
+        return;
+      }
+      list.innerHTML = data.managers.map(function(m) {
+        return '<div class="rank-item">' +
+          '<div class="rank-info">' +
+            '<span class="rank-name">' + (m.discord_username || m.roblox_username || 'User #' + m.user_id) + '</span>' +
+            '<span class="rank-salary" style="color:#7a8ba5">ID: ' + m.user_id + '</span>' +
+          '</div>' +
+          '<div class="rank-actions">' +
+            '<button class="btn-sm danger" onclick="removeManager(' + m.id + ')">Remover</button>' +
+          '</div>' +
+        '</div>';
+      }).join('');
+    }
+
+    async function addManager() {
+      const userId = document.getElementById('mgr-user-id').value;
+      if (!userId) return showAlert('Informe o ID do usuário', 'error');
+      const res = await fetch('/api/corps/' + CORP_ID + '/managers', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ user_id: parseInt(userId) })
+      });
+      const data = await res.json();
+      if (data.error) return showAlert(data.error, 'error');
+      showAlert('Co-gerente adicionado!', 'success');
+      document.getElementById('mgr-user-id').value = '';
+      loadManagers();
+    }
+
+    async function removeManager(managerId) {
+      if (!confirm('Remover este co-gerente?')) return;
+      await fetch('/api/corps/' + CORP_ID + '/managers/' + managerId, { method: 'DELETE' });
+      showAlert('Co-gerente removido', 'success');
+      loadManagers();
+    }
+
+    // Carrega co-gerentes ao abrir a aba config
+    document.querySelector('[data-tab="config"]').addEventListener('click', loadManagers);
+    // Carrega também se config já estiver ativa
+    if (document.querySelector('[data-tab="config"]').classList.contains('active')) loadManagers();
   </script>
 </body>
 </html>

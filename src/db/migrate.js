@@ -56,6 +56,16 @@ CREATE TABLE IF NOT EXISTS members (
   UNIQUE(corporation_id, user_id)
 );
 
+-- Co-gerentes (acesso compartilhado a corporações)
+CREATE TABLE IF NOT EXISTS corp_managers (
+  id SERIAL PRIMARY KEY,
+  corporation_id INTEGER REFERENCES corporations(id) ON DELETE CASCADE,
+  user_id INTEGER REFERENCES users(id) ON DELETE CASCADE,
+  added_at TIMESTAMP DEFAULT NOW(),
+  UNIQUE(corporation_id, user_id)
+);
+CREATE INDEX IF NOT EXISTS idx_corp_managers_user ON corp_managers(user_id);
+
 -- Índices para consultas rápidas do jogo
 CREATE INDEX IF NOT EXISTS idx_members_user_id ON members(user_id);
 CREATE INDEX IF NOT EXISTS idx_members_corp_id ON members(corporation_id);

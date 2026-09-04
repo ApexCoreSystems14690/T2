@@ -182,6 +182,65 @@ router.delete('/:corpId/members/:memberId', requireCorpOwner, async (req, res) =
   }
 });
 
+// DELETE /api/corps/:corpId — excluir corporação (somente dono)
+router.delete('/:corpId', requireCorpOwner, async (req, res) => {
+  try {
+    if (!req.isOwner) {
+      return res.status(403).json({ error: 'Apenas o dono pode excluir a corporação' });
+    }
+    await pool.query('DELETE FROM corporations WHERE id = $1', [req.params.corpId]);
+    res.json({ ok: true });
+  } catch (err) {
+    res.status(500).json({ error: 'Erro interno' });
+  }
+});
+
+// GET /api/corps/:corpId/managers — listar co-gerentes
+router.get('/:corpId/managers', requireCorpOwner, async (req, res) => {
+  try {
+    const result = await pool.query(
+      `SELECT cm.id, cm.added_at, u.id as user_id, u.discord_username, u.roblox_username, u.roblox_id
+       FROM corp_managers cm JOIN users u ON cm.user_id = u.id
+       WHERE cm.corporation_id = $1 ORDER BY cm.added_at`,
+      [req.params.corpId]
+    );
+    res.json({ managers: result.rows });
+  } catch (err) {
+    res.status(500).json({ error: 'Erro interno' });
+  }
+});
+
+// POST /api/corps/:corpId/managers — adicionar co-gerente
+router.post('/:corpId/managers', requireCorpOwner, async (req, res) => {
+  try {
+    const { user_id } = req.body;
+    if (!user_id) return res.status(400).json({ error: 'user_id é obrigatório' });
+    const result = await pool.query(
+      'INSERT INTO corp_managers (corporation_id, user_id) VALUES ($1, $2) RETURNING *',
+      [req.params.corpId, user_id]
+    );
+    res.json({ manager: result.rows[0] });
+  } catch (err) {
+    if (err.code === '23505') {
+      return res.status(400).json({ error: 'Usuário já é co-gerente' });
+    }
+    res.status(500).json({ error: 'Erro interno' });
+  }
+});
+
+// DELETE /api/corps/:corpId/managers/:managerId — remover co-gerente
+router.delete('/:corpId/managers/:managerId', requireCorpOwner, async (req, res) => {
+  try {
+    await pool.query(
+      'DELETE FROM corp_managers WHERE id = $1 AND corporation_id = $2',
+      [req.params.managerId, req.params.corpId]
+    );
+    res.json({ ok: true });
+  } catch (err) {
+    res.status(500).json({ error: 'Erro interno' });
+  }
+});
+
 // POST /api/corps — criar corporação (qualquer usuário logado)
 router.post('/', async (req, res) => {
   try {

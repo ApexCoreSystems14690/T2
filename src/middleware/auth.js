@@ -13,21 +13,33 @@ function requireApiKey(req, res, next) {
   next();
 }
 
-// Verifica se o usuário é dono da corporação
+// Verifica se o usuário é dono ou co-gerente da corporação
 async function requireCorpOwner(req, res, next) {
   const pool = require('../db/pool');
   const corpId = req.params.corpId || req.body.corporation_id;
 
   try {
-    const result = await pool.query(
+    // Primeiro tenta como dono
+    let result = await pool.query(
       'SELECT * FROM corporations WHERE id = $1 AND owner_id = $2',
       [corpId, req.user.id]
     );
-    if (result.rows.length === 0) {
-      return res.status(403).json({ error: 'Você não é dono desta corporação' });
+    if (result.rows.length > 0) {
+      req.corporation = result.rows[0];
+      req.isOwner = true;
+      return next();
     }
-    req.corporation = result.rows[0];
-    next();
+    // Depois tenta como co-gerente
+    const mgr = await pool.query(
+      'SELECT c.* FROM corporations c JOIN corp_managers cm ON cm.corporation_id = c.id WHERE c.id = $1 AND cm.user_id = $2',
+      [corpId, req.user.id]
+    );
+    if (mgr.rows.length > 0) {
+      req.corporation = mgr.rows[0];
+      req.isOwner = false;
+      return next();
+    }
+    return res.status(403).json({ error: 'Você não tem acesso a esta corporação' });
   } catch (err) {
     res.status(500).json({ error: 'Erro interno' });
   }

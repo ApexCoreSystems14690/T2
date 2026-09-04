@@ -9,7 +9,10 @@ router.get('/', async (req, res) => {
   try {
     const corps = await pool.query(
       `SELECT c.*, (SELECT COUNT(*) FROM members WHERE corporation_id = c.id) as member_count
-       FROM corporations c WHERE c.owner_id = $1 ORDER BY c.name`,
+       FROM corporations c
+       WHERE c.owner_id = $1
+          OR c.id IN (SELECT corporation_id FROM corp_managers WHERE user_id = $1)
+       ORDER BY c.name`,
       [req.user.id]
     );
     res.render('dashboard', { user: req.user, corporations: corps.rows });
@@ -22,7 +25,8 @@ router.get('/', async (req, res) => {
 router.get('/corp/:corpId', async (req, res) => {
   try {
     const corp = await pool.query(
-      'SELECT * FROM corporations WHERE id = $1 AND owner_id = $2',
+      `SELECT * FROM corporations WHERE id = $1
+       AND (owner_id = $2 OR id IN (SELECT corporation_id FROM corp_managers WHERE user_id = $2))`,
       [req.params.corpId, req.user.id]
     );
     if (corp.rows.length === 0) return res.redirect('/dashboard');

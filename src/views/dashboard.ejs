@@ -82,7 +82,10 @@
               <div class="corp-members"><%= corp.member_count %> membros</div>
             </div>
           </div>
-          <a href="/dashboard/corp/<%= corp.id %>" class="corp-btn">Gerenciar</a>
+          <div style="display:flex;gap:0.5rem;align-items:center">
+            <a href="/dashboard/corp/<%= corp.id %>" class="corp-btn">Gerenciar</a>
+            <button class="corp-btn" style="color:#ef4444;border-color:#ef444433;cursor:pointer;background:none" onclick="excluirCorp(<%= corp.id %>, '<%= corp.name.replace(/'/g, "\\'") %>')">Excluir</button>
+          </div>
         </div>
       <% }) %>
     <% } %>
@@ -118,6 +121,17 @@
         .replace(/\s+/g, '-').replace(/[^a-z0-9-]/g, '');
       document.getElementById('corpSlug').value = slug;
     });
+
+    async function excluirCorp(id, name) {
+      if (!confirm('Tem certeza que quer excluir "' + name + '"? Isso remove todos os cargos e membros!')) return;
+      if (!confirm('ÚLTIMA CHANCE! Excluir "' + name + '" permanentemente?')) return;
+      try {
+        const res = await fetch('/api/corps/' + id, { method: 'DELETE' });
+        const data = await res.json();
+        if (!res.ok) { alert(data.error || 'Erro ao excluir'); return; }
+        window.location.reload();
+      } catch (err) { alert('Erro de conexão'); }
+    }
 
     async function criarCorp() {
       const name = document.getElementById('corpName').value.trim();
