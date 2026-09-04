@@ -72,7 +72,9 @@
       <% corporations.forEach(corp => { %>
         <div class="corp-card">
           <div class="corp-info">
-            <% if (corp.icon_url) { %>
+            <% if (corp.has_icon_file) { %>
+              <img src="/api/corps/<%= corp.id %>/icon" class="corp-icon" alt="<%= corp.name %>">
+            <% } else if (corp.icon_url) { %>
               <img src="<%= corp.icon_url %>" class="corp-icon" alt="<%= corp.name %>">
             <% } else { %>
               <div class="corp-color" style="background: <%= corp.color %>"></div>
@@ -101,8 +103,9 @@
       <input type="text" id="corpSlug" placeholder="Ex: policia-militar">
       <label>Descrição (opcional)</label>
       <textarea id="corpDesc" placeholder="Descrição da corporação"></textarea>
-      <label>Imagem / Logo (URL)</label>
-      <input type="text" id="corpIcon" placeholder="https://i.imgur.com/exemplo.png">
+      <label>Imagem / Logo</label>
+      <input type="file" id="corpIconFile" accept="image/png,image/jpeg,image/gif,image/webp" style="margin-bottom:0.5rem">
+      <input type="text" id="corpIcon" placeholder="Ou cole uma URL: https://i.imgur.com/exemplo.png" style="font-size:0.8rem">
       <label>Cor</label>
       <input type="color" id="corpColor" value="#3B82F6" style="height: 36px; padding: 2px;">
       <div class="error-msg" id="createError"></div>
@@ -139,6 +142,7 @@
       const description = document.getElementById('corpDesc').value.trim();
       const icon_url = document.getElementById('corpIcon').value.trim();
       const color = document.getElementById('corpColor').value;
+      const iconFile = document.getElementById('corpIconFile').files[0];
       const errorEl = document.getElementById('createError');
 
       if (!name || !slug) {
@@ -148,16 +152,23 @@
       }
 
       try {
+        // 1. Cria a corp
         const res = await fetch('/api/corps', {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ name, slug, description, color, icon_url })
+          body: JSON.stringify({ name, slug, description, color, icon_url: iconFile ? null : icon_url })
         });
         const data = await res.json();
         if (!res.ok) {
           errorEl.textContent = data.error || 'Erro ao criar';
           errorEl.style.display = 'block';
           return;
+        }
+        // 2. Se tem arquivo, faz upload
+        if (iconFile && data.corporation) {
+          const form = new FormData();
+          form.append('icon', iconFile);
+          await fetch('/api/corps/' + data.corporation.id + '/icon', { method: 'POST', body: form });
         }
         window.location.reload();
       } catch (err) {

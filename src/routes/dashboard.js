@@ -8,10 +8,19 @@ router.use(requireAuth);
 router.get('/', async (req, res) => {
   try {
     const corps = await pool.query(
-      `SELECT c.*, (SELECT COUNT(*) FROM members WHERE corporation_id = c.id) as member_count
+      `SELECT c.*, (SELECT COUNT(*) FROM members WHERE corporation_id = c.id) as member_count,
+              (icon_data IS NOT NULL) as has_icon_file
        FROM corporations c
        WHERE c.owner_id = $1
           OR c.id IN (SELECT corporation_id FROM corp_managers WHERE user_id = $1)
+          OR c.id IN (
+            SELECT m.corporation_id FROM members m
+            JOIN ranks r ON m.rank_id = r.id
+            WHERE m.user_id = $1
+            AND r.level IN (
+              SELECT level FROM ranks r2 WHERE r2.corporation_id = m.corporation_id ORDER BY level DESC LIMIT 2
+            )
+          )
        ORDER BY c.name`,
       [req.user.id]
     );
@@ -25,11 +34,37 @@ router.get('/', async (req, res) => {
 router.get('/corp/:corpId', async (req, res) => {
   try {
     const corp = await pool.query(
-      `SELECT * FROM corporations WHERE id = $1
-       AND (owner_id = $2 OR id IN (SELECT corporation_id FROM corp_managers WHERE user_id = $2))`,
+      `SELECT *, (icon_data IS NOT NULL) as has_icon_file FROM corporations WHERE id = $1
+       AND (
+         owner_id = $2
+         OR id IN (SELECT corporation_id FROM corp_managers WHERE user_id = $2)
+         OR id IN (
+           SELECT m.corporation_id FROM members m
+           JOIN ranks r ON m.rank_id = r.id
+           WHERE m.user_id = $2
+           AND r.level IN (
+             SELECT level FROM ranks r2 WHERE r2.corporation_id = m.corporation_id ORDER BY level DESC LIMIT 2
+           )
+         )
+       )`,
       [req.params.corpId, req.user.id]
     );
     if (corp.rows.length === 0) return res.redirect('/dashboard');
+
+    const corpData = corp.rows[0];
+    const isOwner = corpData.owner_id === req.user.id;
+
+    // Checa se é co-gerente
+    let isManager = false;
+    if (!isOwner) {
+      const mgrCheck = await pool.query(
+        'SELECT 1 FROM corp_managers WHERE corporation_id = $1 AND user_id = $2',
+        [req.params.corpId, req.user.id]
+      );
+      isManager = mgrCheck.rows.length > 0;
+    }
+
+    const isHighRank = !isOwner && !isManager; // se chegou aqui e não é dono nem co-gerente, é highRank
 
     const ranks = await pool.query(
       'SELECT * FROM ranks WHERE corporation_id = $1 ORDER BY level DESC',
@@ -46,9 +81,11 @@ router.get('/corp/:corpId', async (req, res) => {
 
     res.render('corp-manage', {
       user: req.user,
-      corporation: corp.rows[0],
+      corporation: corpData,
       ranks: ranks.rows,
       members: members.rows,
+      isOwner,
+      isHighRank,
     });
   } catch (err) {
     res.render('error', { message: 'Erro ao carregar corporação', user: req.user });

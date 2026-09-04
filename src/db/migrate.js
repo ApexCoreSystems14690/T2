@@ -26,6 +26,8 @@ CREATE TABLE IF NOT EXISTS corporations (
   description TEXT,
   color VARCHAR(7) DEFAULT '#3B82F6',
   icon_url TEXT,
+  icon_data BYTEA,
+  icon_mime VARCHAR(64),
   owner_id INTEGER REFERENCES users(id) ON DELETE SET NULL,
   max_members INTEGER DEFAULT 100,
   is_active BOOLEAN DEFAULT true,

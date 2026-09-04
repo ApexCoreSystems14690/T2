@@ -1,6 +1,33 @@
 const router = require('express').Router();
 const pool = require('../db/pool');
+const multer = require('multer');
 const { requireAuth, requireCorpOwner, requireAdmin } = require('../middleware/auth');
+
+// Upload config — armazena em memória (vai pro banco)
+const upload = multer({
+  storage: multer.memoryStorage(),
+  limits: { fileSize: 2 * 1024 * 1024 }, // 2MB
+  fileFilter: (req, file, cb) => {
+    const allowed = ['image/png', 'image/jpeg', 'image/gif', 'image/webp'];
+    cb(null, allowed.includes(file.mimetype));
+  }
+});
+
+// GET /api/corps/:corpId/icon — servir imagem da corp (público)
+router.get('/:corpId/icon', async (req, res) => {
+  try {
+    const result = await pool.query(
+      'SELECT icon_data, icon_mime FROM corporations WHERE id = $1 AND icon_data IS NOT NULL',
+      [req.params.corpId]
+    );
+    if (result.rows.length === 0) return res.status(404).send('Sem imagem');
+    res.set('Content-Type', result.rows[0].icon_mime);
+    res.set('Cache-Control', 'public, max-age=3600');
+    res.send(result.rows[0].icon_data);
+  } catch (err) {
+    res.status(500).send('Erro');
+  }
+});
 
 // Todas as rotas precisam de login
 router.use(requireAuth);
@@ -49,6 +76,8 @@ router.get('/:corpId', requireCorpOwner, async (req, res) => {
 router.put('/:corpId', requireCorpOwner, async (req, res) => {
   try {
     const { name, description, icon_url, color, max_members } = req.body;
+    // Se mandou uma URL, limpa a imagem do banco
+    const extraCols = icon_url ? ', icon_data = NULL, icon_mime = NULL' : '';
     const result = await pool.query(
       `UPDATE corporations SET
         name = COALESCE($1, name),
@@ -57,7 +86,8 @@ router.put('/:corpId', requireCorpOwner, async (req, res) => {
         color = COALESCE($4, color),
         max_members = COALESCE($5, max_members),
         updated_at = NOW()
-       WHERE id = $6 AND owner_id = $7 RETURNING *`,
+        ${extraCols}
+       WHERE id = $6 AND (owner_id = $7 OR id IN (SELECT corporation_id FROM corp_managers WHERE user_id = $7)) RETURNING *`,
       [name || null, description || null, icon_url || null, color || null,
        max_members ? parseInt(max_members) : null, req.params.corpId, req.user.id]
     );
@@ -65,6 +95,34 @@ router.put('/:corpId', requireCorpOwner, async (req, res) => {
     res.json({ corporation: result.rows[0] });
   } catch (err) {
     res.status(500).json({ error: 'Erro interno' });
+  }
+});
+
+// POST /api/corps/:corpId/icon — upload de imagem da corp
+router.post('/:corpId/icon', requireCorpOwner, upload.single('icon'), async (req, res) => {
+  try {
+    if (!req.file) return res.status(400).json({ error: 'Envie uma imagem (PNG, JPG, GIF ou WebP, máx 2MB)' });
+    const result = await pool.query(
+      'UPDATE corporations SET icon_data = $1, icon_mime = $2, icon_url = NULL, updated_at = NOW() WHERE id = $3 RETURNING id',
+      [req.file.buffer, req.file.mimetype, req.params.corpId]
+    );
+    if (result.rows.length === 0) return res.status(404).json({ error: 'Corporação não encontrada' });
+    res.json({ ok: true, icon_url: '/api/corps/' + req.params.corpId + '/icon' });
+  } catch (err) {
+    res.status(500).json({ error: 'Erro ao salvar imagem' });
+  }
+});
+
+// DELETE /api/corps/:corpId/icon — remover imagem da corp
+router.delete('/:corpId/icon', requireCorpOwner, async (req, res) => {
+  try {
+    await pool.query(
+      'UPDATE corporations SET icon_data = NULL, icon_mime = NULL, icon_url = NULL, updated_at = NOW() WHERE id = $1',
+      [req.params.corpId]
+    );
+    res.json({ ok: true });
+  } catch (err) {
+    res.status(500).json({ error: 'Erro ao remover imagem' });
   }
 });
 
@@ -158,6 +216,24 @@ router.post('/:corpId/members', requireCorpOwner, async (req, res) => {
 router.put('/:corpId/members/:memberId', requireCorpOwner, async (req, res) => {
   try {
     const { rank_id } = req.body;
+    // Se é highRank, não pode editar membro com cargo >= ao seu
+    if (req.isHighRank) {
+      const target = await pool.query(
+        `SELECT r.level FROM members m LEFT JOIN ranks r ON m.rank_id = r.id
+         WHERE m.id = $1 AND m.corporation_id = $2`,
+        [req.params.memberId, req.params.corpId]
+      );
+      if (target.rows.length > 0 && target.rows[0].level >= req.userRankLevel) {
+        return res.status(403).json({ error: 'Você não pode alterar o cargo de alguém com cargo igual ou superior ao seu' });
+      }
+      // Também não pode dar um cargo >= ao seu
+      if (rank_id) {
+        const newRank = await pool.query('SELECT level FROM ranks WHERE id = $1 AND corporation_id = $2', [rank_id, req.params.corpId]);
+        if (newRank.rows.length > 0 && newRank.rows[0].level >= req.userRankLevel) {
+          return res.status(403).json({ error: 'Você não pode atribuir um cargo igual ou superior ao seu' });
+        }
+      }
+    }
     const result = await pool.query(
       'UPDATE members SET rank_id = $1 WHERE id = $2 AND corporation_id = $3 RETURNING *',
       [rank_id, req.params.memberId, req.params.corpId]
@@ -172,6 +248,17 @@ router.put('/:corpId/members/:memberId', requireCorpOwner, async (req, res) => {
 // DELETE /api/corps/:corpId/members/:memberId — remover membro
 router.delete('/:corpId/members/:memberId', requireCorpOwner, async (req, res) => {
   try {
+    // Se é highRank, não pode remover membro com cargo >= ao seu
+    if (req.isHighRank) {
+      const target = await pool.query(
+        `SELECT r.level FROM members m LEFT JOIN ranks r ON m.rank_id = r.id
+         WHERE m.id = $1 AND m.corporation_id = $2`,
+        [req.params.memberId, req.params.corpId]
+      );
+      if (target.rows.length > 0 && target.rows[0].level >= req.userRankLevel) {
+        return res.status(403).json({ error: 'Você não pode remover alguém com cargo igual ou superior ao seu' });
+      }
+    }
     await pool.query(
       'DELETE FROM members WHERE id = $1 AND corporation_id = $2',
       [req.params.memberId, req.params.corpId]
@@ -210,9 +297,10 @@ router.get('/:corpId/managers', requireCorpOwner, async (req, res) => {
   }
 });
 
-// POST /api/corps/:corpId/managers — adicionar co-gerente
+// POST /api/corps/:corpId/managers — adicionar co-gerente (só dono)
 router.post('/:corpId/managers', requireCorpOwner, async (req, res) => {
   try {
+    if (!req.isOwner) return res.status(403).json({ error: 'Apenas o dono pode gerenciar co-gerentes' });
     const { user_id } = req.body;
     if (!user_id) return res.status(400).json({ error: 'user_id é obrigatório' });
     const result = await pool.query(
@@ -228,9 +316,10 @@ router.post('/:corpId/managers', requireCorpOwner, async (req, res) => {
   }
 });
 
-// DELETE /api/corps/:corpId/managers/:managerId — remover co-gerente
+// DELETE /api/corps/:corpId/managers/:managerId — remover co-gerente (só dono)
 router.delete('/:corpId/managers/:managerId', requireCorpOwner, async (req, res) => {
   try {
+    if (!req.isOwner) return res.status(403).json({ error: 'Apenas o dono pode gerenciar co-gerentes' });
     await pool.query(
       'DELETE FROM corp_managers WHERE id = $1 AND corporation_id = $2',
       [req.params.managerId, req.params.corpId]

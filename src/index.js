@@ -31,6 +31,8 @@ async function start() {
         description TEXT,
         color VARCHAR(7) DEFAULT '#3B82F6',
         icon_url TEXT,
+        icon_data BYTEA,
+        icon_mime VARCHAR(64),
         owner_id INTEGER REFERENCES users(id) ON DELETE SET NULL,
         max_members INTEGER DEFAULT 100,
         is_active BOOLEAN DEFAULT true,
@@ -56,6 +58,14 @@ async function start() {
         joined_at TIMESTAMP DEFAULT NOW(),
         UNIQUE(corporation_id, user_id)
       );
+      CREATE TABLE IF NOT EXISTS corp_managers (
+        id SERIAL PRIMARY KEY,
+        corporation_id INTEGER REFERENCES corporations(id) ON DELETE CASCADE,
+        user_id INTEGER REFERENCES users(id) ON DELETE CASCADE,
+        added_at TIMESTAMP DEFAULT NOW(),
+        UNIQUE(corporation_id, user_id)
+      );
+      CREATE INDEX IF NOT EXISTS idx_corp_managers_user ON corp_managers(user_id);
       CREATE INDEX IF NOT EXISTS idx_members_user_id ON members(user_id);
       CREATE INDEX IF NOT EXISTS idx_members_corp_id ON members(corporation_id);
       CREATE INDEX IF NOT EXISTS idx_users_roblox_id ON users(roblox_id);
