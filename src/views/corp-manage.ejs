@@ -57,6 +57,9 @@
 <body>
   <div class="topbar">
     <a href="/dashboard">&larr; Voltar</a>
+    <% if (corporation.icon_url) { %>
+      <img src="<%= corporation.icon_url %>" style="width:28px;height:28px;border-radius:5px;object-fit:cover">
+    <% } %>
     <h1><%= corporation.name %></h1>
     <span style="color:#7a8ba5;font-size:0.8rem">slug: <%= corporation.slug %></span>
   </div>
@@ -67,6 +70,7 @@
     <div class="tabs">
       <div class="tab active" data-tab="cargos">Cargos (<%= ranks.length %>)</div>
       <div class="tab" data-tab="membros">Membros (<%= members.length %>)</div>
+      <div class="tab" data-tab="config">Configurações</div>
     </div>
 
     <!-- CARGOS -->
@@ -169,6 +173,44 @@
     </div>
   </div>
 
+    <!-- CONFIGURAÇÕES -->
+    <div class="panel" id="panel-config">
+      <div class="form-row">
+        <div class="form-group">
+          <label>Nome</label>
+          <input type="text" id="cfg-name" value="<%= corporation.name %>">
+        </div>
+      </div>
+      <div class="form-row">
+        <div class="form-group">
+          <label>Descrição</label>
+          <input type="text" id="cfg-desc" value="<%= corporation.description || '' %>">
+        </div>
+      </div>
+      <div class="form-row">
+        <div class="form-group">
+          <label>Imagem / Logo (URL)</label>
+          <input type="text" id="cfg-icon" value="<%= corporation.icon_url || '' %>" placeholder="https://i.imgur.com/exemplo.png">
+        </div>
+      </div>
+      <% if (corporation.icon_url) { %>
+        <div style="margin-bottom:1rem">
+          <img src="<%= corporation.icon_url %>" style="width:64px;height:64px;border-radius:8px;object-fit:cover;border:1px solid #1e2a40">
+        </div>
+      <% } %>
+      <div class="form-row">
+        <div class="form-group" style="max-width:160px">
+          <label>Cor</label>
+          <input type="color" id="cfg-color" value="<%= corporation.color || '#3B82F6' %>" style="height:36px;padding:2px">
+        </div>
+        <div class="form-group" style="max-width:160px">
+          <label>Máx. Membros</label>
+          <input type="number" id="cfg-max" value="<%= corporation.max_members || 100 %>" min="1">
+        </div>
+      </div>
+      <button class="btn" onclick="saveConfig()">Salvar</button>
+    </div>
+
   <script>
     const CORP_ID = '<%= corporation.id %>';
 
@@ -227,6 +269,25 @@
       if (!confirm('Remover este membro?')) return;
       await api('DELETE', '/members/' + memberId);
       location.reload();
+    }
+
+    async function saveConfig() {
+      const body = {
+        name: document.getElementById('cfg-name').value.trim(),
+        description: document.getElementById('cfg-desc').value.trim(),
+        icon_url: document.getElementById('cfg-icon').value.trim(),
+        color: document.getElementById('cfg-color').value,
+        max_members: parseInt(document.getElementById('cfg-max').value) || 100
+      };
+      const res = await fetch('/api/corps/' + CORP_ID, {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(body)
+      });
+      const data = await res.json();
+      if (data.error) return showAlert(data.error, 'error');
+      showAlert('Configurações salvas!', 'success');
+      setTimeout(() => location.reload(), 500);
     }
   </script>
 </body>

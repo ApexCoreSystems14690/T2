@@ -20,6 +20,7 @@
     .corp-card:hover { border-color: #3d4a62; }
     .corp-info { display: flex; align-items: center; gap: 0.75rem; }
     .corp-color { width: 12px; height: 12px; border-radius: 3px; flex-shrink: 0; }
+    .corp-icon { width: 36px; height: 36px; border-radius: 6px; object-fit: cover; flex-shrink: 0; }
     .corp-name { font-weight: 600; font-size: 0.95rem; }
     .corp-members { color: #7a8ba5; font-size: 0.8rem; }
     .corp-btn { color: #00d4ff; text-decoration: none; font-size: 0.8rem; font-weight: 600; padding: 0.4rem 0.8rem; border: 1px solid #00d4ff33; border-radius: 4px; }
@@ -71,7 +72,11 @@
       <% corporations.forEach(corp => { %>
         <div class="corp-card">
           <div class="corp-info">
-            <div class="corp-color" style="background: <%= corp.color %>"></div>
+            <% if (corp.icon_url) { %>
+              <img src="<%= corp.icon_url %>" class="corp-icon" alt="<%= corp.name %>">
+            <% } else { %>
+              <div class="corp-color" style="background: <%= corp.color %>"></div>
+            <% } %>
             <div>
               <div class="corp-name"><%= corp.name %></div>
               <div class="corp-members"><%= corp.member_count %> membros</div>
@@ -93,6 +98,8 @@
       <input type="text" id="corpSlug" placeholder="Ex: policia-militar">
       <label>Descrição (opcional)</label>
       <textarea id="corpDesc" placeholder="Descrição da corporação"></textarea>
+      <label>Imagem / Logo (URL)</label>
+      <input type="text" id="corpIcon" placeholder="https://i.imgur.com/exemplo.png">
       <label>Cor</label>
       <input type="color" id="corpColor" value="#3B82F6" style="height: 36px; padding: 2px;">
       <div class="error-msg" id="createError"></div>
@@ -116,6 +123,7 @@
       const name = document.getElementById('corpName').value.trim();
       const slug = document.getElementById('corpSlug').value.trim();
       const description = document.getElementById('corpDesc').value.trim();
+      const icon_url = document.getElementById('corpIcon').value.trim();
       const color = document.getElementById('corpColor').value;
       const errorEl = document.getElementById('createError');
 
@@ -129,7 +137,7 @@
         const res = await fetch('/api/corps', {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ name, slug, description, color })
+          body: JSON.stringify({ name, slug, description, color, icon_url })
         });
         const data = await res.json();
         if (!res.ok) {

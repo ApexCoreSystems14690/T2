@@ -45,6 +45,29 @@ router.get('/:corpId', requireCorpOwner, async (req, res) => {
   }
 });
 
+// PUT /api/corps/:corpId — editar configurações da corporação
+router.put('/:corpId', requireCorpOwner, async (req, res) => {
+  try {
+    const { name, description, icon_url, color, max_members } = req.body;
+    const result = await pool.query(
+      `UPDATE corporations SET
+        name = COALESCE($1, name),
+        description = COALESCE($2, description),
+        icon_url = $3,
+        color = COALESCE($4, color),
+        max_members = COALESCE($5, max_members),
+        updated_at = NOW()
+       WHERE id = $6 AND owner_id = $7 RETURNING *`,
+      [name || null, description || null, icon_url || null, color || null,
+       max_members ? parseInt(max_members) : null, req.params.corpId, req.user.id]
+    );
+    if (result.rows.length === 0) return res.status(404).json({ error: 'Corporação não encontrada' });
+    res.json({ corporation: result.rows[0] });
+  } catch (err) {
+    res.status(500).json({ error: 'Erro interno' });
+  }
+});
+
 // POST /api/corps/:corpId/ranks — criar cargo
 router.post('/:corpId/ranks', requireCorpOwner, async (req, res) => {
   try {
@@ -162,16 +185,16 @@ router.delete('/:corpId/members/:memberId', requireCorpOwner, async (req, res) =
 // POST /api/corps — criar corporação (qualquer usuário logado)
 router.post('/', async (req, res) => {
   try {
-    const { name, slug, description, color, max_members } = req.body;
+    const { name, slug, description, color, icon_url, max_members } = req.body;
     if (!name || !slug) {
       return res.status(400).json({ error: 'Nome e slug são obrigatórios' });
     }
     // Slug deve ser lowercase e sem espaços
     const cleanSlug = slug.toLowerCase().replace(/\s+/g, '-').replace(/[^a-z0-9-]/g, '');
     const result = await pool.query(
-      `INSERT INTO corporations (name, slug, description, owner_id, color, max_members)
-       VALUES ($1, $2, $3, $4, $5, $6) RETURNING *`,
-      [name, cleanSlug, description || null, req.user.id, color || '#3B82F6', max_members || 100]
+      `INSERT INTO corporations (name, slug, description, owner_id, color, icon_url, max_members)
+       VALUES ($1, $2, $3, $4, $5, $6, $7) RETURNING *`,
+      [name, cleanSlug, description || null, req.user.id, color || '#3B82F6', icon_url || null, max_members || 100]
     );
     res.json({ corporation: result.rows[0] });
   } catch (err) {
