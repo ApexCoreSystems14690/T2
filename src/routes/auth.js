@@ -1,33 +1,41 @@
 const router = require('express').Router();
-const passport = require('passport');
+const discord = require('../services/discord-auth');
 
 // Redireciona pro Discord
-router.get('/discord', passport.authenticate('discord'));
+router.get('/discord', (req, res) => {
+  res.redirect(discord.getAuthURL());
+});
 
 // Callback do Discord
-router.get('/discord/callback', (req, res, next) => {
-  passport.authenticate('discord', (err, user, info) => {
-    if (err) {
-      console.error('Auth callback erro:', err.message);
-      return res.render('error', { message: 'Erro no login: ' + err.message, user: null });
-    }
-    if (!user) {
-      console.error('Auth callback: sem user', info);
-      return res.redirect('/');
-    }
-    req.logIn(user, (loginErr) => {
-      if (loginErr) {
-        console.error('logIn erro:', loginErr.message);
-        return res.render('error', { message: 'Erro na sessão: ' + loginErr.message, user: null });
-      }
+router.get('/discord/callback', async (req, res) => {
+  try {
+    const { code } = req.query;
+    if (!code) return res.redirect('/');
+
+    // Troca code por token
+    const tokenData = await discord.exchangeCode(code);
+
+    // Busca perfil do Discord
+    const profile = await discord.getDiscordUser(tokenData.access_token);
+    console.log('Discord login:', profile.id, profile.username);
+
+    // Cria/atualiza no banco
+    const user = await discord.findOrCreateUser(profile);
+
+    // Salva na sessão
+    req.session.userId = user.id;
+    req.session.save(() => {
       res.redirect('/dashboard');
     });
-  })(req, res, next);
+  } catch (err) {
+    console.error('Auth callback erro:', err.message);
+    res.render('error', { message: 'Erro no login: ' + err.message, user: null });
+  }
 });
 
 // Logout
 router.get('/logout', (req, res) => {
-  req.logout(() => {
+  req.session.destroy(() => {
     res.redirect('/');
   });
 });

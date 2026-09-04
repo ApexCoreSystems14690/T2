@@ -2,11 +2,11 @@ require('dotenv').config();
 const express = require('express');
 const session = require('express-session');
 const PgSession = require('connect-pg-simple')(session);
-const passport = require('passport');
 const helmet = require('helmet');
 const cors = require('cors');
 const path = require('path');
 const pool = require('./db/pool');
+const { getUserById } = require('./services/discord-auth');
 
 async function start() {
   // Migrar banco ANTES de tudo
@@ -71,15 +71,13 @@ async function start() {
     console.log('✅ Banco migrado');
   } catch (err) {
     console.error('❌ Migração falhou:', err.message);
-    console.error('DATABASE_URL definida:', !!process.env.DATABASE_URL);
-    console.error('Stack:', err.stack);
     process.exit(1);
   }
 
   const app = express();
   const PORT = process.env.PORT || 3000;
 
-  // Trust Railway's proxy (HTTPS)
+  // Trust Railway's proxy
   app.set('trust proxy', 1);
 
   // Middleware
@@ -102,10 +100,17 @@ async function start() {
     },
   }));
 
-  // Passport
-  app.use(passport.initialize());
-  app.use(passport.session());
-  require('./services/discord-auth');
+  // Carrega user da sessão em cada request
+  app.use(async (req, res, next) => {
+    if (req.session.userId) {
+      try {
+        req.user = await getUserById(req.session.userId);
+      } catch (e) {
+        req.user = null;
+      }
+    }
+    next();
+  });
 
   // View engine
   app.set('view engine', 'ejs');

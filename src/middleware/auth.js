@@ -1,6 +1,6 @@
 // Verifica se o usuário está logado (para rotas do dashboard)
 function requireAuth(req, res, next) {
-  if (req.isAuthenticated()) return next();
+  if (req.user) return next();
   res.redirect('/auth/discord');
 }
 
@@ -35,7 +35,7 @@ async function requireCorpOwner(req, res, next) {
 
 // Verifica se é admin global
 function requireAdmin(req, res, next) {
-  if (req.isAuthenticated() && req.user.is_admin) return next();
+  if (req.user && req.user.is_admin) return next();
   res.status(403).json({ error: 'Acesso negado' });
 }
 
