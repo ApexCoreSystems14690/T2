@@ -25,6 +25,19 @@
     .corp-btn { color: #00d4ff; text-decoration: none; font-size: 0.8rem; font-weight: 600; padding: 0.4rem 0.8rem; border: 1px solid #00d4ff33; border-radius: 4px; }
     .corp-btn:hover { background: #00d4ff11; }
     .empty { color: #7a8ba5; font-size: 0.9rem; text-align: center; padding: 2rem; }
+    .create-btn { background: #00d4ff; color: #0a0e17; border: none; padding: 0.4rem 0.8rem; border-radius: 4px; font-size: 0.8rem; font-weight: 700; cursor: pointer; text-decoration: none; }
+    .create-btn:hover { background: #00b8e0; }
+    .modal-overlay { display: none; position: fixed; top: 0; left: 0; width: 100%; height: 100%; background: rgba(0,0,0,0.6); z-index: 100; align-items: center; justify-content: center; }
+    .modal-overlay.active { display: flex; }
+    .modal { background: #131a2b; border: 1px solid #2d3a52; border-radius: 10px; padding: 1.5rem; width: 90%; max-width: 420px; }
+    .modal h2 { font-size: 1rem; margin-bottom: 1rem; color: #00d4ff; }
+    .modal label { display: block; font-size: 0.8rem; color: #7a8ba5; margin-bottom: 0.25rem; margin-top: 0.75rem; }
+    .modal input, .modal textarea { width: 100%; background: #0a0e17; border: 1px solid #2d3a52; border-radius: 4px; padding: 0.5rem; color: #f0f4f8; font-size: 0.85rem; }
+    .modal textarea { height: 60px; resize: vertical; }
+    .modal .actions { display: flex; gap: 0.5rem; margin-top: 1rem; justify-content: flex-end; }
+    .modal .cancel-btn { background: none; border: 1px solid #2d3a52; color: #7a8ba5; padding: 0.4rem 0.8rem; border-radius: 4px; cursor: pointer; font-size: 0.8rem; }
+    .modal .cancel-btn:hover { border-color: #3d4a62; color: #f0f4f8; }
+    .modal .error-msg { color: #ff4444; font-size: 0.8rem; margin-top: 0.5rem; display: none; }
   </style>
 </head>
 <body>
@@ -47,7 +60,10 @@
       </div>
     <% } %>
 
-    <div class="section-title">Suas Corporações</div>
+    <div class="section-title">
+      Suas Corporações
+      <button class="create-btn" onclick="document.getElementById('createModal').classList.add('active')">+ Nova Corporação</button>
+    </div>
 
     <% if (corporations.length === 0) { %>
       <div class="empty">Você não é dono de nenhuma corporação ainda.</div>
@@ -66,5 +82,67 @@
       <% }) %>
     <% } %>
   </div>
+
+  <!-- Modal Criar Corporação -->
+  <div class="modal-overlay" id="createModal">
+    <div class="modal">
+      <h2>Criar Corporação</h2>
+      <label>Nome</label>
+      <input type="text" id="corpName" placeholder="Ex: Polícia Militar">
+      <label>Slug (URL amigável)</label>
+      <input type="text" id="corpSlug" placeholder="Ex: policia-militar">
+      <label>Descrição (opcional)</label>
+      <textarea id="corpDesc" placeholder="Descrição da corporação"></textarea>
+      <label>Cor</label>
+      <input type="color" id="corpColor" value="#3B82F6" style="height: 36px; padding: 2px;">
+      <div class="error-msg" id="createError"></div>
+      <div class="actions">
+        <button class="cancel-btn" onclick="document.getElementById('createModal').classList.remove('active')">Cancelar</button>
+        <button class="create-btn" onclick="criarCorp()">Criar</button>
+      </div>
+    </div>
+  </div>
+
+  <script>
+    // Auto-gerar slug a partir do nome
+    document.getElementById('corpName').addEventListener('input', function() {
+      const slug = this.value.toLowerCase()
+        .normalize('NFD').replace(/[̀-ͯ]/g, '')
+        .replace(/\s+/g, '-').replace(/[^a-z0-9-]/g, '');
+      document.getElementById('corpSlug').value = slug;
+    });
+
+    async function criarCorp() {
+      const name = document.getElementById('corpName').value.trim();
+      const slug = document.getElementById('corpSlug').value.trim();
+      const description = document.getElementById('corpDesc').value.trim();
+      const color = document.getElementById('corpColor').value;
+      const errorEl = document.getElementById('createError');
+
+      if (!name || !slug) {
+        errorEl.textContent = 'Nome e slug são obrigatórios';
+        errorEl.style.display = 'block';
+        return;
+      }
+
+      try {
+        const res = await fetch('/api/corps', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ name, slug, description, color })
+        });
+        const data = await res.json();
+        if (!res.ok) {
+          errorEl.textContent = data.error || 'Erro ao criar';
+          errorEl.style.display = 'block';
+          return;
+        }
+        window.location.reload();
+      } catch (err) {
+        errorEl.textContent = 'Erro de conexão';
+        errorEl.style.display = 'block';
+      }
+    }
+  </script>
 </body>
 </html>

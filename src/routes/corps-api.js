@@ -159,17 +159,19 @@ router.delete('/:corpId/members/:memberId', requireCorpOwner, async (req, res) =
   }
 });
 
-// POST /api/corps — criar corporação (admin only)
-router.post('/', requireAdmin, async (req, res) => {
+// POST /api/corps — criar corporação (qualquer usuário logado)
+router.post('/', async (req, res) => {
   try {
-    const { name, slug, description, owner_id, color, max_members } = req.body;
+    const { name, slug, description, color, max_members } = req.body;
     if (!name || !slug) {
       return res.status(400).json({ error: 'Nome e slug são obrigatórios' });
     }
+    // Slug deve ser lowercase e sem espaços
+    const cleanSlug = slug.toLowerCase().replace(/\s+/g, '-').replace(/[^a-z0-9-]/g, '');
     const result = await pool.query(
       `INSERT INTO corporations (name, slug, description, owner_id, color, max_members)
        VALUES ($1, $2, $3, $4, $5, $6) RETURNING *`,
-      [name, slug, description, owner_id || req.user.id, color || '#3B82F6', max_members || 100]
+      [name, cleanSlug, description || null, req.user.id, color || '#3B82F6', max_members || 100]
     );
     res.json({ corporation: result.rows[0] });
   } catch (err) {
