@@ -1,0 +1,33 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Santa Fé — Corporações</title>
+  <style>
+    * { margin: 0; padding: 0; box-sizing: border-box; }
+    body { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif; background: #0a0e17; color: #f0f4f8; min-height: 100vh; display: flex; align-items: center; justify-content: center; }
+    .container { text-align: center; padding: 2rem; }
+    h1 { font-size: 2.5rem; font-weight: 800; letter-spacing: 0.04em; color: #00d4ff; margin-bottom: 0.5rem; }
+    .subtitle { color: #7a8ba5; font-size: 1rem; margin-bottom: 2rem; }
+    .btn { display: inline-block; padding: 0.75rem 2rem; background: #5865F2; color: white; text-decoration: none; border-radius: 6px; font-weight: 600; font-size: 0.95rem; transition: opacity 0.15s; }
+    .btn:hover { opacity: 0.85; }
+    .user-info { margin-top: 1.5rem; }
+    .user-info a { color: #00d4ff; text-decoration: none; margin: 0 0.5rem; }
+  </style>
+</head>
+<body>
+  <div class="container">
+    <h1>SANTA FÉ</h1>
+    <p class="subtitle">Sistema de Corporações</p>
+    <% if (!user) { %>
+      <a href="/auth/discord" class="btn">Entrar com Discord</a>
+    <% } else { %>
+      <div class="user-info">
+        <p>Olá, <strong><%= user.discord_username %></strong></p>
+        <a href="/dashboard">Painel</a> | <a href="/auth/logout">Sair</a>
+      </div>
+    <% } %>
+  </div>
+</body>
+</html>

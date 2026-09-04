@@ -1,0 +1,233 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title><%= corporation.name %> — Santa Fé</title>
+  <style>
+    * { margin: 0; padding: 0; box-sizing: border-box; }
+    body { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif; background: #0a0e17; color: #f0f4f8; min-height: 100vh; }
+    .topbar { background: #131a2b; border-bottom: 1px solid #1e2a40; padding: 0.75rem 1.5rem; display: flex; align-items: center; gap: 1rem; }
+    .topbar a { color: #7a8ba5; text-decoration: none; font-size: 0.85rem; }
+    .topbar a:hover { color: #00d4ff; }
+    .topbar h1 { font-size: 1rem; color: #f0f4f8; flex: 1; }
+    .main { max-width: 900px; margin: 0 auto; padding: 2rem 1.25rem; }
+    .tabs { display: flex; gap: 0; border-bottom: 1px solid #1e2a40; margin-bottom: 1.5rem; }
+    .tab { padding: 0.6rem 1.25rem; color: #7a8ba5; cursor: pointer; font-size: 0.85rem; font-weight: 600; border-bottom: 2px solid transparent; transition: all 0.15s; }
+    .tab.active { color: #00d4ff; border-bottom-color: #00d4ff; }
+    .tab:hover { color: #f0f4f8; }
+    .panel { display: none; }
+    .panel.active { display: block; }
+
+    /* Cargos */
+    .rank-list { display: flex; flex-direction: column; gap: 0.5rem; margin-bottom: 1rem; }
+    .rank-item { background: #131a2b; border: 1px solid #1e2a40; border-radius: 6px; padding: 0.75rem 1rem; display: flex; align-items: center; justify-content: space-between; }
+    .rank-info { display: flex; align-items: center; gap: 1rem; }
+    .rank-level { background: #1e2a40; color: #7a8ba5; font-size: 0.7rem; font-weight: 700; padding: 0.2rem 0.5rem; border-radius: 3px; min-width: 2rem; text-align: center; }
+    .rank-name { font-weight: 600; font-size: 0.9rem; }
+    .rank-salary { color: #10b981; font-size: 0.8rem; }
+    .rank-actions { display: flex; gap: 0.5rem; }
+    .btn-sm { padding: 0.3rem 0.6rem; font-size: 0.75rem; border: 1px solid #1e2a40; background: transparent; color: #7a8ba5; border-radius: 4px; cursor: pointer; }
+    .btn-sm:hover { border-color: #3d4a62; color: #f0f4f8; }
+    .btn-sm.danger { border-color: #ef444433; color: #ef4444; }
+    .btn-sm.danger:hover { background: #ef444411; }
+
+    /* Membros */
+    .member-table { width: 100%; border-collapse: collapse; font-size: 0.85rem; }
+    .member-table th { text-align: left; color: #7a8ba5; font-weight: 600; padding: 0.5rem 0.75rem; border-bottom: 1px solid #1e2a40; font-size: 0.75rem; text-transform: uppercase; letter-spacing: 0.05em; }
+    .member-table td { padding: 0.6rem 0.75rem; border-bottom: 1px solid #1e2a4066; }
+    .member-table tr:hover td { background: #131a2b; }
+
+    /* Forms */
+    .form-row { display: flex; gap: 0.75rem; margin-bottom: 1rem; flex-wrap: wrap; }
+    .form-group { display: flex; flex-direction: column; gap: 0.25rem; flex: 1; min-width: 120px; }
+    .form-group label { font-size: 0.75rem; color: #7a8ba5; font-weight: 600; }
+    .form-group input, .form-group select { background: #131a2b; border: 1px solid #1e2a40; color: #f0f4f8; padding: 0.5rem 0.75rem; border-radius: 4px; font-size: 0.85rem; }
+    .form-group input:focus, .form-group select:focus { outline: none; border-color: #00d4ff; }
+    .btn { padding: 0.5rem 1.25rem; background: #00d4ff; color: #0a0e17; border: none; border-radius: 4px; font-weight: 600; font-size: 0.85rem; cursor: pointer; }
+    .btn:hover { opacity: 0.85; }
+    .btn.secondary { background: transparent; border: 1px solid #1e2a40; color: #f0f4f8; }
+
+    .alert { padding: 0.75rem 1rem; border-radius: 6px; font-size: 0.85rem; margin-bottom: 1rem; }
+    .alert.success { background: #10b98122; color: #10b981; border: 1px solid #10b98133; }
+    .alert.error { background: #ef444422; color: #ef4444; border: 1px solid #ef444433; }
+    .empty { color: #7a8ba5; font-size: 0.85rem; padding: 1.5rem; text-align: center; }
+  </style>
+</head>
+<body>
+  <div class="topbar">
+    <a href="/dashboard">&larr; Voltar</a>
+    <h1><%= corporation.name %></h1>
+    <span style="color:#7a8ba5;font-size:0.8rem">slug: <%= corporation.slug %></span>
+  </div>
+
+  <div class="main">
+    <div id="alert-container"></div>
+
+    <div class="tabs">
+      <div class="tab active" data-tab="cargos">Cargos (<%= ranks.length %>)</div>
+      <div class="tab" data-tab="membros">Membros (<%= members.length %>)</div>
+    </div>
+
+    <!-- CARGOS -->
+    <div class="panel active" id="panel-cargos">
+      <div class="form-row">
+        <div class="form-group">
+          <label>Nome do Cargo</label>
+          <input type="text" id="rank-name" placeholder="Ex: Soldado">
+        </div>
+        <div class="form-group" style="max-width:100px">
+          <label>Nível</label>
+          <input type="number" id="rank-level" placeholder="1" min="0">
+        </div>
+        <div class="form-group" style="max-width:120px">
+          <label>Salário (R$)</label>
+          <input type="number" id="rank-salary" placeholder="500" min="0">
+        </div>
+        <div class="form-group" style="max-width:120px;justify-content:flex-end">
+          <button class="btn" onclick="addRank()">Adicionar</button>
+        </div>
+      </div>
+
+      <div class="rank-list" id="rank-list">
+        <% if (ranks.length === 0) { %>
+          <div class="empty">Nenhum cargo criado ainda.</div>
+        <% } else { %>
+          <% ranks.forEach(rank => { %>
+            <div class="rank-item" data-rank-id="<%= rank.id %>">
+              <div class="rank-info">
+                <span class="rank-level">Nv.<%= rank.level %></span>
+                <span class="rank-name"><%= rank.name %></span>
+                <span class="rank-salary">R$<%= rank.salary %></span>
+              </div>
+              <div class="rank-actions">
+                <button class="btn-sm danger" onclick="deleteRank(<%= rank.id %>)">Remover</button>
+              </div>
+            </div>
+          <% }) %>
+        <% } %>
+      </div>
+    </div>
+
+    <!-- MEMBROS -->
+    <div class="panel" id="panel-membros">
+      <div class="form-row">
+        <div class="form-group">
+          <label>Roblox User ID</label>
+          <input type="number" id="member-roblox-id" placeholder="Ex: 123456789">
+        </div>
+        <div class="form-group">
+          <label>Username (opcional)</label>
+          <input type="text" id="member-roblox-name" placeholder="Ex: JogadorX">
+        </div>
+        <div class="form-group">
+          <label>Cargo</label>
+          <select id="member-rank">
+            <option value="">Sem cargo</option>
+            <% ranks.forEach(rank => { %>
+              <option value="<%= rank.id %>"><%= rank.name %> (Nv.<%= rank.level %>)</option>
+            <% }) %>
+          </select>
+        </div>
+        <div class="form-group" style="max-width:120px;justify-content:flex-end">
+          <button class="btn" onclick="addMember()">Adicionar</button>
+        </div>
+      </div>
+
+      <div style="overflow-x:auto">
+        <table class="member-table">
+          <thead>
+            <tr>
+              <th>Roblox ID</th>
+              <th>Username</th>
+              <th>Discord</th>
+              <th>Cargo</th>
+              <th>Desde</th>
+              <th></th>
+            </tr>
+          </thead>
+          <tbody id="member-tbody">
+            <% if (members.length === 0) { %>
+              <tr><td colspan="6" class="empty">Nenhum membro ainda.</td></tr>
+            <% } else { %>
+              <% members.forEach(m => { %>
+                <tr>
+                  <td><%= m.roblox_id || '-' %></td>
+                  <td><%= m.roblox_username || '-' %></td>
+                  <td><%= m.discord_username || '-' %></td>
+                  <td><%= m.rank_name || 'Sem cargo' %></td>
+                  <td><%= new Date(m.joined_at).toLocaleDateString('pt-BR') %></td>
+                  <td>
+                    <button class="btn-sm danger" onclick="deleteMember(<%= m.id %>)">Remover</button>
+                  </td>
+                </tr>
+              <% }) %>
+            <% } %>
+          </tbody>
+        </table>
+      </div>
+    </div>
+  </div>
+
+  <script>
+    const CORP_ID = '<%= corporation.id %>';
+
+    // Tabs
+    document.querySelectorAll('.tab').forEach(tab => {
+      tab.addEventListener('click', () => {
+        document.querySelectorAll('.tab').forEach(t => t.classList.remove('active'));
+        document.querySelectorAll('.panel').forEach(p => p.classList.remove('active'));
+        tab.classList.add('active');
+        document.getElementById('panel-' + tab.dataset.tab).classList.add('active');
+      });
+    });
+
+    function showAlert(msg, type) {
+      const c = document.getElementById('alert-container');
+      c.innerHTML = '<div class="alert ' + type + '">' + msg + '</div>';
+      setTimeout(() => c.innerHTML = '', 3000);
+    }
+
+    async function api(method, path, body) {
+      const opts = { method, headers: { 'Content-Type': 'application/json' } };
+      if (body) opts.body = JSON.stringify(body);
+      const res = await fetch('/api/corps/' + CORP_ID + path, opts);
+      return res.json();
+    }
+
+    async function addRank() {
+      const name = document.getElementById('rank-name').value.trim();
+      const level = document.getElementById('rank-level').value;
+      const salary = document.getElementById('rank-salary').value;
+      if (!name || !level) return showAlert('Preencha nome e nível', 'error');
+      const data = await api('POST', '/ranks', { name, level, salary: salary || 0 });
+      if (data.error) return showAlert(data.error, 'error');
+      showAlert('Cargo criado!', 'success');
+      setTimeout(() => location.reload(), 500);
+    }
+
+    async function deleteRank(rankId) {
+      if (!confirm('Remover este cargo?')) return;
+      await api('DELETE', '/ranks/' + rankId);
+      location.reload();
+    }
+
+    async function addMember() {
+      const roblox_id = document.getElementById('member-roblox-id').value;
+      const roblox_username = document.getElementById('member-roblox-name').value.trim();
+      const rank_id = document.getElementById('member-rank').value || null;
+      if (!roblox_id) return showAlert('Roblox ID é obrigatório', 'error');
+      const data = await api('POST', '/members', { roblox_id, roblox_username, rank_id });
+      if (data.error) return showAlert(data.error, 'error');
+      showAlert('Membro adicionado!', 'success');
+      setTimeout(() => location.reload(), 500);
+    }
+
+    async function deleteMember(memberId) {
+      if (!confirm('Remover este membro?')) return;
+      await api('DELETE', '/members/' + memberId);
+      location.reload();
+    }
+  </script>
+</body>
+</html>
