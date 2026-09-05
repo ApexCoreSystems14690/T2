@@ -147,4 +147,108 @@ router.get('/corp/:corpSlug/ranks', async (req, res) => {
   }
 });
 
+// ============================================================
+// PAINEL ADMIN — endpoints usados pelo servidor do jogo (API key)
+// ============================================================
+
+// POST /api/game/heartbeat  { job_id, place_id, players: [...], catalog?: {...} }
+router.post('/heartbeat', async (req, res) => {
+  try {
+    const { job_id, place_id, players, catalog } = req.body || {};
+    if (!job_id || typeof job_id !== 'string' || job_id.length > 64) return res.status(400).json({ error: 'job_id inválido' });
+    const lista = Array.isArray(players) ? players.slice(0, 200) : [];
+    if (catalog && typeof catalog === 'object') {
+      await pool.query(
+        `INSERT INTO game_servers (job_id, place_id, players, catalog, updated_at) VALUES ($1, $2, $3, $4, NOW())
+         ON CONFLICT (job_id) DO UPDATE SET place_id = EXCLUDED.place_id, players = EXCLUDED.players, catalog = EXCLUDED.catalog, updated_at = NOW()`,
+        [job_id, place_id ? parseInt(place_id) : null, JSON.stringify(lista), JSON.stringify(catalog)]
+      );
+    } else {
+      await pool.query(
+        `INSERT INTO game_servers (job_id, place_id, players, updated_at) VALUES ($1, $2, $3, NOW())
+         ON CONFLICT (job_id) DO UPDATE SET place_id = EXCLUDED.place_id, players = EXCLUDED.players, updated_at = NOW()`,
+        [job_id, place_id ? parseInt(place_id) : null, JSON.stringify(lista)]
+      );
+    }
+    // limpa servidores mortos (sem heartbeat há 2 min)
+    await pool.query(`DELETE FROM game_servers WHERE updated_at < NOW() - INTERVAL '2 minutes'`);
+    res.json({ ok: true });
+  } catch (err) {
+    console.error('heartbeat:', err.message);
+    res.status(500).json({ error: 'Erro interno' });
+  }
+});
+
+// GET /api/game/commands/pending?job_id=...  -> marca como 'sent' atomicamente e devolve
+router.get('/commands/pending', async (req, res) => {
+  try {
+    const job = String(req.query.job_id || '');
+    if (!job) return res.status(400).json({ error: 'job_id obrigatório' });
+    const result = await pool.query(
+      `UPDATE game_commands SET status = 'sent', sent_at = NOW()
+       WHERE id IN (
+         SELECT id FROM game_commands
+         WHERE status = 'pending' AND (job_id = $1 OR job_id IS NULL)
+           AND created_at > NOW() - INTERVAL '10 minutes'
+         ORDER BY id ASC LIMIT 20
+         FOR UPDATE SKIP LOCKED
+       )
+       RETURNING id, tipo, target_roblox_id, target_name, payload, job_id`,
+      [job]
+    );
+    // comandos globais (job_id NULL) ficam marcados como sent pelo primeiro servidor que pegar;
+    // pra broadcast real o painel cria um comando por servidor.
+    res.json({ commands: result.rows });
+  } catch (err) {
+    console.error('commands/pending:', err.message);
+    res.status(500).json({ error: 'Erro interno' });
+  }
+});
+
+// POST /api/game/commands/:id/result  { ok: bool, msg: string }
+router.post('/commands/:id/result', async (req, res) => {
+  try {
+    const { ok, msg } = req.body || {};
+    await pool.query(
+      `UPDATE game_commands SET status = $1, result = $2, executed_at = NOW() WHERE id = $3 AND status = 'sent'`,
+      [ok ? 'done' : 'error', String(msg || '').slice(0, 500), req.params.id]
+    );
+    res.json({ ok: true });
+  } catch (err) {
+    console.error('commands/result:', err.message);
+    res.status(500).json({ error: 'Erro interno' });
+  }
+});
+
+// POST /api/game/logs  { job_id, eventos: [{ tipo, jogador, alvo, detalhe, t }] }
+router.post('/logs', async (req, res) => {
+  try {
+    const { job_id, eventos } = req.body || {};
+    if (!Array.isArray(eventos) || eventos.length === 0) return res.json({ ok: true, n: 0 });
+    const lote = eventos.slice(0, 500);
+    const values = [];
+    const params = [];
+    let i = 1;
+    for (const e of lote) {
+      if (!e || typeof e.tipo !== 'string') continue;
+      values.push(`($${i++}, $${i++}, $${i++}, $${i++}, $${i++}, to_timestamp($${i++}))`);
+      params.push(
+        e.tipo.slice(0, 32),
+        e.jogador != null ? String(e.jogador).slice(0, 64) : null,
+        e.alvo != null ? String(e.alvo).slice(0, 64) : null,
+        JSON.stringify(e.detalhe && typeof e.detalhe === 'object' ? e.detalhe : {}),
+        job_id ? String(job_id).slice(0, 64) : null,
+        Number(e.t) || Math.floor(Date.now() / 1000)
+      );
+    }
+    if (values.length) {
+      await pool.query(`INSERT INTO game_logs (tipo, jogador, alvo, detalhe, job_id, ocorrido_em) VALUES ${values.join(',')}`, params);
+    }
+    res.json({ ok: true, n: values.length });
+  } catch (err) {
+    console.error('logs:', err.message);
+    res.status(500).json({ error: 'Erro interno' });
+  }
+});
+
 module.exports = router;

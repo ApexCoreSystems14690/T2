@@ -1,0 +1,262 @@
+// API do Painel Admin. TUDO aqui exige login + is_admin (checado no servidor, em cada request).
+const router = require('express').Router();
+const pool = require('../db/pool');
+const { requireAuth, requireAdmin } = require('../middleware/auth');
+
+router.use(requireAuth);
+router.use(requireAdmin);
+
+// ------------------------------------------------------------
+// Whitelist de comandos que o jogo sabe executar + validação do payload
+// ------------------------------------------------------------
+const num = (v, min, max) => {
+  const n = Number(v);
+  if (!Number.isFinite(n)) return null;
+  if (min != null && n < min) return null;
+  if (max != null && n > max) return null;
+  return n;
+};
+const str = (v, max) => (typeof v === 'string' && v.trim().length > 0 && v.length <= (max || 64)) ? v.trim() : null;
+
+const COMANDOS = {
+  // alvo obrigatório (jogador online)
+  dinheiro_set:   { alvo: true,  valida: p => ({ valor: num(p.valor, 0, 1e12) }) },
+  dinheiro_add:   { alvo: true,  valida: p => ({ valor: num(p.valor, -1e12, 1e12) }) },
+  banco_set:      { alvo: true,  valida: p => ({ valor: num(p.valor, 0, 1e12) }) },
+  item_add:       { alvo: true,  valida: p => ({ item: str(p.item), qtd: num(p.qtd, 1, 99) || 1 }) },
+  item_remove:    { alvo: true,  valida: p => ({ item: str(p.item), qtd: num(p.qtd, 1, 99) || 1 }) },
+  emprego:        { alvo: true,  valida: p => ({ emprego: typeof p.emprego === 'string' && p.emprego.length <= 64 ? p.emprego : null }) },
+  level_set:      { alvo: true,  valida: p => ({ level: num(p.level, 1, 9999) }) },
+  slots_set:      { alvo: true,  valida: p => ({ slots: num(p.slots, 1, 6) }) },
+  tp_local:       { alvo: true,  valida: p => ({ local: str(p.local) }) },
+  tp_jogador:     { alvo: true,  valida: p => ({ para: str(p.para) }) },
+  tp_coord:       { alvo: true,  valida: p => ({ x: num(p.x), y: num(p.y), z: num(p.z) }) },
+  trazer:         { alvo: true,  valida: p => ({ de: str(p.de) }) }, // traz "de" até o alvo
+  curar:          { alvo: true,  valida: () => ({}) },
+  matar:          { alvo: true,  valida: () => ({}) },
+  kick:           { alvo: true,  valida: p => ({ motivo: str(p.motivo, 200) || 'Expulso por um administrador' }) },
+  mensagem:       { alvo: true,  valida: p => ({ texto: str(p.texto, 300) }) },
+  carro_add:      { alvo: true,  valida: p => ({ carro: str(p.carro) }) },
+  carro_remove:   { alvo: true,  valida: p => ({ carro: str(p.carro) }) },
+  resetar_dados:  { alvo: true,  valida: () => ({}) },
+  corp_refresh:   { alvo: true,  valida: () => ({}) },
+  // alvo por roblox_id, pode estar offline
+  ban:            { alvo: 'id',  valida: p => ({ roblox_id: num(p.roblox_id, 1), motivo: str(p.motivo, 200) || 'Banido por um administrador' }) },
+  unban:          { alvo: 'id',  valida: p => ({ roblox_id: num(p.roblox_id, 1) }) },
+  // servidor inteiro
+  hora:           { alvo: false, valida: p => ({ clock: num(p.clock, 0, 24) }) },
+  anuncio:        { alvo: false, valida: p => ({ titulo: str(p.titulo, 40) || 'Aviso', texto: str(p.texto, 300) }) },
+};
+
+async function audit(req, acao, detalhe) {
+  try {
+    await pool.query('INSERT INTO admin_audit (admin_id, admin_nome, acao, detalhe) VALUES ($1, $2, $3, $4)',
+      [req.user.id, req.user.discord_username || ('user#' + req.user.id), acao, JSON.stringify(detalhe || {})]);
+  } catch (e) { console.error('audit:', e.message); }
+}
+
+// ------------------------------------------------------------
+// Estado ao vivo: servidores, jogadores online, catálogo
+// ------------------------------------------------------------
+router.get('/state', async (req, res) => {
+  try {
+    const servers = await pool.query(`SELECT job_id, place_id, players, catalog, updated_at FROM game_servers WHERE updated_at > NOW() - INTERVAL '90 seconds' ORDER BY updated_at DESC`);
+    let catalog = null;
+    const players = [];
+    for (const s of servers.rows) {
+      if (!catalog && s.catalog) catalog = s.catalog;
+      for (const p of (s.players || [])) players.push(Object.assign({ job_id: s.job_id }, p));
+    }
+    res.json({ servers: servers.rows.map(s => ({ job_id: s.job_id, place_id: s.place_id, n: (s.players || []).length, updated_at: s.updated_at })), players, catalog });
+  } catch (err) {
+    console.error('state:', err.message);
+    res.status(500).json({ error: 'Erro interno' });
+  }
+});
+
+// ------------------------------------------------------------
+// Enviar comando pro jogo
+// ------------------------------------------------------------
+router.post('/command', async (req, res) => {
+  try {
+    const { tipo, target_roblox_id, target_name, payload } = req.body || {};
+    const spec = COMANDOS[tipo];
+    if (!spec) return res.status(400).json({ error: 'Comando desconhecido' });
+    const dados = spec.valida(payload || {});
+    for (const k of Object.keys(dados)) {
+      if (dados[k] === null || dados[k] === undefined) return res.status(400).json({ error: 'Parâmetro inválido: ' + k });
+    }
+
+    // Descobre em que servidor o alvo está (comando vai só pra ele)
+    let jobId = null;
+    let alvoId = null, alvoNome = null;
+    if (spec.alvo === true) {
+      const servers = await pool.query(`SELECT job_id, players FROM game_servers WHERE updated_at > NOW() - INTERVAL '90 seconds'`);
+      for (const s of servers.rows) {
+        for (const p of (s.players || [])) {
+          if ((target_roblox_id && Number(p.userId) === Number(target_roblox_id)) || (target_name && p.name === target_name)) {
+            jobId = s.job_id; alvoId = p.userId; alvoNome = p.name;
+          }
+        }
+      }
+      if (!jobId) return res.status(400).json({ error: 'Jogador não está online em nenhum servidor' });
+    } else if (spec.alvo === 'id') {
+      alvoId = dados.roblox_id;
+      alvoNome = target_name || null;
+    }
+
+    if (spec.alvo === false) {
+      // servidor inteiro: um comando por servidor ativo
+      const servers = await pool.query(`SELECT job_id FROM game_servers WHERE updated_at > NOW() - INTERVAL '90 seconds'`);
+      if (servers.rows.length === 0) return res.status(400).json({ error: 'Nenhum servidor online' });
+      const ids = [];
+      for (const s of servers.rows) {
+        const r = await pool.query(
+          'INSERT INTO game_commands (tipo, payload, job_id, created_by) VALUES ($1, $2, $3, $4) RETURNING id',
+          [tipo, JSON.stringify(dados), s.job_id, req.user.id]);
+        ids.push(r.rows[0].id);
+      }
+      await audit(req, 'comando:' + tipo, { payload: dados, servidores: servers.rows.length });
+      return res.json({ ok: true, ids });
+    }
+
+    if (spec.alvo === 'id') {
+      // ban/unban: manda pra todos os servidores (o online executa kick; todos podem gravar o DataStore, mas só um precisa)
+      const servers = await pool.query(`SELECT job_id FROM game_servers WHERE updated_at > NOW() - INTERVAL '90 seconds' ORDER BY updated_at DESC LIMIT 1`);
+      if (servers.rows.length === 0) return res.status(400).json({ error: 'Nenhum servidor online pra executar' });
+      jobId = servers.rows[0].job_id;
+    }
+
+    const r = await pool.query(
+      'INSERT INTO game_commands (tipo, target_roblox_id, target_name, payload, job_id, created_by) VALUES ($1, $2, $3, $4, $5, $6) RETURNING id',
+      [tipo, alvoId, alvoNome, JSON.stringify(dados), jobId, req.user.id]);
+    await audit(req, 'comando:' + tipo, { alvo: alvoNome || alvoId, payload: dados });
+    res.json({ ok: true, id: r.rows[0].id });
+  } catch (err) {
+    console.error('command:', err.message);
+    res.status(500).json({ error: 'Erro interno' });
+  }
+});
+
+// Histórico de comandos (com resultado)
+router.get('/commands', async (req, res) => {
+  try {
+    const r = await pool.query(
+      `SELECT c.*, u.discord_username AS admin FROM game_commands c LEFT JOIN users u ON u.id = c.created_by
+       ORDER BY c.id DESC LIMIT 100`);
+    res.json({ commands: r.rows });
+  } catch (err) { res.status(500).json({ error: 'Erro interno' }); }
+});
+
+// ------------------------------------------------------------
+// Logs do jogo
+// ------------------------------------------------------------
+router.get('/logs', async (req, res) => {
+  try {
+    const tipo = str(req.query.tipo, 32);
+    const q = str(req.query.q, 64);
+    const limit = Math.min(Math.max(parseInt(req.query.limit) || 200, 1), 1000);
+    const where = [];
+    const params = [];
+    if (tipo && tipo !== 'todos') { params.push(tipo); where.push(`tipo = $${params.length}`); }
+    if (q) { params.push('%' + q + '%'); where.push(`(jogador ILIKE $${params.length} OR alvo ILIKE $${params.length})`); }
+    params.push(limit);
+    const r = await pool.query(
+      `SELECT id, tipo, jogador, alvo, detalhe, job_id, COALESCE(ocorrido_em, created_at) AS quando FROM game_logs
+       ${where.length ? 'WHERE ' + where.join(' AND ') : ''} ORDER BY id DESC LIMIT $${params.length}`, params);
+    const counts = await pool.query(`SELECT tipo, COUNT(*)::int AS n FROM game_logs GROUP BY tipo`);
+    res.json({ logs: r.rows, counts: counts.rows });
+  } catch (err) {
+    console.error('logs:', err.message);
+    res.status(500).json({ error: 'Erro interno' });
+  }
+});
+
+router.delete('/logs', async (req, res) => {
+  try {
+    const tipo = str(req.query.tipo, 32);
+    let r;
+    if (tipo && tipo !== 'todos') r = await pool.query('DELETE FROM game_logs WHERE tipo = $1', [tipo]);
+    else r = await pool.query('DELETE FROM game_logs');
+    await audit(req, 'logs:resetar', { tipo: tipo || 'todos', apagados: r.rowCount });
+    res.json({ ok: true, apagados: r.rowCount });
+  } catch (err) { res.status(500).json({ error: 'Erro interno' }); }
+});
+
+// ------------------------------------------------------------
+// Auditoria das ações do painel
+// ------------------------------------------------------------
+router.get('/audit', async (req, res) => {
+  try {
+    const r = await pool.query('SELECT * FROM admin_audit ORDER BY id DESC LIMIT 200');
+    res.json({ audit: r.rows });
+  } catch (err) { res.status(500).json({ error: 'Erro interno' }); }
+});
+
+// ------------------------------------------------------------
+// Usuários do site: conceder/retirar admin
+// ------------------------------------------------------------
+router.get('/users', async (req, res) => {
+  try {
+    const r = await pool.query(
+      `SELECT id, discord_username, discord_id, discord_avatar, roblox_id, roblox_username, is_admin, created_at,
+              (discord_id LIKE 'roblox_%') AS is_placeholder
+       FROM users ORDER BY is_admin DESC, LOWER(COALESCE(discord_username, roblox_username, '')) ASC`);
+    res.json({ users: r.rows });
+  } catch (err) { res.status(500).json({ error: 'Erro interno' }); }
+});
+
+router.post('/users/:id/admin', async (req, res) => {
+  try {
+    const id = parseInt(req.params.id);
+    const value = !!(req.body && req.body.value);
+    if (!id) return res.status(400).json({ error: 'id inválido' });
+    if (id === req.user.id && !value) return res.status(400).json({ error: 'Você não pode remover seu próprio admin' });
+    const alvo = await pool.query('SELECT * FROM users WHERE id = $1', [id]);
+    if (alvo.rows.length === 0) return res.status(404).json({ error: 'Usuário não encontrado' });
+    if (value && String(alvo.rows[0].discord_id).startsWith('roblox_')) {
+      return res.status(400).json({ error: 'Esse usuário ainda não entrou com Discord; não pode ser admin' });
+    }
+    await pool.query('UPDATE users SET is_admin = $1, updated_at = NOW() WHERE id = $2', [value, id]);
+    await audit(req, value ? 'admin:conceder' : 'admin:retirar', { user_id: id, nome: alvo.rows[0].discord_username || alvo.rows[0].roblox_username });
+    res.json({ ok: true });
+  } catch (err) { res.status(500).json({ error: 'Erro interno' }); }
+});
+
+// ------------------------------------------------------------
+// Cargo em corporação (atalho do painel): user_id + corp_id + rank_id
+// ------------------------------------------------------------
+router.get('/corps', async (req, res) => {
+  try {
+    const corps = await pool.query('SELECT id, name, slug FROM corporations WHERE is_active = true ORDER BY name');
+    const ranks = await pool.query('SELECT id, corporation_id, name, level FROM ranks ORDER BY corporation_id, level DESC');
+    res.json({ corps: corps.rows, ranks: ranks.rows });
+  } catch (err) { res.status(500).json({ error: 'Erro interno' }); }
+});
+
+router.post('/cargo', async (req, res) => {
+  try {
+    const user_id = parseInt(req.body.user_id), corp_id = parseInt(req.body.corp_id);
+    const rank_id = req.body.rank_id ? parseInt(req.body.rank_id) : null;
+    if (!user_id || !corp_id) return res.status(400).json({ error: 'user_id e corp_id são obrigatórios' });
+    if (rank_id) {
+      const rk = await pool.query('SELECT 1 FROM ranks WHERE id = $1 AND corporation_id = $2', [rank_id, corp_id]);
+      if (rk.rows.length === 0) return res.status(400).json({ error: 'Cargo não pertence a essa corporação' });
+    }
+    if (req.body.remover) {
+      await pool.query('DELETE FROM members WHERE user_id = $1 AND corporation_id = $2', [user_id, corp_id]);
+    } else {
+      await pool.query(
+        `INSERT INTO members (corporation_id, user_id, rank_id) VALUES ($1, $2, $3)
+         ON CONFLICT (corporation_id, user_id) DO UPDATE SET rank_id = EXCLUDED.rank_id`,
+        [corp_id, user_id, rank_id]);
+    }
+    await audit(req, req.body.remover ? 'cargo:remover' : 'cargo:definir', { user_id, corp_id, rank_id });
+    res.json({ ok: true });
+  } catch (err) {
+    console.error('cargo:', err.message);
+    res.status(500).json({ error: 'Erro interno' });
+  }
+});
+
+module.exports = router;

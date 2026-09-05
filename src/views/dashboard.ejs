@@ -43,8 +43,12 @@
 </head>
 <body>
   <div class="topbar">
-    <h1>SANTA FÉ — CORPORAÇÕES</h1>
+    <div style="display:flex;align-items:center;gap:1rem">
+      <a href="/" title="Voltar ao início" style="font-size:1.1rem;line-height:1">&larr; Início</a>
+      <h1>SANTA FÉ — CORPORAÇÕES</h1>
+    </div>
     <div class="user">
+      <% if (user.is_admin) { %><a href="/admin" style="color:#ef4444">Painel Admin</a><% } %>
       <span><%= user.discord_username %></span>
       <a href="/auth/logout">Sair</a>
     </div>

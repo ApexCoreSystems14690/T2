@@ -1,0 +1,480 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Painel Admin — Santa Fé</title>
+  <style>
+    * { margin: 0; padding: 0; box-sizing: border-box; }
+    body { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif; background: #0a0e17; color: #f0f4f8; min-height: 100vh; }
+    .topbar { background: #131a2b; border-bottom: 1px solid #1e2a40; padding: 0.75rem 1.5rem; display: flex; align-items: center; justify-content: space-between; }
+    .topbar h1 { font-size: 1rem; color: #ef4444; letter-spacing: 0.04em; }
+    .topbar a { color: #7a8ba5; text-decoration: none; font-size: 0.85rem; }
+    .topbar a:hover { color: #00d4ff; }
+    .topbar .left { display: flex; align-items: center; gap: 1rem; }
+    .main { max-width: 1180px; margin: 0 auto; padding: 1.5rem 1.25rem; }
+    .tabs { display: flex; gap: 0; border-bottom: 1px solid #1e2a40; margin-bottom: 1.25rem; overflow-x: auto; }
+    .tab { padding: 0.6rem 1.1rem; color: #7a8ba5; cursor: pointer; font-size: 0.85rem; font-weight: 600; border-bottom: 2px solid transparent; white-space: nowrap; }
+    .tab.active { color: #00d4ff; border-bottom-color: #00d4ff; }
+    .tab:hover { color: #f0f4f8; }
+    .panel { display: none; } .panel.active { display: block; }
+    .row { display: flex; gap: .75rem; flex-wrap: wrap; align-items: flex-end; margin-bottom: 1rem; }
+    .fg { display: flex; flex-direction: column; gap: .25rem; min-width: 140px; flex: 1; }
+    .fg label { font-size: .72rem; color: #7a8ba5; font-weight: 600; text-transform: uppercase; letter-spacing: .04em; }
+    input, select, textarea { background: #131a2b; border: 1px solid #1e2a40; color: #f0f4f8; padding: .5rem .7rem; border-radius: 4px; font-size: .85rem; }
+    input:focus, select:focus, textarea:focus { outline: none; border-color: #00d4ff; }
+    .btn { padding: .5rem 1rem; background: #00d4ff; color: #0a0e17; border: none; border-radius: 4px; font-weight: 700; font-size: .8rem; cursor: pointer; white-space: nowrap; }
+    .btn:hover { opacity: .85; }
+    .btn.sec { background: transparent; border: 1px solid #2d3a52; color: #f0f4f8; }
+    .btn.danger { background: #ef4444; color: #fff; }
+    .btn.sm { padding: .3rem .6rem; font-size: .72rem; }
+    table { width: 100%; border-collapse: collapse; font-size: .82rem; }
+    th { text-align: left; color: #7a8ba5; font-weight: 600; padding: .45rem .6rem; border-bottom: 1px solid #1e2a40; font-size: .7rem; text-transform: uppercase; letter-spacing: .05em; }
+    td { padding: .5rem .6rem; border-bottom: 1px solid #1e2a4066; vertical-align: middle; }
+    tr:hover td { background: #131a2b; }
+    .muted { color: #7a8ba5; }
+    .pill { display: inline-block; padding: .1rem .45rem; border-radius: 3px; font-size: .68rem; font-weight: 700; text-transform: uppercase; letter-spacing: .04em; background: #1e2a40; color: #7a8ba5; }
+    .pill.ok { background: #10b98122; color: #10b981; } .pill.err { background: #ef444422; color: #ef4444; } .pill.warn { background: #f59e0b22; color: #f59e0b; } .pill.info { background: #00d4ff22; color: #00d4ff; }
+    .acts { display: flex; gap: .3rem; flex-wrap: wrap; }
+    .acts button { background: #1e2a40; border: 1px solid #2d3a52; color: #f0f4f8; border-radius: 4px; padding: .25rem .5rem; font-size: .72rem; cursor: pointer; }
+    .acts button:hover { border-color: #00d4ff; }
+    .acts button.d { border-color: #ef444455; color: #ef4444; }
+    .card { background: #131a2b; border: 1px solid #1e2a40; border-radius: 8px; padding: 1rem 1.1rem; margin-bottom: 1rem; }
+    .card h3 { font-size: .85rem; color: #00d4ff; margin-bottom: .75rem; text-transform: uppercase; letter-spacing: .05em; }
+    .grid2 { display: grid; grid-template-columns: 1fr 1fr; gap: 1rem; }
+    @media (max-width: 800px) { .grid2 { grid-template-columns: 1fr; } }
+    .alert { position: fixed; top: 1rem; right: 1rem; z-index: 200; padding: .7rem 1rem; border-radius: 6px; font-size: .85rem; display: none; max-width: 420px; }
+    .alert.success { background: #10b981; color: #062; display: block; } .alert.error { background: #ef4444; color: #fff; display: block; }
+    .modal-overlay { display: none; position: fixed; inset: 0; background: rgba(0,0,0,.6); z-index: 100; align-items: center; justify-content: center; }
+    .modal-overlay.active { display: flex; }
+    .modal { background: #131a2b; border: 1px solid #2d3a52; border-radius: 10px; padding: 1.25rem; width: 92%; max-width: 440px; }
+    .modal h2 { font-size: .95rem; margin-bottom: .25rem; color: #00d4ff; }
+    .modal .sub { color: #7a8ba5; font-size: .78rem; margin-bottom: .9rem; }
+    .modal .fg { margin-bottom: .7rem; }
+    .modal .actions { display: flex; gap: .5rem; justify-content: flex-end; margin-top: .75rem; }
+    .stat { display: flex; gap: 1.5rem; margin-bottom: 1rem; font-size: .8rem; color: #7a8ba5; }
+    .stat b { color: #f0f4f8; }
+    .empty { color: #7a8ba5; font-size: .85rem; padding: 1.5rem; text-align: center; }
+    .clock { display: flex; gap: .5rem; flex-wrap: wrap; }
+    .hbar { height: 6px; background: #1e2a40; border-radius: 3px; overflow: hidden; width: 70px; display: inline-block; vertical-align: middle; margin-right: .35rem; }
+    .hbar i { display: block; height: 100%; background: #10b981; }
+    .picker { position: relative; }
+    .picker-list { position: absolute; top: 100%; left: 0; right: 0; z-index: 20; max-height: 220px; overflow-y: auto; background: #131a2b; border: 1px solid #2d3a52; border-radius: 6px; margin-top: 4px; display: none; }
+    .picker-list.open { display: block; }
+    .picker-item { padding: .45rem .7rem; cursor: pointer; font-size: .82rem; border-bottom: 1px solid #1e2a4066; }
+    .picker-item:hover { background: #1e2a40; }
+    .picker-item .m { color: #7a8ba5; font-size: .72rem; }
+    pre.det { font-size: .72rem; color: #7a8ba5; white-space: pre-wrap; word-break: break-all; margin: 0; }
+  </style>
+</head>
+<body>
+  <div class="topbar">
+    <div class="left">
+      <a href="/" title="Voltar ao início" style="font-size:1.05rem">&larr; Início</a>
+      <h1>🛡️ PAINEL ADMIN — SANTA FÉ</h1>
+    </div>
+    <div class="left">
+      <a href="/dashboard">Corporações</a>
+      <span class="muted" style="font-size:.85rem"><%= user.discord_username %></span>
+      <a href="/auth/logout">Sair</a>
+    </div>
+  </div>
+
+  <div id="alert" class="alert"></div>
+
+  <div class="main">
+    <div class="stat">
+      <span>Servidores online: <b id="st-servers">–</b></span>
+      <span>Jogadores online: <b id="st-players">–</b></span>
+      <span>Atualizado: <b id="st-upd">–</b></span>
+    </div>
+
+    <div class="tabs">
+      <div class="tab active" data-tab="jogadores">Jogadores</div>
+      <div class="tab" data-tab="servidor">Servidor</div>
+      <div class="tab" data-tab="logs">Logs</div>
+      <div class="tab" data-tab="cargos">Cargos</div>
+      <div class="tab" data-tab="usuarios">Usuários</div>
+      <div class="tab" data-tab="historico">Histórico</div>
+    </div>
+
+    <!-- JOGADORES -->
+    <div class="panel active" id="panel-jogadores">
+      <div class="row">
+        <div class="fg" style="max-width:320px"><label>Buscar</label><input id="pl-busca" placeholder="nome ou id"></div>
+        <button class="btn sec" onclick="loadState()">Atualizar</button>
+      </div>
+      <div style="overflow-x:auto">
+        <table>
+          <thead><tr><th>Jogador</th><th>Vida</th><th>Carteira</th><th>Banco</th><th>Emprego</th><th>Level</th><th>Posição</th><th>Ações</th></tr></thead>
+          <tbody id="pl-body"><tr><td colspan="8" class="empty">Carregando…</td></tr></tbody>
+        </table>
+      </div>
+      <div class="card" style="margin-top:1.25rem">
+        <h3>Ação por Roblox ID (jogador offline)</h3>
+        <div class="row">
+          <div class="fg" style="max-width:220px"><label>Roblox ID</label><input id="off-id" type="number" placeholder="123456789"></div>
+          <div class="fg" style="max-width:320px"><label>Motivo (ban)</label><input id="off-motivo" placeholder="Motivo do banimento"></div>
+          <button class="btn danger" onclick="banOffline()">Banir</button>
+          <button class="btn sec" onclick="unbanOffline()">Desbanir</button>
+        </div>
+      </div>
+    </div>
+
+    <!-- SERVIDOR -->
+    <div class="panel" id="panel-servidor">
+      <div class="grid2">
+        <div class="card">
+          <h3>Hora do dia</h3>
+          <div class="clock">
+            <button class="btn sec" onclick="cmdServer('hora',{clock:6.5})">🌅 Amanhecer</button>
+            <button class="btn sec" onclick="cmdServer('hora',{clock:12})">☀️ Meio-dia</button>
+            <button class="btn sec" onclick="cmdServer('hora',{clock:17.5})">🌇 Entardecer</button>
+            <button class="btn sec" onclick="cmdServer('hora',{clock:0})">🌙 Noite</button>
+          </div>
+          <div class="row" style="margin-top:.75rem">
+            <div class="fg" style="max-width:160px"><label>Hora (0–24)</label><input id="hora-custom" type="number" step="0.5" min="0" max="24" value="12"></div>
+            <button class="btn" onclick="cmdServer('hora',{clock:parseFloat(document.getElementById('hora-custom').value)})">Aplicar</button>
+          </div>
+        </div>
+        <div class="card">
+          <h3>Anúncio pra todos</h3>
+          <div class="fg" style="margin-bottom:.6rem"><label>Título</label><input id="an-titulo" value="Aviso" maxlength="40"></div>
+          <div class="fg"><label>Mensagem</label><textarea id="an-texto" rows="3" maxlength="300" placeholder="Texto do anúncio"></textarea></div>
+          <div style="margin-top:.6rem"><button class="btn" onclick="cmdServer('anuncio',{titulo:document.getElementById('an-titulo').value,texto:document.getElementById('an-texto').value})">Enviar anúncio</button></div>
+        </div>
+      </div>
+      <div class="card">
+        <h3>Servidores</h3>
+        <div id="srv-list" class="muted" style="font-size:.82rem">–</div>
+      </div>
+    </div>
+
+    <!-- LOGS -->
+    <div class="panel" id="panel-logs">
+      <div class="row">
+        <div class="fg" style="max-width:180px"><label>Tipo</label>
+          <select id="log-tipo" onchange="loadLogs()">
+            <option value="todos">Todos</option>
+            <option value="abate">Abates (derrubou)</option>
+            <option value="morte">Mortes</option>
+            <option value="tiro">Tiros (acertos)</option>
+            <option value="entrou">Entradas</option>
+            <option value="saiu">Saídas</option>
+            <option value="admin">Ações admin (jogo)</option>
+          </select>
+        </div>
+        <div class="fg" style="max-width:260px"><label>Jogador</label><input id="log-q" placeholder="nome"></div>
+        <button class="btn sec" onclick="loadLogs()">Filtrar</button>
+        <span id="log-counts" class="muted" style="font-size:.75rem;flex:1"></span>
+        <button class="btn danger" onclick="resetLogs()">Resetar logs (tipo selecionado)</button>
+      </div>
+      <div style="overflow-x:auto">
+        <table>
+          <thead><tr><th>Quando</th><th>Tipo</th><th>Jogador</th><th>Alvo</th><th>Detalhe</th></tr></thead>
+          <tbody id="log-body"><tr><td colspan="5" class="empty">Carregando…</td></tr></tbody>
+        </table>
+      </div>
+    </div>
+
+    <!-- CARGOS -->
+    <div class="panel" id="panel-cargos">
+      <div class="card">
+        <h3>Definir cargo em corporação</h3>
+        <div class="row">
+          <div class="fg" style="flex:2"><label>Usuário do site</label>
+            <div class="picker"><input id="cg-user" placeholder="buscar por Discord, Roblox ou ID" autocomplete="off"><div class="picker-list" id="cg-list"></div></div>
+            <div id="cg-picked" class="muted" style="font-size:.75rem;min-height:1rem"></div>
+          </div>
+          <div class="fg"><label>Corporação</label><select id="cg-corp" onchange="fillRanks()"></select></div>
+          <div class="fg"><label>Cargo</label><select id="cg-rank"><option value="">Sem cargo</option></select></div>
+          <button class="btn" onclick="setCargo(false)">Definir</button>
+          <button class="btn danger" onclick="setCargo(true)">Remover da corp</button>
+        </div>
+        <div class="muted" style="font-size:.75rem">Se o jogador estiver online, o jogo atualiza a corporação dele em até 2 minutos (ou na hora, com o botão "Atualizar corp" na aba Jogadores).</div>
+      </div>
+    </div>
+
+    <!-- USUARIOS -->
+    <div class="panel" id="panel-usuarios">
+      <div class="row"><div class="fg" style="max-width:320px"><label>Buscar</label><input id="us-busca" oninput="renderUsers()" placeholder="nome"></div></div>
+      <div style="overflow-x:auto">
+        <table>
+          <thead><tr><th>Discord</th><th>Roblox</th><th>Admin</th><th></th></tr></thead>
+          <tbody id="us-body"></tbody>
+        </table>
+      </div>
+    </div>
+
+    <!-- HISTORICO -->
+    <div class="panel" id="panel-historico">
+      <div class="grid2">
+        <div class="card">
+          <h3>Comandos enviados</h3>
+          <div style="overflow-x:auto"><table><thead><tr><th>#</th><th>Tipo</th><th>Alvo</th><th>Admin</th><th>Status</th><th>Resultado</th></tr></thead><tbody id="hist-body"></tbody></table></div>
+        </div>
+        <div class="card">
+          <h3>Auditoria do painel</h3>
+          <div style="overflow-x:auto"><table><thead><tr><th>Quando</th><th>Admin</th><th>Ação</th><th>Detalhe</th></tr></thead><tbody id="aud-body"></tbody></table></div>
+        </div>
+      </div>
+      <button class="btn sec" onclick="loadHist()">Atualizar</button>
+    </div>
+  </div>
+
+  <!-- MODAL DE COMANDO -->
+  <div class="modal-overlay" id="modal">
+    <div class="modal">
+      <h2 id="m-title">Comando</h2>
+      <div class="sub" id="m-sub"></div>
+      <div id="m-fields"></div>
+      <div class="actions">
+        <button class="btn sec" onclick="closeModal()">Cancelar</button>
+        <button class="btn" id="m-ok" onclick="submitModal()">Executar</button>
+      </div>
+    </div>
+  </div>
+
+  <script>
+    // ---------- util ----------
+    const $ = id => document.getElementById(id);
+    let alertT;
+    function showAlert(msg, type) { const a = $('alert'); a.textContent = msg; a.className = 'alert ' + type; clearTimeout(alertT); alertT = setTimeout(() => a.className = 'alert', 3500); }
+    async function api(method, path, body) {
+      const r = await fetch('/api/admin' + path, { method, headers: { 'Content-Type': 'application/json' }, body: body ? JSON.stringify(body) : undefined });
+      let j = null; try { j = await r.json(); } catch {}
+      if (!r.ok) throw new Error((j && j.error) || ('HTTP ' + r.status));
+      return j;
+    }
+    const esc = s => String(s == null ? '' : s).replace(/[&<>"']/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
+    const fmtN = n => (Number(n) || 0).toLocaleString('pt-BR');
+    const fmtT = t => { const d = new Date(t); return d.toLocaleDateString('pt-BR') + ' ' + d.toLocaleTimeString('pt-BR'); };
+
+    document.querySelectorAll('.tab').forEach(tab => tab.addEventListener('click', () => {
+      document.querySelectorAll('.tab').forEach(t => t.classList.remove('active'));
+      document.querySelectorAll('.panel').forEach(p => p.classList.remove('active'));
+      tab.classList.add('active'); $('panel-' + tab.dataset.tab).classList.add('active');
+      if (tab.dataset.tab === 'logs') loadLogs();
+      if (tab.dataset.tab === 'usuarios') loadUsers();
+      if (tab.dataset.tab === 'historico') loadHist();
+      if (tab.dataset.tab === 'cargos') loadCargos();
+    }));
+
+    // ---------- estado ao vivo ----------
+    let STATE = { players: [], servers: [], catalog: null };
+    async function loadState() {
+      try {
+        STATE = await api('GET', '/state');
+        $('st-servers').textContent = STATE.servers.length;
+        $('st-players').textContent = STATE.players.length;
+        $('st-upd').textContent = new Date().toLocaleTimeString('pt-BR');
+        renderPlayers();
+        $('srv-list').innerHTML = STATE.servers.length ? STATE.servers.map(s => '<div><span class="pill info">' + esc(s.job_id.slice(0, 8)) + '</span> ' + s.n + ' jogador(es) · visto ' + fmtT(s.updated_at) + '</div>').join('') : 'Nenhum servidor mandou heartbeat nos últimos 90s. O jogo precisa estar rodando com o AdminBridge ativo.';
+      } catch (e) { showAlert('Erro ao carregar estado: ' + e.message, 'error'); }
+    }
+    $('pl-busca').addEventListener('input', renderPlayers);
+    function renderPlayers() {
+      const q = $('pl-busca').value.toLowerCase().trim();
+      const list = STATE.players.filter(p => !q || String(p.name).toLowerCase().includes(q) || String(p.userId).includes(q));
+      if (!list.length) { $('pl-body').innerHTML = '<tr><td colspan="8" class="empty">' + (STATE.players.length ? 'Nenhum jogador bate com a busca' : 'Nenhum jogador online') + '</td></tr>'; return; }
+      $('pl-body').innerHTML = list.map(p => {
+        const hp = Math.max(0, Math.min(100, Number(p.health) || 0));
+        const pos = p.pos ? p.pos.map(v => Math.round(v)).join(', ') : '–';
+        return '<tr>' +
+          '<td><b>' + esc(p.name) + '</b><div class="muted" style="font-size:.7rem">ID ' + esc(p.userId) + ' · srv ' + esc(String(p.job_id).slice(0, 6)) + (p.preso ? ' · <span class="pill err">preso</span>' : '') + '</div></td>' +
+          '<td><span class="hbar"><i style="width:' + hp + '%"></i></span>' + hp + '</td>' +
+          '<td>R$ ' + fmtN(p.dinheiro) + '</td><td>R$ ' + fmtN(p.banco) + '</td>' +
+          '<td>' + esc(p.emprego || '—') + '</td><td>' + esc(p.level || '–') + '</td>' +
+          '<td class="muted" style="font-size:.72rem">' + esc(pos) + '</td>' +
+          '<td><div class="acts">' +
+            '<button onclick="openCmd(\'dinheiro_set\',' + p.userId + ')">💰 Dinheiro</button>' +
+            '<button onclick="openCmd(\'item_add\',' + p.userId + ')">🎒 Item</button>' +
+            '<button onclick="openCmd(\'emprego\',' + p.userId + ')">💼 Emprego</button>' +
+            '<button onclick="openCmd(\'tp_local\',' + p.userId + ')">📍 TP</button>' +
+            '<button onclick="quick(\'curar\',' + p.userId + ')">❤️ Curar</button>' +
+            '<button onclick="openCmd(\'mensagem\',' + p.userId + ')">✉️ Msg</button>' +
+            '<button onclick="openCmd(\'mais\',' + p.userId + ')">⚙️ Mais</button>' +
+            '<button class="d" onclick="openCmd(\'kick\',' + p.userId + ')">👢 Kick</button>' +
+            '<button class="d" onclick="openCmd(\'ban\',' + p.userId + ')">🔨 Ban</button>' +
+          '</div></td></tr>';
+      }).join('');
+    }
+    setInterval(loadState, 5000);
+    loadState();
+
+    // ---------- comandos ----------
+    function cat(k, fallback) { return (STATE.catalog && Array.isArray(STATE.catalog[k]) && STATE.catalog[k].length) ? STATE.catalog[k] : fallback; }
+    const FORMS = {
+      dinheiro_set: { t: 'Dinheiro', f: [
+        { k: 'modo', l: 'Operação', type: 'select', opts: [['set', 'Definir carteira'], ['add', 'Adicionar (negativo tira)'], ['banco', 'Definir banco']] },
+        { k: 'valor', l: 'Valor (R$)', type: 'number', v: 1000 }] },
+      item_add: { t: 'Item', f: [
+        { k: 'modo', l: 'Operação', type: 'select', opts: [['add', 'Dar item'], ['remove', 'Tirar item']] },
+        { k: 'item', l: 'Item', type: 'datalist', opts: () => cat('itens', []) },
+        { k: 'qtd', l: 'Quantidade', type: 'number', v: 1 }] },
+      emprego: { t: 'Emprego', f: [{ k: 'emprego', l: 'Emprego (vazio = desempregado)', type: 'datalist', opts: () => cat('empregos', []) }] },
+      tp_local: { t: 'Teleporte', f: [
+        { k: 'modo', l: 'Destino', type: 'select', opts: [['local', 'Local do mapa'], ['jogador', 'Até um jogador'], ['coord', 'Coordenada'], ['trazer', 'Trazer outro jogador até este']] },
+        { k: 'local', l: 'Local', type: 'select', opts: () => cat('locais', []).map(l => [l.nome, l.nome]) },
+        { k: 'para', l: 'Jogador', type: 'datalist', opts: () => STATE.players.map(p => p.name) },
+        { k: 'x', l: 'X', type: 'number', v: 0 }, { k: 'y', l: 'Y', type: 'number', v: 50 }, { k: 'z', l: 'Z', type: 'number', v: 0 }] },
+      mensagem: { t: 'Mensagem privada', f: [{ k: 'texto', l: 'Texto', type: 'text' }] },
+      kick: { t: 'Expulsar', f: [{ k: 'motivo', l: 'Motivo', type: 'text', v: 'Expulso por um administrador' }], danger: true },
+      ban: { t: 'Banir', f: [{ k: 'motivo', l: 'Motivo', type: 'text', v: 'Banido por um administrador' }], danger: true },
+      mais: { t: 'Mais ações', f: [
+        { k: 'modo', l: 'Ação', type: 'select', opts: [['level_set', 'Definir level'], ['slots_set', 'Definir slots da barra (1–6)'], ['carro_add', 'Dar carro'], ['carro_remove', 'Tirar carro'], ['matar', 'Matar (derrubar)'], ['corp_refresh', 'Atualizar corporação (site → jogo)'], ['resetar_dados', 'RESETAR DADOS (zera tudo)']] },
+        { k: 'level', l: 'Level', type: 'number', v: 1 }, { k: 'slots', l: 'Slots', type: 'number', v: 4 },
+        { k: 'carro', l: 'Carro', type: 'datalist', opts: () => cat('carros', []) }] },
+    };
+    let MODAL = null;
+    function openCmd(kind, userId) {
+      const p = STATE.players.find(x => Number(x.userId) === Number(userId));
+      if (!p) return showAlert('Jogador saiu', 'error');
+      const spec = FORMS[kind];
+      MODAL = { kind, p, spec };
+      $('m-title').textContent = spec.t + ' — ' + p.name;
+      $('m-sub').textContent = 'ID ' + p.userId + ' · carteira R$ ' + fmtN(p.dinheiro) + ' · ' + (p.emprego || 'sem emprego');
+      $('m-ok').className = 'btn' + (spec.danger ? ' danger' : '');
+      $('m-fields').innerHTML = spec.f.map(f => {
+        let inp;
+        if (f.type === 'select') {
+          const opts = typeof f.opts === 'function' ? f.opts() : f.opts;
+          inp = '<select id="mf-' + f.k + '">' + opts.map(o => '<option value="' + esc(o[0]) + '">' + esc(o[1]) + '</option>').join('') + '</select>';
+        } else if (f.type === 'datalist') {
+          const opts = typeof f.opts === 'function' ? f.opts() : f.opts;
+          inp = '<input id="mf-' + f.k + '" list="dl-' + f.k + '" autocomplete="off"><datalist id="dl-' + f.k + '">' + opts.map(o => '<option value="' + esc(o) + '">').join('') + '</datalist>';
+        } else {
+          inp = '<input id="mf-' + f.k + '" type="' + f.type + '" value="' + esc(f.v == null ? '' : f.v) + '">';
+        }
+        return '<div class="fg" id="mfw-' + f.k + '"><label>' + esc(f.l) + '</label>' + inp + '</div>';
+      }).join('');
+      $('modal').classList.add('active');
+      const modo = $('mf-modo'); if (modo) { modo.addEventListener('change', toggleFields); toggleFields(); }
+    }
+    function toggleFields() {
+      const modo = $('mf-modo') && $('mf-modo').value;
+      const show = (ids) => ['local', 'para', 'x', 'y', 'z', 'level', 'slots', 'carro'].forEach(k => { const w = $('mfw-' + k); if (w) w.style.display = ids.includes(k) ? '' : 'none'; });
+      if (MODAL.kind === 'tp_local') show(modo === 'local' ? ['local'] : modo === 'jogador' ? ['para'] : modo === 'trazer' ? ['para'] : ['x', 'y', 'z']);
+      if (MODAL.kind === 'mais') show(modo === 'level_set' ? ['level'] : modo === 'slots_set' ? ['slots'] : (modo === 'carro_add' || modo === 'carro_remove') ? ['carro'] : []);
+    }
+    function closeModal() { $('modal').classList.remove('active'); MODAL = null; }
+    const val = k => { const e = $('mf-' + k); return e ? e.value : undefined; };
+    async function submitModal() {
+      if (!MODAL) return;
+      const { kind, p } = MODAL;
+      let tipo = kind, payload = {};
+      if (kind === 'dinheiro_set') { const m = val('modo'); tipo = m === 'add' ? 'dinheiro_add' : m === 'banco' ? 'banco_set' : 'dinheiro_set'; payload = { valor: Number(val('valor')) }; }
+      else if (kind === 'item_add') { tipo = val('modo') === 'remove' ? 'item_remove' : 'item_add'; payload = { item: val('item'), qtd: Number(val('qtd')) || 1 }; }
+      else if (kind === 'emprego') { payload = { emprego: val('emprego') || '' }; }
+      else if (kind === 'tp_local') { const m = val('modo'); if (m === 'local') { tipo = 'tp_local'; payload = { local: val('local') }; } else if (m === 'jogador') { tipo = 'tp_jogador'; payload = { para: val('para') }; } else if (m === 'trazer') { tipo = 'trazer'; payload = { de: val('para') }; } else { tipo = 'tp_coord'; payload = { x: Number(val('x')), y: Number(val('y')), z: Number(val('z')) }; } }
+      else if (kind === 'mensagem') { payload = { texto: val('texto') }; }
+      else if (kind === 'kick') { payload = { motivo: val('motivo') }; }
+      else if (kind === 'ban') { payload = { roblox_id: p.userId, motivo: val('motivo') }; }
+      else if (kind === 'mais') { tipo = val('modo'); if (tipo === 'level_set') payload = { level: Number(val('level')) }; if (tipo === 'slots_set') payload = { slots: Number(val('slots')) }; if (tipo === 'carro_add' || tipo === 'carro_remove') payload = { carro: val('carro') }; if (tipo === 'resetar_dados' && !confirm('ZERAR todos os dados de ' + p.name + '? Isso não tem volta.')) return; }
+      try {
+        await api('POST', '/command', { tipo, target_roblox_id: p.userId, target_name: p.name, payload });
+        showAlert('Comando "' + tipo + '" enviado pra ' + p.name, 'success');
+        closeModal();
+        setTimeout(loadState, 2500);
+      } catch (e) { showAlert(e.message, 'error'); }
+    }
+    async function quick(tipo, userId) {
+      const p = STATE.players.find(x => Number(x.userId) === Number(userId)); if (!p) return;
+      try { await api('POST', '/command', { tipo, target_roblox_id: p.userId, target_name: p.name, payload: {} }); showAlert(tipo + ' → ' + p.name, 'success'); } catch (e) { showAlert(e.message, 'error'); }
+    }
+    async function cmdServer(tipo, payload) {
+      try { const r = await api('POST', '/command', { tipo, payload }); showAlert('Enviado pra ' + r.ids.length + ' servidor(es)', 'success'); } catch (e) { showAlert(e.message, 'error'); }
+    }
+    async function banOffline() {
+      const id = Number($('off-id').value); if (!id) return showAlert('Informe o Roblox ID', 'error');
+      if (!confirm('Banir o Roblox ID ' + id + '?')) return;
+      try { await api('POST', '/command', { tipo: 'ban', payload: { roblox_id: id, motivo: $('off-motivo').value } }); showAlert('Ban enviado', 'success'); } catch (e) { showAlert(e.message, 'error'); }
+    }
+    async function unbanOffline() {
+      const id = Number($('off-id').value); if (!id) return showAlert('Informe o Roblox ID', 'error');
+      try { await api('POST', '/command', { tipo: 'unban', payload: { roblox_id: id } }); showAlert('Desban enviado', 'success'); } catch (e) { showAlert(e.message, 'error'); }
+    }
+
+    // ---------- logs ----------
+    async function loadLogs() {
+      try {
+        const tipo = $('log-tipo').value, q = $('log-q').value.trim();
+        const d = await api('GET', '/logs?tipo=' + encodeURIComponent(tipo) + '&q=' + encodeURIComponent(q) + '&limit=300');
+        $('log-counts').textContent = d.counts.map(c => c.tipo + ': ' + c.n).join(' · ');
+        if (!d.logs.length) { $('log-body').innerHTML = '<tr><td colspan="5" class="empty">Sem registros</td></tr>'; return; }
+        const cls = { abate: 'err', morte: 'err', tiro: 'warn', entrou: 'ok', saiu: '', admin: 'info' };
+        $('log-body').innerHTML = d.logs.map(l => '<tr><td class="muted" style="white-space:nowrap">' + fmtT(l.quando) + '</td><td><span class="pill ' + (cls[l.tipo] || '') + '">' + esc(l.tipo) + '</span></td><td>' + esc(l.jogador || '—') + '</td><td>' + esc(l.alvo || '—') + '</td><td><pre class="det">' + esc(Object.entries(l.detalhe || {}).map(([k, v]) => k + '=' + (typeof v === 'object' ? JSON.stringify(v) : v)).join('  ')) + '</pre></td></tr>').join('');
+      } catch (e) { showAlert(e.message, 'error'); }
+    }
+    async function resetLogs() {
+      const tipo = $('log-tipo').value;
+      if (!confirm('Apagar logs (' + tipo + ')? Não tem volta.')) return;
+      try { const r = await api('DELETE', '/logs?tipo=' + encodeURIComponent(tipo)); showAlert(r.apagados + ' registros apagados', 'success'); loadLogs(); } catch (e) { showAlert(e.message, 'error'); }
+    }
+
+    // ---------- usuários ----------
+    let USERS = [];
+    async function loadUsers() { try { USERS = (await api('GET', '/users')).users; renderUsers(); } catch (e) { showAlert(e.message, 'error'); } }
+    function renderUsers() {
+      const q = ($('us-busca').value || '').toLowerCase();
+      const list = USERS.filter(u => !q || [u.discord_username, u.roblox_username, u.roblox_id, u.id].some(v => v != null && String(v).toLowerCase().includes(q)));
+      $('us-body').innerHTML = list.map(u => '<tr><td>' + (u.is_placeholder ? '<span class="muted">sem Discord</span>' : esc(u.discord_username)) + ' <span class="muted" style="font-size:.7rem">#' + u.id + '</span></td>' +
+        '<td>' + (u.roblox_id ? esc(u.roblox_username || '') + ' <span class="muted" style="font-size:.7rem">' + u.roblox_id + '</span>' : '<span class="muted">não vinculado</span>') + '</td>' +
+        '<td>' + (u.is_admin ? '<span class="pill err">ADMIN</span>' : '<span class="pill">usuário</span>') + '</td>' +
+        '<td>' + (u.is_placeholder ? '' : (u.is_admin ? '<button class="btn sm sec" onclick="setAdmin(' + u.id + ',false)">Retirar admin</button>' : '<button class="btn sm danger" onclick="setAdmin(' + u.id + ',true)">Tornar admin</button>')) + '</td></tr>').join('');
+    }
+    async function setAdmin(id, value) {
+      if (!confirm((value ? 'CONCEDER' : 'RETIRAR') + ' admin? Admin tem controle total do servidor.')) return;
+      try { await api('POST', '/users/' + id + '/admin', { value }); showAlert('Atualizado', 'success'); loadUsers(); } catch (e) { showAlert(e.message, 'error'); }
+    }
+
+    // ---------- cargos ----------
+    let CORPS = { corps: [], ranks: [] }, CG_SEL = null;
+    async function loadCargos() {
+      try {
+        if (!USERS.length) USERS = (await api('GET', '/users')).users;
+        CORPS = await api('GET', '/corps');
+        $('cg-corp').innerHTML = CORPS.corps.map(c => '<option value="' + c.id + '">' + esc(c.name) + '</option>').join('');
+        fillRanks();
+      } catch (e) { showAlert(e.message, 'error'); }
+    }
+    function fillRanks() {
+      const cid = Number($('cg-corp').value);
+      $('cg-rank').innerHTML = '<option value="">Sem cargo</option>' + CORPS.ranks.filter(r => r.corporation_id === cid).map(r => '<option value="' + r.id + '">' + esc(r.name) + ' (Nv.' + r.level + ')</option>').join('');
+    }
+    (function () {
+      const inp = $('cg-user'), list = $('cg-list');
+      function render() {
+        const q = inp.value.toLowerCase().trim();
+        const us = USERS.filter(u => !q || [u.discord_username, u.roblox_username, u.roblox_id, u.id].some(v => v != null && String(v).toLowerCase().includes(q))).slice(0, 40);
+        list.innerHTML = us.length ? us.map(u => '<div class="picker-item" data-id="' + u.id + '"><div>' + (u.is_placeholder ? '(sem Discord)' : esc(u.discord_username)) + '</div><div class="m">' + (u.roblox_username ? esc(u.roblox_username) + ' · ' : '') + (u.roblox_id || 'sem Roblox') + '</div></div>').join('') : '<div class="picker-item muted">Nenhum</div>';
+        list.classList.add('open');
+      }
+      inp.addEventListener('focus', async () => { if (!USERS.length) USERS = (await api('GET', '/users')).users; render(); });
+      inp.addEventListener('input', () => { CG_SEL = null; $('cg-picked').textContent = ''; render(); });
+      list.addEventListener('mousedown', e => { const it = e.target.closest('.picker-item'); if (!it || !it.dataset.id) return; CG_SEL = USERS.find(u => String(u.id) === it.dataset.id); inp.value = CG_SEL.discord_username || CG_SEL.roblox_username || ('#' + CG_SEL.id); $('cg-picked').textContent = '✓ ' + inp.value + (CG_SEL.roblox_id ? ' (Roblox ' + CG_SEL.roblox_id + ')' : ' — sem Roblox vinculado, não funciona no jogo ainda'); list.classList.remove('open'); });
+      document.addEventListener('click', e => { if (!e.target.closest('#panel-cargos .picker')) list.classList.remove('open'); });
+    })();
+    async function setCargo(remover) {
+      if (!CG_SEL) return showAlert('Selecione um usuário', 'error');
+      try {
+        await api('POST', '/cargo', { user_id: CG_SEL.id, corp_id: Number($('cg-corp').value), rank_id: $('cg-rank').value || null, remover });
+        showAlert(remover ? 'Removido da corporação' : 'Cargo definido', 'success');
+        // se estiver online, manda o jogo recarregar a corp dele
+        const on = STATE.players.find(p => CG_SEL.roblox_id && Number(p.userId) === Number(CG_SEL.roblox_id));
+        if (on) { try { await api('POST', '/command', { tipo: 'corp_refresh', target_roblox_id: on.userId, target_name: on.name, payload: {} }); } catch {} }
+      } catch (e) { showAlert(e.message, 'error'); }
+    }
+
+    // ---------- histórico ----------
+    async function loadHist() {
+      try {
+        const c = await api('GET', '/commands'), a = await api('GET', '/audit');
+        const cls = { done: 'ok', error: 'err', sent: 'warn', pending: '' };
+        $('hist-body').innerHTML = c.commands.map(x => '<tr><td class="muted">' + x.id + '</td><td>' + esc(x.tipo) + '</td><td>' + esc(x.target_name || x.target_roblox_id || '—') + '</td><td>' + esc(x.admin || '—') + '</td><td><span class="pill ' + (cls[x.status] || '') + '">' + esc(x.status) + '</span></td><td class="muted" style="font-size:.72rem">' + esc(x.result || '') + '</td></tr>').join('') || '<tr><td colspan="6" class="empty">Nenhum comando</td></tr>';
+        $('aud-body').innerHTML = a.audit.map(x => '<tr><td class="muted" style="white-space:nowrap">' + fmtT(x.created_at) + '</td><td>' + esc(x.admin_nome) + '</td><td>' + esc(x.acao) + '</td><td><pre class="det">' + esc(JSON.stringify(x.detalhe)) + '</pre></td></tr>').join('') || '<tr><td colspan="4" class="empty">Nada ainda</td></tr>';
+      } catch (e) { showAlert(e.message, 'error'); }
+    }
+  </script>
+</body>
+</html>

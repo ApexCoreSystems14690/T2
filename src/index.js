@@ -83,6 +83,51 @@ async function start() {
       ALTER TABLE corporations ADD COLUMN IF NOT EXISTS icon_data BYTEA;
       ALTER TABLE corporations ADD COLUMN IF NOT EXISTS icon_mime VARCHAR(64);
     `);
+    // Painel admin: fila de comandos, logs do jogo, servidores online, auditoria
+    await pool.query(`
+      CREATE TABLE IF NOT EXISTS game_servers (
+        job_id VARCHAR(64) PRIMARY KEY,
+        place_id BIGINT,
+        players JSONB DEFAULT '[]',
+        catalog JSONB,
+        updated_at TIMESTAMP DEFAULT NOW()
+      );
+      CREATE TABLE IF NOT EXISTS game_commands (
+        id SERIAL PRIMARY KEY,
+        tipo VARCHAR(48) NOT NULL,
+        target_roblox_id BIGINT,
+        target_name VARCHAR(64),
+        payload JSONB DEFAULT '{}',
+        job_id VARCHAR(64),
+        status VARCHAR(16) DEFAULT 'pending',
+        result TEXT,
+        created_by INTEGER REFERENCES users(id) ON DELETE SET NULL,
+        created_at TIMESTAMP DEFAULT NOW(),
+        sent_at TIMESTAMP,
+        executed_at TIMESTAMP
+      );
+      CREATE INDEX IF NOT EXISTS idx_game_commands_status ON game_commands(status, job_id);
+      CREATE TABLE IF NOT EXISTS game_logs (
+        id SERIAL PRIMARY KEY,
+        tipo VARCHAR(32) NOT NULL,
+        jogador VARCHAR(64),
+        alvo VARCHAR(64),
+        detalhe JSONB DEFAULT '{}',
+        job_id VARCHAR(64),
+        ocorrido_em TIMESTAMP,
+        created_at TIMESTAMP DEFAULT NOW()
+      );
+      CREATE INDEX IF NOT EXISTS idx_game_logs_tipo ON game_logs(tipo, created_at DESC);
+      CREATE INDEX IF NOT EXISTS idx_game_logs_jogador ON game_logs(jogador);
+      CREATE TABLE IF NOT EXISTS admin_audit (
+        id SERIAL PRIMARY KEY,
+        admin_id INTEGER REFERENCES users(id) ON DELETE SET NULL,
+        admin_nome VARCHAR(128),
+        acao VARCHAR(64) NOT NULL,
+        detalhe JSONB DEFAULT '{}',
+        created_at TIMESTAMP DEFAULT NOW()
+      );
+    `);
     console.log('✅ Banco migrado');
   } catch (err) {
     console.error('❌ Migração falhou:', err.message);
@@ -136,6 +181,8 @@ async function start() {
   app.use('/api/game', require('./routes/game-api'));
   app.use('/dashboard', require('./routes/dashboard'));
   app.use('/api/corps', require('./routes/corps-api'));
+  app.use('/api/admin', require('./routes/admin-api'));
+  app.use('/admin', require('./routes/admin'));
 
   // Home
   app.get('/', (req, res) => {

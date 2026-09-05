@@ -14,6 +14,16 @@
     .btn:hover { opacity: 0.85; }
     .user-info { margin-top: 1.5rem; }
     .user-info a { color: #00d4ff; text-decoration: none; margin: 0 0.5rem; }
+    .opcoes { display: flex; gap: 1rem; justify-content: center; margin: 1.5rem 0 1rem; flex-wrap: wrap; }
+    .card { width: 240px; background: #131a2b; border: 1px solid #1e2a40; border-radius: 10px; padding: 1.25rem 1rem; text-decoration: none; color: #f0f4f8; text-align: left; transition: border-color .15s, transform .15s; }
+    .card:hover { border-color: #00d4ff; transform: translateY(-2px); }
+    .card .ic { font-size: 1.4rem; margin-bottom: .5rem; }
+    .card .t { font-weight: 700; font-size: .95rem; }
+    .card .d { color: #7a8ba5; font-size: .78rem; margin-top: .25rem; line-height: 1.35; }
+    .card.adm { border-color: #ef444455; }
+    .card.adm:hover { border-color: #ef4444; }
+    .card.adm .t { color: #ef4444; }
+    .card.off { opacity: .45; pointer-events: none; }
   </style>
 </head>
 <body>
@@ -25,8 +35,28 @@
     <% } else { %>
       <div class="user-info">
         <p>Olá, <strong><%= user.discord_username %></strong></p>
-        <a href="/dashboard">Painel</a> | <a href="/auth/logout">Sair</a>
       </div>
+      <div class="opcoes">
+        <a class="card" href="/dashboard">
+          <div class="ic">🏛️</div>
+          <div class="t">Painel de Corporações</div>
+          <div class="d">Cargos, membros e configurações das corporações que você gerencia.</div>
+        </a>
+        <% if (user.is_admin) { %>
+        <a class="card adm" href="/admin">
+          <div class="ic">🛡️</div>
+          <div class="t">Painel Admin</div>
+          <div class="d">Controle total do servidor: jogadores, dinheiro, itens, teleporte, logs, hora e banimentos.</div>
+        </a>
+        <% } else { %>
+        <div class="card adm off" title="Somente administradores">
+          <div class="ic">🛡️</div>
+          <div class="t">Painel Admin</div>
+          <div class="d">Somente administradores.</div>
+        </div>
+        <% } %>
+      </div>
+      <div class="user-info"><a href="/auth/logout">Sair</a></div>
     <% } %>
   </div>
 </body>

@@ -76,6 +76,7 @@
 <body>
   <div class="topbar">
     <a href="/dashboard">&larr; Voltar</a>
+    <a href="/" title="Início">Início</a>
     <% if (corporation.has_icon_file) { %>
       <img src="/api/corps/<%= corporation.id %>/icon" style="width:28px;height:28px;border-radius:5px;object-fit:cover">
     <% } else if (corporation.icon_url) { %>
