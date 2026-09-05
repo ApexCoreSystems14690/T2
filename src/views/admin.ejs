@@ -147,12 +147,13 @@
       <div class="card">
         <h3>Clima</h3>
         <div class="clock" id="clima-btns">
+          <button class="btn sec" data-chuva="-1" onclick="setClima(-1)">🔄 Automático</button>
           <button class="btn sec" data-chuva="0" onclick="setClima(0)">☀️ Sem chuva</button>
           <button class="btn sec" data-chuva="1" onclick="setClima(1)">🌦️ Chuva fraca</button>
           <button class="btn sec" data-chuva="2" onclick="setClima(2)">🌧️ Chuva média</button>
           <button class="btn sec" data-chuva="3" onclick="setClima(3)">⛈️ Tempestade</button>
         </div>
-        <div class="muted" style="font-size:.78rem;margin-top:.5rem">Atual: <b id="clima-atual">–</b> · fica salvo: servidor novo já abre com esse clima. Poças e asfalto molhado aparecem em ~5s.</div>
+        <div class="muted" style="font-size:.78rem;margin-top:.5rem">Atual: <b id="clima-atual">–</b> · fica salvo (servidor novo já abre assim). <b>Automático</b> = chove sozinho de vez em quando, mais à noite; os outros fixam o clima.</div>
       </div>
       <div class="card">
         <h3>Servidores</h3>
@@ -393,10 +394,10 @@
       const p = STATE.players.find(x => Number(x.userId) === Number(userId)); if (!p) return;
       try { await api('POST', '/command', { tipo, target_roblox_id: p.userId, target_name: p.name, payload: {} }); showAlert(tipo + ' → ' + p.name, 'success'); } catch (e) { showAlert(e.message, 'error'); }
     }
-    const CLIMA_NOMES = ['Sem chuva', 'Chuva fraca', 'Chuva média', 'Tempestade'];
+    const CLIMA_NOMES = { '-1': 'Automático', '0': 'Sem chuva', '1': 'Chuva fraca', '2': 'Chuva média', '3': 'Tempestade' };
     function renderClima() {
-      const c = STATE.config && STATE.config.clima ? Number(STATE.config.clima.chuva) : 0;
-      $('clima-atual').textContent = CLIMA_NOMES[c] || 'Sem chuva';
+      const c = STATE.config && STATE.config.clima ? Number(STATE.config.clima.chuva) : -1;
+      $('clima-atual').textContent = CLIMA_NOMES[String(c)] || 'Automático';
       document.querySelectorAll('#clima-btns button').forEach(b => b.className = 'btn ' + (Number(b.dataset.chuva) === c ? '' : 'sec'));
     }
     async function setClima(chuva) {

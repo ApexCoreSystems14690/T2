@@ -45,7 +45,7 @@ const COMANDOS = {
   unban:          { alvo: 'id',  valida: p => ({ roblox_id: num(p.roblox_id, 1) }) },
   // servidor inteiro
   hora:           { alvo: false, valida: p => ({ clock: num(p.clock, 0, 24) }) },
-  clima:          { alvo: false, valida: p => ({ chuva: num(p.chuva, 0, 3) }), persiste: 'clima' }, // 0 sem chuva, 1 fraca, 2 média, 3 forte
+  clima:          { alvo: false, valida: p => ({ chuva: num(p.chuva, -1, 3) }), persiste: 'clima' }, // -1 automático (ciclo aleatório), 0 sem chuva, 1 fraca, 2 média, 3 forte
   anuncio:        { alvo: false, valida: p => ({ titulo: str(p.titulo, 40) || 'Aviso', texto: str(p.texto, 300) }) },
 };
 
