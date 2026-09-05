@@ -11,7 +11,8 @@ router.get('/', async (req, res) => {
       `SELECT c.*, (SELECT COUNT(*) FROM members WHERE corporation_id = c.id) as member_count,
               (icon_data IS NOT NULL) as has_icon_file
        FROM corporations c
-       WHERE c.owner_id = $1
+       WHERE $2::boolean
+          OR c.owner_id = $1
           OR c.id IN (SELECT corporation_id FROM corp_managers WHERE user_id = $1)
           OR c.id IN (
             SELECT m.corporation_id FROM members m
@@ -20,7 +21,7 @@ router.get('/', async (req, res) => {
             AND (SELECT COUNT(DISTINCT r2.level) FROM ranks r2 WHERE r2.corporation_id = m.corporation_id AND r2.level > r.level) < 2
           )
        ORDER BY c.name`,
-      [req.user.id]
+      [req.user.id, !!req.user.is_admin]
     );
     res.render('dashboard', { user: req.user, corporations: corps.rows });
   } catch (err) {
@@ -35,7 +36,8 @@ router.get('/corp/:corpId', async (req, res) => {
     const corp = await pool.query(
       `SELECT *, (icon_data IS NOT NULL) as has_icon_file FROM corporations WHERE id = $1
        AND (
-         owner_id = $2
+         $3::boolean
+         OR owner_id = $2
          OR id IN (SELECT corporation_id FROM corp_managers WHERE user_id = $2)
          OR id IN (
            SELECT m.corporation_id FROM members m
@@ -44,12 +46,12 @@ router.get('/corp/:corpId', async (req, res) => {
            AND (SELECT COUNT(DISTINCT r2.level) FROM ranks r2 WHERE r2.corporation_id = m.corporation_id AND r2.level > r.level) < 2
          )
        )`,
-      [req.params.corpId, req.user.id]
+      [req.params.corpId, req.user.id, !!req.user.is_admin]
     );
     if (corp.rows.length === 0) return res.redirect('/dashboard');
 
     const corpData = corp.rows[0];
-    const isOwner = corpData.owner_id === req.user.id;
+    const isOwner = corpData.owner_id === req.user.id || !!req.user.is_admin;
 
     // Checa se é co-gerente
     let isManager = false;
@@ -96,20 +98,52 @@ router.get('/link-roblox', (req, res) => {
 });
 
 router.post('/link-roblox', async (req, res) => {
-  try {
-    const { roblox_id, roblox_username } = req.body;
-    if (!roblox_id) return res.redirect('/dashboard/link-roblox?error=id_required');
+  const { roblox_id, roblox_username } = req.body;
+  const rid = parseInt(roblox_id);
+  if (!rid) return res.redirect('/dashboard/link-roblox?error=id_required');
 
-    await pool.query(
+  const client = await pool.connect();
+  try {
+    await client.query('BEGIN');
+
+    // Existe outro usuário com esse Roblox ID?
+    const outro = await client.query('SELECT * FROM users WHERE roblox_id = $1 AND id <> $2', [rid, req.user.id]);
+    if (outro.rows.length > 0) {
+      const ph = outro.rows[0];
+      if (!String(ph.discord_id).startsWith('roblox_')) {
+        // Conta real de outra pessoa já usa esse ID
+        await client.query('ROLLBACK');
+        return res.redirect('/dashboard/link-roblox?error=already_linked');
+      }
+      // É um "placeholder" criado quando alguém te adicionou por Roblox ID:
+      // transfere tudo dele pra tua conta e apaga o placeholder.
+      await client.query(
+        `UPDATE members SET user_id = $1 WHERE user_id = $2
+         AND corporation_id NOT IN (SELECT corporation_id FROM members WHERE user_id = $1)`,
+        [req.user.id, ph.id]);
+      await client.query('DELETE FROM members WHERE user_id = $1', [ph.id]);
+      await client.query(
+        `UPDATE corp_managers SET user_id = $1 WHERE user_id = $2
+         AND corporation_id NOT IN (SELECT corporation_id FROM corp_managers WHERE user_id = $1)`,
+        [req.user.id, ph.id]);
+      await client.query('DELETE FROM corp_managers WHERE user_id = $1', [ph.id]);
+      await client.query('UPDATE corporations SET owner_id = $1 WHERE owner_id = $2', [req.user.id, ph.id]);
+      await client.query('DELETE FROM users WHERE id = $1', [ph.id]);
+    }
+
+    await client.query(
       'UPDATE users SET roblox_id = $1, roblox_username = $2, updated_at = NOW() WHERE id = $3',
-      [parseInt(roblox_id), roblox_username || null, req.user.id]
+      [rid, roblox_username || null, req.user.id]
     );
+    await client.query('COMMIT');
     res.redirect('/dashboard');
   } catch (err) {
-    if (err.code === '23505') {
-      return res.redirect('/dashboard/link-roblox?error=already_linked');
-    }
+    await client.query('ROLLBACK').catch(() => {});
+    console.error('link-roblox:', err.message);
+    if (err.code === '23505') return res.redirect('/dashboard/link-roblox?error=already_linked');
     res.redirect('/dashboard/link-roblox?error=internal');
+  } finally {
+    client.release();
   }
 });
 

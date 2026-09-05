@@ -62,12 +62,14 @@
     <% } %>
 
     <div class="section-title">
-      Suas Corporações
+      <%= user.is_admin ? 'Todas as Corporações (admin)' : 'Suas Corporações' %>
+      <% if (user.is_admin) { %>
       <button class="create-btn" onclick="document.getElementById('createModal').classList.add('active')">+ Nova Corporação</button>
+      <% } %>
     </div>
 
     <% if (corporations.length === 0) { %>
-      <div class="empty">Você não é dono de nenhuma corporação ainda.</div>
+      <div class="empty">Você ainda não gerencia nenhuma corporação. Peça a um administrador para te adicionar como dono, co-gerente ou em um dos dois cargos mais altos.</div>
     <% } else { %>
       <% corporations.forEach(corp => { %>
         <div class="corp-card">
@@ -86,7 +88,9 @@
           </div>
           <div style="display:flex;gap:0.5rem;align-items:center">
             <a href="/dashboard/corp/<%= corp.id %>" class="corp-btn">Gerenciar</a>
+            <% if (user.is_admin || corp.owner_id === user.id) { %>
             <button class="corp-btn" style="color:#ef4444;border-color:#ef444433;cursor:pointer;background:none" onclick="excluirCorp(<%= corp.id %>, '<%= corp.name.replace(/'/g, "\\'") %>')">Excluir</button>
+            <% } %>
           </div>
         </div>
       <% }) %>

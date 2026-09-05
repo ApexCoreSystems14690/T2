@@ -74,4 +74,10 @@ async function getUserById(id) {
   return result.rows[0] || null;
 }
 
-module.exports = { getAuthURL, exchangeCode, getDiscordUser, findOrCreateUser, getUserById };
+// Define/remove admin global
+async function setAdmin(id, value) {
+  const result = await pool.query('UPDATE users SET is_admin = $1, updated_at = NOW() WHERE id = $2 RETURNING *', [!!value, id]);
+  return result.rows[0];
+}
+
+module.exports = { getAuthURL, exchangeCode, getDiscordUser, findOrCreateUser, getUserById, setAdmin };

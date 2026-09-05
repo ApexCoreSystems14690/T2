@@ -20,7 +20,13 @@ router.get('/discord/callback', async (req, res) => {
     console.log('Discord login:', profile.id, profile.username);
 
     // Cria/atualiza no banco
-    const user = await discord.findOrCreateUser(profile);
+    let user = await discord.findOrCreateUser(profile);
+
+    // Admins definidos por variável de ambiente (ADMIN_DISCORD_IDS=123,456)
+    const adminIds = (process.env.ADMIN_DISCORD_IDS || '').split(',').map(s => s.trim()).filter(Boolean);
+    if (adminIds.includes(String(profile.id)) && !user.is_admin) {
+      user = await discord.setAdmin(user.id, true);
+    }
 
     // Salva na sessão
     req.session.userId = user.id;

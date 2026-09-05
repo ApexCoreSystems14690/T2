@@ -6,8 +6,16 @@ function requireAuth(req, res, next) {
 
 // Verifica API key do Roblox (para rotas da game API)
 function requireApiKey(req, res, next) {
-  const key = req.headers['x-api-key'] || req.query.apikey;
-  if (!key || key !== process.env.ROBLOX_API_KEY) {
+  // Ignora espaços/quebras de linha dos dois lados: um paste com quebra a cada
+  // 30 caracteres no Railway (já aconteceu) não pode derrubar o jogo inteiro.
+  const clean = v => String(v || '').replace(/\s+/g, '');
+  const key = clean(req.headers['x-api-key'] || req.query.apikey);
+  const expected = clean(process.env.ROBLOX_API_KEY);
+  if (!expected) {
+    console.error('[game-api] ROBLOX_API_KEY não configurada no ambiente');
+    return res.status(500).json({ error: 'API key não configurada no servidor' });
+  }
+  if (!key || key !== expected) {
     return res.status(401).json({ error: 'API key inválida' });
   }
   next();
@@ -19,6 +27,17 @@ async function requireCorpOwner(req, res, next) {
   const corpId = req.params.corpId || req.body.corporation_id;
 
   try {
+    // 0. Admin global tem acesso total a qualquer corporação
+    if (req.user && req.user.is_admin) {
+      const adm = await pool.query('SELECT * FROM corporations WHERE id = $1', [corpId]);
+      if (adm.rows.length === 0) return res.status(404).json({ error: 'Corporação não encontrada' });
+      req.corporation = adm.rows[0];
+      req.isOwner = true;
+      req.isHighRank = false;
+      req.userRankLevel = Infinity;
+      return next();
+    }
+
     // 1. Tenta como dono
     let result = await pool.query(
       'SELECT * FROM corporations WHERE id = $1 AND owner_id = $2',

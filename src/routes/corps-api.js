@@ -35,13 +35,45 @@ router.use(requireAuth);
 // GET /api/corps — listar corporações do usuário (que ele é dono)
 router.get('/', async (req, res) => {
   try {
-    const result = await pool.query(
-      `SELECT c.*, (SELECT COUNT(*) FROM members WHERE corporation_id = c.id) as member_count
-       FROM corporations c WHERE c.owner_id = $1 ORDER BY c.name`,
-      [req.user.id]
-    );
+    const result = req.user.is_admin
+      ? await pool.query(
+          `SELECT c.*, (SELECT COUNT(*) FROM members WHERE corporation_id = c.id) as member_count
+           FROM corporations c ORDER BY c.name`)
+      : await pool.query(
+          `SELECT c.*, (SELECT COUNT(*) FROM members WHERE corporation_id = c.id) as member_count
+           FROM corporations c WHERE c.owner_id = $1 ORDER BY c.name`,
+          [req.user.id]);
     res.json({ corporations: result.rows });
   } catch (err) {
+    res.status(500).json({ error: 'Erro interno' });
+  }
+});
+
+// GET /api/corps/users/list — todos os usuários registrados na plataforma (pro seletor de membros)
+// Precisa estar logado; só quem gerencia alguma corporação (ou admin) enxerga.
+router.get('/users/list', async (req, res) => {
+  try {
+    if (!req.user.is_admin) {
+      const gerencia = await pool.query(
+        `SELECT 1 FROM corporations WHERE owner_id = $1
+         UNION SELECT 1 FROM corp_managers WHERE user_id = $1
+         UNION SELECT 1 FROM members m JOIN ranks r ON m.rank_id = r.id
+           WHERE m.user_id = $1
+           AND (SELECT COUNT(DISTINCT r2.level) FROM ranks r2 WHERE r2.corporation_id = m.corporation_id AND r2.level > r.level) < 2
+         LIMIT 1`,
+        [req.user.id]
+      );
+      if (gerencia.rows.length === 0) return res.status(403).json({ error: 'Acesso negado' });
+    }
+    const result = await pool.query(
+      `SELECT id, discord_username, discord_avatar, discord_id, roblox_id, roblox_username, is_admin,
+              (discord_id LIKE 'roblox_%') AS is_placeholder
+       FROM users
+       ORDER BY (discord_id LIKE 'roblox_%') ASC, LOWER(COALESCE(discord_username, roblox_username, '')) ASC`
+    );
+    res.json({ users: result.rows });
+  } catch (err) {
+    console.error('users/list:', err.message);
     res.status(500).json({ error: 'Erro interno' });
   }
 });
@@ -87,9 +119,9 @@ router.put('/:corpId', requireCorpOwner, async (req, res) => {
         max_members = COALESCE($5, max_members),
         updated_at = NOW()
         ${extraCols}
-       WHERE id = $6 AND (owner_id = $7 OR id IN (SELECT corporation_id FROM corp_managers WHERE user_id = $7)) RETURNING *`,
+       WHERE id = $6 AND ($8::boolean OR owner_id = $7 OR id IN (SELECT corporation_id FROM corp_managers WHERE user_id = $7)) RETURNING *`,
       [name || null, description || null, icon_url || null, color || null,
-       max_members ? parseInt(max_members) : null, req.params.corpId, req.user.id]
+       max_members ? parseInt(max_members) : null, req.params.corpId, req.user.id, !!req.user.is_admin]
     );
     if (result.rows.length === 0) return res.status(404).json({ error: 'Corporação não encontrada' });
     res.json({ corporation: result.rows[0] });
@@ -176,28 +208,58 @@ router.delete('/:corpId/ranks/:rankId', requireCorpOwner, async (req, res) => {
   }
 });
 
-// POST /api/corps/:corpId/members — adicionar membro (por roblox_id ou roblox_username)
+// Busca o username no Roblox a partir do ID (melhor esforço)
+async function fetchRobloxUsername(robloxId) {
+  try {
+    const r = await fetch('https://users.roblox.com/v1/users/' + robloxId);
+    if (!r.ok) return null;
+    const j = await r.json();
+    return j.name || null;
+  } catch (e) { return null; }
+}
+
+// POST /api/corps/:corpId/members — adicionar membro
+// Aceita { user_id } (usuário registrado, escolhido no seletor) OU { roblox_id, roblox_username } (fallback)
 router.post('/:corpId/members', requireCorpOwner, async (req, res) => {
   try {
-    const { roblox_id, roblox_username, rank_id } = req.body;
+    const { user_id, roblox_id, roblox_username, rank_id } = req.body;
 
-    // Busca ou cria o usuário pelo roblox_id
     let user;
-    if (roblox_id) {
-      let result = await pool.query('SELECT * FROM users WHERE roblox_id = $1', [roblox_id]);
+    if (user_id) {
+      const result = await pool.query('SELECT * FROM users WHERE id = $1', [parseInt(user_id)]);
+      if (result.rows.length === 0) return res.status(404).json({ error: 'Usuário não encontrado' });
+      user = result.rows[0];
+    } else if (roblox_id) {
+      const rid = parseInt(roblox_id);
+      if (!rid) return res.status(400).json({ error: 'Roblox ID inválido' });
+      let result = await pool.query('SELECT * FROM users WHERE roblox_id = $1', [rid]);
       if (result.rows.length === 0) {
-        // Cria um usuário placeholder (sem Discord linkado ainda)
+        const nome = roblox_username || await fetchRobloxUsername(rid);
+        // Usuário placeholder (sem Discord ainda). Quando a pessoa vincular o Roblox, é mesclado.
         result = await pool.query(
           'INSERT INTO users (discord_id, roblox_id, roblox_username) VALUES ($1, $2, $3) RETURNING *',
-          [`roblox_${roblox_id}`, parseInt(roblox_id), roblox_username || null]
+          [`roblox_${rid}`, rid, nome]
         );
       }
       user = result.rows[0];
     } else {
-      return res.status(400).json({ error: 'roblox_id é obrigatório' });
+      return res.status(400).json({ error: 'Selecione um usuário' });
     }
 
-    // Adiciona como membro
+    // Quem é apenas alto cargo não pode adicionar alguém com cargo >= ao seu
+    if (req.isHighRank && rank_id) {
+      const newRank = await pool.query('SELECT level FROM ranks WHERE id = $1 AND corporation_id = $2', [rank_id, req.params.corpId]);
+      if (newRank.rows.length > 0 && newRank.rows[0].level >= req.userRankLevel) {
+        return res.status(403).json({ error: 'Você não pode atribuir um cargo igual ou superior ao seu' });
+      }
+    }
+
+    // Limite de membros
+    const count = await pool.query('SELECT COUNT(*)::int AS n FROM members WHERE corporation_id = $1', [req.params.corpId]);
+    if (req.corporation && req.corporation.max_members && count.rows[0].n >= req.corporation.max_members) {
+      return res.status(400).json({ error: 'A corporação atingiu o máximo de membros' });
+    }
+
     const member = await pool.query(
       'INSERT INTO members (corporation_id, user_id, rank_id) VALUES ($1, $2, $3) RETURNING *',
       [req.params.corpId, user.id, rank_id || null]
@@ -208,6 +270,7 @@ router.post('/:corpId/members', requireCorpOwner, async (req, res) => {
     if (err.code === '23505') {
       return res.status(400).json({ error: 'Jogador já é membro desta corporação' });
     }
+    console.error('add member:', err.message);
     res.status(500).json({ error: 'Erro interno' });
   }
 });
@@ -330,8 +393,8 @@ router.delete('/:corpId/managers/:managerId', requireCorpOwner, async (req, res)
   }
 });
 
-// POST /api/corps — criar corporação (qualquer usuário logado)
-router.post('/', async (req, res) => {
+// POST /api/corps — criar corporação (SOMENTE admin)
+router.post('/', requireAdmin, async (req, res) => {
   try {
     const { name, slug, description, color, icon_url, max_members } = req.body;
     if (!name || !slug) {

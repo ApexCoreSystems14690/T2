@@ -29,6 +29,17 @@ router.get('/player/:robloxId', async (req, res) => {
 
     res.json({
       roblox_id: parseInt(robloxId),
+      // Formato lido pelo CorpService do Roblox (data.corps[].corp_slug / rank_name / ...)
+      corps: result.rows.map(row => ({
+        corp_id: row.corp_id,
+        corp_slug: row.corp_slug,
+        corp_name: row.corp_name,
+        rank_name: row.rank_name || 'Sem cargo',
+        rank_level: row.rank_level || 0,
+        salary: row.rank_salary || 0,
+        permissions: row.rank_permissions || {},
+      })),
+      // Formato antigo, mantido por compatibilidade
       corporations: result.rows.map(row => ({
         id: row.corp_id,
         name: row.corp_name,

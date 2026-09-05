@@ -52,6 +52,25 @@
     .alert.success { background: #10b98122; color: #10b981; border: 1px solid #10b98133; }
     .alert.error { background: #ef444422; color: #ef4444; border: 1px solid #ef444433; }
     .empty { color: #7a8ba5; font-size: 0.85rem; padding: 1.5rem; text-align: center; }
+
+    /* Seletor de usuários */
+    .picker { position: relative; }
+    .picker input { width: 100%; }
+    .picker-list { position: absolute; top: 100%; left: 0; right: 0; z-index: 20; max-height: 260px; overflow-y: auto; background: #131a2b; border: 1px solid #2d3a52; border-radius: 6px; margin-top: 4px; display: none; }
+    .picker-list.open { display: block; }
+    .picker-item { padding: 0.5rem 0.75rem; cursor: pointer; display: flex; align-items: center; gap: 0.6rem; font-size: 0.85rem; border-bottom: 1px solid #1e2a4066; }
+    .picker-item:hover, .picker-item.active { background: #1e2a40; }
+    .picker-item .avatar { width: 24px; height: 24px; border-radius: 50%; background: #2d3a52; flex-shrink: 0; object-fit: cover; }
+    .picker-item .meta { color: #7a8ba5; font-size: 0.75rem; }
+    .picker-item .tag { margin-left: auto; font-size: 0.65rem; padding: 0.1rem 0.4rem; border-radius: 3px; background: #2d3a52; color: #7a8ba5; text-transform: uppercase; letter-spacing: 0.04em; }
+    .picker-item .tag.ok { background: #10b98122; color: #10b981; }
+    .picker-empty { padding: 0.75rem; color: #7a8ba5; font-size: 0.8rem; text-align: center; }
+    .picked { display: flex; align-items: center; gap: 0.5rem; font-size: 0.8rem; color: #10b981; margin-top: 0.3rem; min-height: 1.2rem; }
+    .picked button { background: none; border: none; color: #7a8ba5; cursor: pointer; font-size: 0.8rem; }
+    .fallback { margin-top: 0.5rem; font-size: 0.8rem; color: #7a8ba5; }
+    .fallback summary { cursor: pointer; }
+    .fallback .form-row { margin-top: 0.5rem; }
+    .rank-select { background: #0a0e17; border: 1px solid #1e2a40; color: #f0f4f8; padding: 0.3rem 0.5rem; border-radius: 4px; font-size: 0.8rem; }
   </style>
 </head>
 <body>
@@ -118,13 +137,13 @@
     <!-- MEMBROS -->
     <div class="panel" id="panel-membros">
       <div class="form-row">
-        <div class="form-group">
-          <label>Roblox User ID</label>
-          <input type="number" id="member-roblox-id" placeholder="Ex: 123456789">
-        </div>
-        <div class="form-group">
-          <label>Username (opcional)</label>
-          <input type="text" id="member-roblox-name" placeholder="Ex: JogadorX">
+        <div class="form-group" style="flex:2">
+          <label>Usuário registrado na plataforma</label>
+          <div class="picker" id="member-picker">
+            <input type="text" id="member-search" placeholder="Digite pra buscar por Discord, Roblox ou ID…" autocomplete="off">
+            <div class="picker-list" id="member-list"></div>
+          </div>
+          <div class="picked" id="member-picked"></div>
         </div>
         <div class="form-group">
           <label>Cargo</label>
@@ -139,6 +158,19 @@
           <button class="btn" onclick="addMember()">Adicionar</button>
         </div>
       </div>
+      <details class="fallback">
+        <summary>O jogador ainda não entrou no site? Adicionar pelo Roblox ID</summary>
+        <div class="form-row">
+          <div class="form-group">
+            <label>Roblox User ID</label>
+            <input type="number" id="member-roblox-id" placeholder="Ex: 123456789">
+          </div>
+          <div class="form-group" style="max-width:160px;justify-content:flex-end">
+            <button class="btn secondary" onclick="addMemberById()">Adicionar por ID</button>
+          </div>
+        </div>
+        <div style="font-size:0.75rem">O nome é buscado no Roblox automaticamente. Quando ele logar com Discord e vincular o Roblox, o registro é unificado.</div>
+      </details>
 
       <div style="overflow-x:auto">
         <table class="member-table">
@@ -160,8 +192,15 @@
                 <tr>
                   <td><%= m.roblox_id || '-' %></td>
                   <td><%= m.roblox_username || '-' %></td>
-                  <td><%= m.discord_username || '-' %></td>
-                  <td><%= m.rank_name || 'Sem cargo' %></td>
+                  <td><%= (m.discord_username && !String(m.discord_username).startsWith('roblox_')) ? m.discord_username : '—' %></td>
+                  <td>
+                    <select class="rank-select" onchange="changeRank(<%= m.id %>, this.value, this)">
+                      <option value="" <%= !m.rank_id ? 'selected' : '' %>>Sem cargo</option>
+                      <% ranks.forEach(rank => { %>
+                        <option value="<%= rank.id %>" <%= m.rank_id === rank.id ? 'selected' : '' %>><%= rank.name %> (Nv.<%= rank.level %>)</option>
+                      <% }) %>
+                    </select>
+                  </td>
                   <td><%= new Date(m.joined_at).toLocaleDateString('pt-BR') %></td>
                   <td>
                     <button class="btn-sm danger" onclick="deleteMember(<%= m.id %>)">Remover</button>
@@ -226,9 +265,13 @@
       <div style="margin-top:2rem;padding-top:1.5rem;border-top:1px solid #1e2a40">
         <h3 style="font-size:0.9rem;margin-bottom:1rem;color:#00d4ff">Co-Gerentes</h3>
         <div class="form-row">
-          <div class="form-group">
-            <label>ID do Usuário</label>
-            <input type="number" id="mgr-user-id" placeholder="Ex: 2">
+          <div class="form-group" style="flex:2">
+            <label>Usuário registrado</label>
+            <div class="picker" id="mgr-picker">
+              <input type="text" id="mgr-search" placeholder="Digite pra buscar…" autocomplete="off">
+              <div class="picker-list" id="mgr-list"></div>
+            </div>
+            <div class="picked" id="mgr-picked"></div>
           </div>
           <div class="form-group" style="max-width:140px;justify-content:flex-end">
             <button class="btn" onclick="addManager()">Adicionar</button>
@@ -284,15 +327,103 @@
       location.reload();
     }
 
+    // ---------- Seletor de usuários registrados ----------
+    let ALL_USERS = null;
+    async function loadUsers() {
+      if (ALL_USERS) return ALL_USERS;
+      const res = await fetch('/api/corps/users/list');
+      const data = await res.json();
+      ALL_USERS = data.users || [];
+      return ALL_USERS;
+    }
+
+    function userLabel(u) {
+      const disc = (u.discord_username && !u.is_placeholder) ? u.discord_username : null;
+      const rbx = u.roblox_username || (u.roblox_id ? ('ID ' + u.roblox_id) : null);
+      return (disc || rbx || ('Usuário #' + u.id));
+    }
+
+    function avatarUrl(u) {
+      if (u.discord_avatar && u.discord_id && !u.is_placeholder) {
+        return 'https://cdn.discordapp.com/avatars/' + u.discord_id + '/' + u.discord_avatar + '.png?size=32';
+      }
+      return null;
+    }
+
+    function makePicker(prefix) {
+      const input = document.getElementById(prefix + '-search');
+      const list = document.getElementById(prefix + '-list');
+      const picked = document.getElementById(prefix + '-picked');
+      const state = { selected: null };
+
+      function render(filter) {
+        const q = (filter || '').toLowerCase().trim();
+        const users = (ALL_USERS || []).filter(u => {
+          if (!q) return true;
+          return [u.discord_username, u.roblox_username, u.roblox_id, u.id].some(v => v != null && String(v).toLowerCase().includes(q));
+        }).slice(0, 60);
+        if (users.length === 0) {
+          list.innerHTML = '<div class="picker-empty">Nenhum usuário encontrado</div>';
+        } else {
+          list.innerHTML = users.map(u => {
+            const av = avatarUrl(u);
+            const disc = (u.discord_username && !u.is_placeholder) ? u.discord_username : null;
+            const rbx = u.roblox_username ? (u.roblox_username + (u.roblox_id ? ' · ' + u.roblox_id : '')) : (u.roblox_id ? 'ID ' + u.roblox_id : 'sem Roblox');
+            return '<div class="picker-item" data-id="' + u.id + '">' +
+              (av ? '<img class="avatar" src="' + av + '">' : '<div class="avatar"></div>') +
+              '<div><div>' + (disc || rbx) + '</div>' + (disc ? '<div class="meta">' + rbx + '</div>' : '') + '</div>' +
+              (u.is_placeholder ? '<span class="tag">sem discord</span>' : (u.roblox_id ? '<span class="tag ok">vinculado</span>' : '<span class="tag">sem roblox</span>')) +
+            '</div>';
+          }).join('');
+        }
+        list.classList.add('open');
+      }
+
+      input.addEventListener('focus', async () => { await loadUsers(); render(input.value); });
+      input.addEventListener('input', async () => { await loadUsers(); state.selected = null; picked.innerHTML = ''; render(input.value); });
+      list.addEventListener('mousedown', e => {
+        const item = e.target.closest('.picker-item');
+        if (!item) return;
+        const u = ALL_USERS.find(x => String(x.id) === item.dataset.id);
+        state.selected = u;
+        input.value = userLabel(u);
+        picked.innerHTML = '✓ Selecionado: <strong>' + userLabel(u) + '</strong>' + (u.roblox_id ? ' (Roblox ' + u.roblox_id + ')' : ' — <span style="color:#f59e0b">sem Roblox vinculado, não vai funcionar no jogo ainda</span>') +
+          ' <button onclick="pickers.' + prefix + '.clear()">✕</button>';
+        list.classList.remove('open');
+      });
+      document.addEventListener('click', e => { if (!e.target.closest('#' + prefix + '-picker')) list.classList.remove('open'); });
+      return {
+        get: () => state.selected,
+        clear: () => { state.selected = null; input.value = ''; picked.innerHTML = ''; }
+      };
+    }
+    const pickers = { member: makePicker('member') };
+    if (document.getElementById('mgr-search')) pickers.mgr = makePicker('mgr');
+
     async function addMember() {
-      const roblox_id = document.getElementById('member-roblox-id').value;
-      const roblox_username = document.getElementById('member-roblox-name').value.trim();
+      const u = pickers.member.get();
       const rank_id = document.getElementById('member-rank').value || null;
-      if (!roblox_id) return showAlert('Roblox ID é obrigatório', 'error');
-      const data = await api('POST', '/members', { roblox_id, roblox_username, rank_id });
+      if (!u) return showAlert('Selecione um usuário da lista (ou use "Adicionar pelo Roblox ID")', 'error');
+      const data = await api('POST', '/members', { user_id: u.id, rank_id });
       if (data.error) return showAlert(data.error, 'error');
       showAlert('Membro adicionado!', 'success');
       setTimeout(() => location.reload(), 500);
+    }
+
+    async function addMemberById() {
+      const roblox_id = document.getElementById('member-roblox-id').value;
+      const rank_id = document.getElementById('member-rank').value || null;
+      if (!roblox_id) return showAlert('Informe o Roblox ID', 'error');
+      const data = await api('POST', '/members', { roblox_id, rank_id });
+      if (data.error) return showAlert(data.error, 'error');
+      showAlert('Membro adicionado!', 'success');
+      setTimeout(() => location.reload(), 500);
+    }
+
+    async function changeRank(memberId, rankId, el) {
+      const data = await api('PUT', '/members/' + memberId, { rank_id: rankId || null });
+      if (data.error) { showAlert(data.error, 'error'); setTimeout(() => location.reload(), 800); return; }
+      showAlert('Cargo atualizado!', 'success');
     }
 
     async function deleteMember(memberId) {
@@ -363,17 +494,17 @@
     }
 
     async function addManager() {
-      const userId = document.getElementById('mgr-user-id').value;
-      if (!userId) return showAlert('Informe o ID do usuário', 'error');
+      const u = pickers.mgr && pickers.mgr.get();
+      if (!u) return showAlert('Selecione um usuário da lista', 'error');
       const res = await fetch('/api/corps/' + CORP_ID + '/managers', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ user_id: parseInt(userId) })
+        body: JSON.stringify({ user_id: u.id })
       });
       const data = await res.json();
       if (data.error) return showAlert(data.error, 'error');
       showAlert('Co-gerente adicionado!', 'success');
-      document.getElementById('mgr-user-id').value = '';
+      pickers.mgr.clear();
       loadManagers();
     }
 
