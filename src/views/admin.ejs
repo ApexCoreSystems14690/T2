@@ -145,6 +145,16 @@
         </div>
       </div>
       <div class="card">
+        <h3>Clima</h3>
+        <div class="clock" id="clima-btns">
+          <button class="btn sec" data-chuva="0" onclick="setClima(0)">☀️ Sem chuva</button>
+          <button class="btn sec" data-chuva="1" onclick="setClima(1)">🌦️ Chuva fraca</button>
+          <button class="btn sec" data-chuva="2" onclick="setClima(2)">🌧️ Chuva média</button>
+          <button class="btn sec" data-chuva="3" onclick="setClima(3)">⛈️ Tempestade</button>
+        </div>
+        <div class="muted" style="font-size:.78rem;margin-top:.5rem">Atual: <b id="clima-atual">–</b> · fica salvo: servidor novo já abre com esse clima. Poças e asfalto molhado aparecem em ~5s.</div>
+      </div>
+      <div class="card">
         <h3>Servidores</h3>
         <div id="srv-list" class="muted" style="font-size:.82rem">–</div>
       </div>
@@ -269,6 +279,7 @@
         $('st-players').textContent = STATE.players.length;
         $('st-upd').textContent = new Date().toLocaleTimeString('pt-BR');
         renderPlayers();
+        renderClima();
         $('srv-list').innerHTML = STATE.servers.length ? STATE.servers.map(s => '<div><span class="pill info">' + esc(s.job_id.slice(0, 8)) + '</span> ' + s.n + ' jogador(es) · visto ' + fmtT(s.updated_at) + '</div>').join('') : 'Nenhum servidor mandou heartbeat nos últimos 90s. O jogo precisa estar rodando com o AdminBridge ativo.';
       } catch (e) { showAlert('Erro ao carregar estado: ' + e.message, 'error'); }
     }
@@ -381,6 +392,19 @@
     async function quick(tipo, userId) {
       const p = STATE.players.find(x => Number(x.userId) === Number(userId)); if (!p) return;
       try { await api('POST', '/command', { tipo, target_roblox_id: p.userId, target_name: p.name, payload: {} }); showAlert(tipo + ' → ' + p.name, 'success'); } catch (e) { showAlert(e.message, 'error'); }
+    }
+    const CLIMA_NOMES = ['Sem chuva', 'Chuva fraca', 'Chuva média', 'Tempestade'];
+    function renderClima() {
+      const c = STATE.config && STATE.config.clima ? Number(STATE.config.clima.chuva) : 0;
+      $('clima-atual').textContent = CLIMA_NOMES[c] || 'Sem chuva';
+      document.querySelectorAll('#clima-btns button').forEach(b => b.className = 'btn ' + (Number(b.dataset.chuva) === c ? '' : 'sec'));
+    }
+    async function setClima(chuva) {
+      try {
+        const r = await api('POST', '/command', { tipo: 'clima', payload: { chuva } });
+        STATE.config = Object.assign({}, STATE.config, { clima: { chuva } }); renderClima();
+        showAlert(r.ids.length ? 'Clima enviado pra ' + r.ids.length + ' servidor(es)' : 'Clima salvo (nenhum servidor online agora)', 'success');
+      } catch (e) { showAlert(e.message, 'error'); }
     }
     async function cmdServer(tipo, payload) {
       try { const r = await api('POST', '/command', { tipo, payload }); showAlert('Enviado pra ' + r.ids.length + ' servidor(es)', 'success'); } catch (e) { showAlert(e.message, 'error'); }

@@ -172,7 +172,11 @@ router.post('/heartbeat', async (req, res) => {
     }
     // limpa servidores mortos (sem heartbeat há 2 min)
     await pool.query(`DELETE FROM game_servers WHERE updated_at < NOW() - INTERVAL '2 minutes'`);
-    res.json({ ok: true });
+    // config persistida (clima etc.) volta no heartbeat: servidor novo já nasce com o estado certo
+    const cfg = await pool.query(`SELECT key, value FROM game_config`);
+    const config = {};
+    for (const r of cfg.rows) config[r.key] = r.value;
+    res.json({ ok: true, config });
   } catch (err) {
     console.error('heartbeat:', err.message);
     res.status(500).json({ error: 'Erro interno' });

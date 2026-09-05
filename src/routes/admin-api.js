@@ -45,6 +45,7 @@ const COMANDOS = {
   unban:          { alvo: 'id',  valida: p => ({ roblox_id: num(p.roblox_id, 1) }) },
   // servidor inteiro
   hora:           { alvo: false, valida: p => ({ clock: num(p.clock, 0, 24) }) },
+  clima:          { alvo: false, valida: p => ({ chuva: num(p.chuva, 0, 3) }), persiste: 'clima' }, // 0 sem chuva, 1 fraca, 2 média, 3 forte
   anuncio:        { alvo: false, valida: p => ({ titulo: str(p.titulo, 40) || 'Aviso', texto: str(p.texto, 300) }) },
 };
 
@@ -67,7 +68,10 @@ router.get('/state', async (req, res) => {
       if (!catalog && s.catalog) catalog = s.catalog;
       for (const p of (s.players || [])) players.push(Object.assign({ job_id: s.job_id }, p));
     }
-    res.json({ servers: servers.rows.map(s => ({ job_id: s.job_id, place_id: s.place_id, n: (s.players || []).length, updated_at: s.updated_at })), players, catalog });
+    const cfgRows = await pool.query(`SELECT key, value FROM game_config`);
+    const config = {};
+    for (const r of cfgRows.rows) config[r.key] = r.value;
+    res.json({ servers: servers.rows.map(s => ({ job_id: s.job_id, place_id: s.place_id, n: (s.players || []).length, updated_at: s.updated_at })), players, catalog, config });
   } catch (err) {
     console.error('state:', err.message);
     res.status(500).json({ error: 'Erro interno' });
@@ -106,9 +110,19 @@ router.post('/command', async (req, res) => {
     }
 
     if (spec.alvo === false) {
+      // config persistida (ex.: clima): grava sempre, mesmo sem servidor online — o heartbeat entrega depois
+      if (spec.persiste) {
+        await pool.query(
+          `INSERT INTO game_config (key, value, updated_at) VALUES ($1, $2, NOW())
+           ON CONFLICT (key) DO UPDATE SET value = EXCLUDED.value, updated_at = NOW()`,
+          [spec.persiste, JSON.stringify(dados)]);
+      }
       // servidor inteiro: um comando por servidor ativo
       const servers = await pool.query(`SELECT job_id FROM game_servers WHERE updated_at > NOW() - INTERVAL '90 seconds'`);
-      if (servers.rows.length === 0) return res.status(400).json({ error: 'Nenhum servidor online' });
+      if (servers.rows.length === 0) {
+        if (spec.persiste) { await audit(req, 'comando:' + tipo, { payload: dados, servidores: 0, salvo: true }); return res.json({ ok: true, ids: [], salvo: true }); }
+        return res.status(400).json({ error: 'Nenhum servidor online' });
+      }
       const ids = [];
       for (const s of servers.rows) {
         const r = await pool.query(

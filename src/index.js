@@ -119,6 +119,11 @@ async function start() {
       );
       CREATE INDEX IF NOT EXISTS idx_game_logs_tipo ON game_logs(tipo, created_at DESC);
       CREATE INDEX IF NOT EXISTS idx_game_logs_jogador ON game_logs(jogador);
+      CREATE TABLE IF NOT EXISTS game_config (
+        key VARCHAR(32) PRIMARY KEY,
+        value JSONB NOT NULL DEFAULT '{}',
+        updated_at TIMESTAMP DEFAULT NOW()
+      );
       CREATE TABLE IF NOT EXISTS admin_audit (
         id SERIAL PRIMARY KEY,
         admin_id INTEGER REFERENCES users(id) ON DELETE SET NULL,
