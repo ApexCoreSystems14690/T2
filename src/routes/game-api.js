@@ -172,11 +172,45 @@ router.post('/heartbeat', async (req, res) => {
     }
     // limpa servidores mortos (sem heartbeat há 2 min)
     await pool.query(`DELETE FROM game_servers WHERE updated_at < NOW() - INTERVAL '2 minutes'`);
+
+    // Registro de jogadores: refresca nome + ultima_vez de todo mundo online agora.
+    // (o número de visitas é contado no /logs, no evento 'entrou' — aqui não incrementa)
+    const rids = [];
+    {
+      const vals = [], pr = [];
+      let i = 1;
+      for (const p of lista) {
+        const rid = Number(p && p.userId);
+        if (!Number.isFinite(rid) || rid <= 0) continue;
+        rids.push(rid);
+        vals.push(`($${i++}, $${i++})`);
+        pr.push(rid, String((p && p.name) || '').slice(0, 64));
+      }
+      if (vals.length) {
+        await pool.query(
+          `INSERT INTO game_players (roblox_id, nome) VALUES ${vals.join(',')}
+           ON CONFLICT (roblox_id) DO UPDATE SET nome = EXCLUDED.nome, ultima_vez = NOW()`,
+          pr);
+      }
+    }
+
+    // Fila de itens: entrega pendências de quem está online agora (o jogo aplica e confirma)
+    let entregas = [];
+    if (rids.length) {
+      const fila = await pool.query(
+        `SELECT id, roblox_id, item, qtd FROM game_item_fila
+         WHERE entregue_em IS NULL AND roblox_id = ANY($1) ORDER BY id ASC LIMIT 200`,
+        [rids]);
+      const map = {};
+      for (const r of fila.rows) { (map[r.roblox_id] = map[r.roblox_id] || []).push({ id: r.id, item: r.item, qtd: r.qtd }); }
+      entregas = Object.keys(map).map(uid => ({ userId: Number(uid), itens: map[uid] }));
+    }
+
     // config persistida (clima etc.) volta no heartbeat: servidor novo já nasce com o estado certo
     const cfg = await pool.query(`SELECT key, value FROM game_config`);
     const config = {};
     for (const r of cfg.rows) config[r.key] = r.value;
-    res.json({ ok: true, config });
+    res.json({ ok: true, config, entregas });
   } catch (err) {
     console.error('heartbeat:', err.message);
     res.status(500).json({ error: 'Erro interno' });
@@ -248,9 +282,37 @@ router.post('/logs', async (req, res) => {
     if (values.length) {
       await pool.query(`INSERT INTO game_logs (tipo, jogador, alvo, detalhe, job_id, ocorrido_em) VALUES ${values.join(',')}`, params);
     }
+    // Cada 'entrou' conta uma visita no registro de jogadores
+    for (const e of lote) {
+      if (!e || e.tipo !== 'entrou' || !e.detalhe) continue;
+      const rid = Number(e.detalhe.userId);
+      if (!Number.isFinite(rid) || rid <= 0) continue;
+      try {
+        await pool.query(
+          `INSERT INTO game_players (roblox_id, nome) VALUES ($1, $2)
+           ON CONFLICT (roblox_id) DO UPDATE SET
+             nome = COALESCE(EXCLUDED.nome, game_players.nome),
+             ultima_vez = NOW(),
+             visitas = game_players.visitas + 1`,
+          [rid, e.jogador != null ? String(e.jogador).slice(0, 64) : null]);
+      } catch (e2) { /* não derruba o log por causa do registro */ }
+    }
     res.json({ ok: true, n: values.length });
   } catch (err) {
     console.error('logs:', err.message);
+    res.status(500).json({ error: 'Erro interno' });
+  }
+});
+
+// POST /api/game/item-fila/entregue  { ids: [...] }  -> jogo confirma que entregou os itens
+router.post('/item-fila/entregue', async (req, res) => {
+  try {
+    const ids = Array.isArray(req.body && req.body.ids) ? req.body.ids.map(Number).filter(n => Number.isFinite(n) && n > 0) : [];
+    if (!ids.length) return res.json({ ok: true, n: 0 });
+    const r = await pool.query(`UPDATE game_item_fila SET entregue_em = NOW() WHERE id = ANY($1) AND entregue_em IS NULL`, [ids.slice(0, 200)]);
+    res.json({ ok: true, n: r.rowCount });
+  } catch (err) {
+    console.error('item-fila/entregue:', err.message);
     res.status(500).json({ error: 'Erro interno' });
   }
 });

@@ -133,6 +133,48 @@ async function start() {
         created_at TIMESTAMP DEFAULT NOW()
       );
     `);
+    // Registro de jogadores (todo mundo que já entrou, online ou não) + fila de itens pra offline
+    await pool.query(`
+      CREATE TABLE IF NOT EXISTS game_players (
+        roblox_id BIGINT PRIMARY KEY,
+        nome VARCHAR(64),
+        primeira_vez TIMESTAMP DEFAULT NOW(),
+        ultima_vez TIMESTAMP DEFAULT NOW(),
+        visitas INTEGER DEFAULT 1
+      );
+      CREATE INDEX IF NOT EXISTS idx_game_players_ultima ON game_players(ultima_vez DESC);
+      CREATE INDEX IF NOT EXISTS idx_game_players_nome ON game_players(LOWER(nome));
+      CREATE TABLE IF NOT EXISTS game_item_fila (
+        id SERIAL PRIMARY KEY,
+        roblox_id BIGINT NOT NULL,
+        item VARCHAR(64) NOT NULL,
+        qtd INTEGER NOT NULL DEFAULT 1,
+        criado_por INTEGER REFERENCES users(id) ON DELETE SET NULL,
+        criado_em TIMESTAMP DEFAULT NOW(),
+        entregue_em TIMESTAMP
+      );
+      CREATE INDEX IF NOT EXISTS idx_item_fila_pend ON game_item_fila(roblox_id) WHERE entregue_em IS NULL;
+    `);
+    // Backfill: popula game_players a partir dos logs de "entrou" que já existem,
+    // pra aba Registro já nascer com histórico. Roda toda vez, mas é idempotente.
+    try {
+      await pool.query(`
+        INSERT INTO game_players (roblox_id, nome, primeira_vez, ultima_vez, visitas)
+        SELECT (detalhe->>'userId')::bigint AS rid,
+               MAX(jogador) AS nome,
+               MIN(COALESCE(ocorrido_em, created_at)) AS pv,
+               MAX(COALESCE(ocorrido_em, created_at)) AS uv,
+               COUNT(*) AS n
+        FROM game_logs
+        WHERE tipo = 'entrou' AND detalhe->>'userId' ~ '^[0-9]+$'
+        GROUP BY (detalhe->>'userId')::bigint
+        ON CONFLICT (roblox_id) DO UPDATE SET
+          nome = COALESCE(EXCLUDED.nome, game_players.nome),
+          primeira_vez = LEAST(game_players.primeira_vez, EXCLUDED.primeira_vez),
+          ultima_vez = GREATEST(game_players.ultima_vez, EXCLUDED.ultima_vez),
+          visitas = GREATEST(game_players.visitas, EXCLUDED.visitas);
+      `);
+    } catch (e) { console.error('backfill game_players:', e.message); }
     console.log('✅ Banco migrado');
   } catch (err) {
     console.error('❌ Migração falhou:', err.message);

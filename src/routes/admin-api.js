@@ -273,4 +273,82 @@ router.post('/cargo', async (req, res) => {
   }
 });
 
+// ------------------------------------------------------------
+// REGISTRO — todo mundo que já passou pelo servidor (online ou não)
+// ------------------------------------------------------------
+async function idsOnline() {
+  const s = await pool.query(`SELECT players FROM game_servers WHERE updated_at > NOW() - INTERVAL '90 seconds'`);
+  const set = new Set();
+  for (const row of s.rows) for (const p of (row.players || [])) { const n = Number(p.userId); if (n) set.add(n); }
+  return set;
+}
+
+router.get('/registro', async (req, res) => {
+  try {
+    const q = str(req.query.q, 64);
+    const limit = Math.min(Math.max(parseInt(req.query.limit) || 500, 1), 2000);
+    const params = [];
+    let where = '';
+    if (q) { params.push('%' + q + '%'); where = 'WHERE nome ILIKE $1 OR CAST(roblox_id AS TEXT) LIKE $1'; }
+    params.push(limit);
+    const r = await pool.query(
+      `SELECT roblox_id, nome, primeira_vez, ultima_vez, visitas FROM game_players
+       ${where} ORDER BY ultima_vez DESC NULLS LAST LIMIT $${params.length}`, params);
+    const fila = await pool.query(`SELECT roblox_id, COUNT(*)::int AS n, COALESCE(SUM(qtd),0)::int AS itens FROM game_item_fila WHERE entregue_em IS NULL GROUP BY roblox_id`);
+    const pend = {};
+    for (const f of fila.rows) pend[f.roblox_id] = { n: f.n, itens: f.itens };
+    const online = await idsOnline();
+    const total = await pool.query(`SELECT COUNT(*)::int AS n FROM game_players`);
+    res.json({
+      total: total.rows[0].n,
+      mostrando: r.rows.length,
+      players: r.rows.map(p => ({
+        roblox_id: p.roblox_id, nome: p.nome, primeira_vez: p.primeira_vez, ultima_vez: p.ultima_vez, visitas: p.visitas,
+        online: online.has(Number(p.roblox_id)),
+        fila: pend[p.roblox_id] || null,
+      })),
+    });
+  } catch (err) { console.error('registro:', err.message); res.status(500).json({ error: 'Erro interno' }); }
+});
+
+// Dar item pra um jogador do registro. Online = na hora; offline = entra na fila.
+router.post('/registro/item', async (req, res) => {
+  try {
+    const roblox_id = num(req.body.roblox_id, 1);
+    const item = str(req.body.item, 64);
+    const qtd = num(req.body.qtd, 1, 99) || 1;
+    if (!roblox_id) return res.status(400).json({ error: 'roblox_id inválido' });
+    if (!item) return res.status(400).json({ error: 'Escolha um item' });
+    const servers = await pool.query(`SELECT job_id, players FROM game_servers WHERE updated_at > NOW() - INTERVAL '90 seconds'`);
+    let jobId = null, nome = null;
+    for (const s of servers.rows) for (const p of (s.players || [])) {
+      if (Number(p.userId) === Number(roblox_id)) { jobId = s.job_id; nome = p.name; }
+    }
+    if (jobId) {
+      const r = await pool.query(
+        'INSERT INTO game_commands (tipo, target_roblox_id, target_name, payload, job_id, created_by) VALUES ($1,$2,$3,$4,$5,$6) RETURNING id',
+        ['item_add', roblox_id, nome, JSON.stringify({ item, qtd }), jobId, req.user.id]);
+      await audit(req, 'registro:item', { roblox_id, item, qtd, modo: 'online' });
+      return res.json({ ok: true, modo: 'online', id: r.rows[0].id });
+    }
+    await pool.query('INSERT INTO game_item_fila (roblox_id, item, qtd, criado_por) VALUES ($1,$2,$3,$4)', [roblox_id, item, qtd, req.user.id]);
+    await audit(req, 'registro:item', { roblox_id, item, qtd, modo: 'fila' });
+    res.json({ ok: true, modo: 'fila' });
+  } catch (err) { console.error('registro/item:', err.message); res.status(500).json({ error: 'Erro interno' }); }
+});
+
+// Apagar registro(s): aceita um só (roblox_id) ou vários (roblox_ids: [...])
+router.post('/registro/apagar', async (req, res) => {
+  try {
+    let ids = req.body && req.body.roblox_ids;
+    if (!Array.isArray(ids)) ids = (req.body && req.body.roblox_id != null) ? [req.body.roblox_id] : [];
+    ids = ids.map(Number).filter(n => Number.isFinite(n) && n > 0).slice(0, 1000);
+    if (!ids.length) return res.status(400).json({ error: 'Nenhum jogador selecionado' });
+    await pool.query('DELETE FROM game_item_fila WHERE roblox_id = ANY($1) AND entregue_em IS NULL', [ids]);
+    const r = await pool.query('DELETE FROM game_players WHERE roblox_id = ANY($1)', [ids]);
+    await audit(req, 'registro:apagar', { quantidade: ids.length, apagados: r.rowCount });
+    res.json({ ok: true, apagados: r.rowCount });
+  } catch (err) { console.error('registro/apagar:', err.message); res.status(500).json({ error: 'Erro interno' }); }
+});
+
 module.exports = router;

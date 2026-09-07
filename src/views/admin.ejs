@@ -91,6 +91,7 @@
 
     <div class="tabs">
       <div class="tab active" data-tab="jogadores">Jogadores</div>
+      <div class="tab" data-tab="registro">Registro</div>
       <div class="tab" data-tab="servidor">Servidor</div>
       <div class="tab" data-tab="logs">Logs</div>
       <div class="tab" data-tab="cargos">Cargos</div>
@@ -119,6 +120,30 @@
           <button class="btn sec" onclick="unbanOffline()">Desbanir</button>
         </div>
       </div>
+    </div>
+
+    <!-- REGISTRO -->
+    <div class="panel" id="panel-registro">
+      <div class="row">
+        <div class="fg" style="max-width:320px"><label>Buscar</label><input id="rg-busca" placeholder="nome ou Roblox ID"></div>
+        <button class="btn sec" onclick="loadRegistro()">Atualizar</button>
+        <span class="muted" id="rg-info" style="font-size:.75rem;flex:1"></span>
+      </div>
+      <div class="row" id="rg-lote-bar" style="display:none">
+        <span class="muted" style="font-size:.82rem"><b id="rg-sel-n">0</b> selecionado(s)</span>
+        <button class="btn danger" onclick="apagarLote()">🗑️ Apagar selecionados</button>
+        <button class="btn sec" onclick="limparSel()">Limpar seleção</button>
+      </div>
+      <div style="overflow-x:auto">
+        <table>
+          <thead><tr>
+            <th style="width:26px"><input type="checkbox" id="rg-all" onclick="toggleAll(this)" title="Selecionar todos"></th>
+            <th>Jogador</th><th>Roblox ID</th><th>Visitas</th><th>1ª vez</th><th>Última vez</th><th>Status</th><th>Ações</th>
+          </tr></thead>
+          <tbody id="rg-body"><tr><td colspan="8" class="empty">Carregando…</td></tr></tbody>
+        </table>
+      </div>
+      <div class="muted" style="font-size:.75rem;margin-top:.6rem">Item pra quem está <b>offline</b> entra numa fila e é entregue assim que a pessoa logar. Online recebe na hora.</div>
     </div>
 
     <!-- SERVIDOR -->
@@ -246,6 +271,20 @@
     </div>
   </div>
 
+  <!-- MODAL DAR ITEM (registro) -->
+  <div class="modal-overlay" id="rmodal">
+    <div class="modal">
+      <h2 id="ri-title">Dar item</h2>
+      <div class="sub" id="ri-sub"></div>
+      <div class="fg" style="margin-bottom:.7rem"><label>Item</label><input id="ri-item" list="ri-itens" autocomplete="off" placeholder="nome do item"><datalist id="ri-itens"></datalist></div>
+      <div class="fg"><label>Quantidade</label><input id="ri-qtd" type="number" value="1" min="1" max="99"></div>
+      <div class="actions">
+        <button class="btn sec" onclick="closeItem()">Cancelar</button>
+        <button class="btn" id="ri-ok" onclick="submitItem()">Dar item</button>
+      </div>
+    </div>
+  </div>
+
   <script>
     // ---------- util ----------
     const $ = id => document.getElementById(id);
@@ -265,6 +304,7 @@
       document.querySelectorAll('.tab').forEach(t => t.classList.remove('active'));
       document.querySelectorAll('.panel').forEach(p => p.classList.remove('active'));
       tab.classList.add('active'); $('panel-' + tab.dataset.tab).classList.add('active');
+      if (tab.dataset.tab === 'registro') loadRegistro();
       if (tab.dataset.tab === 'logs') loadLogs();
       if (tab.dataset.tab === 'usuarios') loadUsers();
       if (tab.dataset.tab === 'historico') loadHist();
@@ -499,6 +539,77 @@
         $('hist-body').innerHTML = c.commands.map(x => '<tr><td class="muted">' + x.id + '</td><td>' + esc(x.tipo) + '</td><td>' + esc(x.target_name || x.target_roblox_id || '—') + '</td><td>' + esc(x.admin || '—') + '</td><td><span class="pill ' + (cls[x.status] || '') + '">' + esc(x.status) + '</span></td><td class="muted" style="font-size:.72rem">' + esc(x.result || '') + '</td></tr>').join('') || '<tr><td colspan="6" class="empty">Nenhum comando</td></tr>';
         $('aud-body').innerHTML = a.audit.map(x => '<tr><td class="muted" style="white-space:nowrap">' + fmtT(x.created_at) + '</td><td>' + esc(x.admin_nome) + '</td><td>' + esc(x.acao) + '</td><td><pre class="det">' + esc(JSON.stringify(x.detalhe)) + '</pre></td></tr>').join('') || '<tr><td colspan="4" class="empty">Nada ainda</td></tr>';
       } catch (e) { showAlert(e.message, 'error'); }
+    }
+
+    // ---------- registro (todo mundo que já entrou) ----------
+    let REG = { players: [], total: 0, mostrando: 0 }, REG_SEL = new Set(), RITEM = null, rgT;
+    async function loadRegistro() {
+      try {
+        const q = ($('rg-busca').value || '').trim();
+        REG = await api('GET', '/registro?limit=1000&q=' + encodeURIComponent(q));
+        $('rg-info').textContent = 'Mostrando ' + REG.mostrando + ' de ' + REG.total + ' jogador(es) no registro';
+        renderRegistro();
+      } catch (e) { showAlert(e.message, 'error'); }
+    }
+    $('rg-busca').addEventListener('input', () => { clearTimeout(rgT); rgT = setTimeout(loadRegistro, 350); });
+    function renderRegistro() {
+      const list = REG.players || [];
+      if (!list.length) { $('rg-body').innerHTML = '<tr><td colspan="8" class="empty">' + (REG.total ? 'Ninguém bate com a busca' : 'Registro vazio — vai enchendo conforme os jogadores entram') + '</td></tr>'; updateSelBar(); return; }
+      $('rg-body').innerHTML = list.map(p => {
+        const rid = Number(p.roblox_id);
+        const sel = REG_SEL.has(rid);
+        const fila = p.fila ? ' · <span class="pill warn">' + p.fila.itens + ' na fila</span>' : '';
+        return '<tr>' +
+          '<td><input type="checkbox" ' + (sel ? 'checked' : '') + ' onclick="toggleSel(' + rid + ',this)"></td>' +
+          '<td><b>' + esc(p.nome || '—') + '</b>' + fila + '</td>' +
+          '<td class="muted">' + esc(p.roblox_id) + '</td>' +
+          '<td>' + esc(p.visitas || 1) + '</td>' +
+          '<td class="muted" style="font-size:.74rem;white-space:nowrap">' + (p.primeira_vez ? fmtT(p.primeira_vez) : '—') + '</td>' +
+          '<td class="muted" style="font-size:.74rem;white-space:nowrap">' + (p.ultima_vez ? fmtT(p.ultima_vez) : '—') + '</td>' +
+          '<td>' + (p.online ? '<span class="pill ok">online</span>' : '<span class="pill">offline</span>') + '</td>' +
+          '<td><div class="acts">' +
+            '<button onclick="openItem(' + rid + ')">🎒 Dar item</button>' +
+            '<button class="d" onclick="apagarUm(' + rid + ')">🗑️ Apagar</button>' +
+          '</div></td></tr>';
+      }).join('');
+      updateSelBar();
+    }
+    function toggleSel(rid, el) { if (el.checked) REG_SEL.add(Number(rid)); else REG_SEL.delete(Number(rid)); updateSelBar(); }
+    function toggleAll(el) { (REG.players || []).forEach(p => { const rid = Number(p.roblox_id); if (el.checked) REG_SEL.add(rid); else REG_SEL.delete(rid); }); renderRegistro(); }
+    function limparSel() { REG_SEL.clear(); const a = $('rg-all'); if (a) a.checked = false; renderRegistro(); }
+    function updateSelBar() { const n = REG_SEL.size; $('rg-sel-n').textContent = n; $('rg-lote-bar').style.display = n ? 'flex' : 'none'; }
+    function openItem(rid) {
+      const p = (REG.players || []).find(x => Number(x.roblox_id) === Number(rid));
+      if (!p) return;
+      RITEM = p;
+      $('ri-title').textContent = 'Dar item — ' + (p.nome || p.roblox_id);
+      $('ri-sub').textContent = p.online ? 'Está online — o item vai na hora.' : 'Offline — entra na fila e o jogo entrega assim que ele logar.';
+      $('ri-itens').innerHTML = cat('itens', []).map(it => '<option value="' + esc(it) + '">').join('');
+      $('ri-item').value = ''; $('ri-qtd').value = 1;
+      $('rmodal').classList.add('active');
+    }
+    function closeItem() { $('rmodal').classList.remove('active'); RITEM = null; }
+    async function submitItem() {
+      if (!RITEM) return;
+      const item = $('ri-item').value.trim(), qtd = Number($('ri-qtd').value) || 1;
+      if (!item) return showAlert('Escolha ou digite um item', 'error');
+      try {
+        const r = await api('POST', '/registro/item', { roblox_id: RITEM.roblox_id, item, qtd });
+        showAlert(r.modo === 'online' ? (qtd + 'x ' + item + ' enviado agora') : (qtd + 'x ' + item + ' na fila — entrega quando logar'), 'success');
+        closeItem();
+        setTimeout(loadRegistro, 1500);
+      } catch (e) { showAlert(e.message, 'error'); }
+    }
+    async function apagarUm(rid) {
+      const p = (REG.players || []).find(x => Number(x.roblox_id) === Number(rid));
+      if (!confirm('Apagar o registro de ' + ((p && p.nome) || rid) + '?')) return;
+      try { const r = await api('POST', '/registro/apagar', { roblox_id: Number(rid) }); showAlert(r.apagados + ' registro(s) apagado(s)', 'success'); REG_SEL.delete(Number(rid)); loadRegistro(); } catch (e) { showAlert(e.message, 'error'); }
+    }
+    async function apagarLote() {
+      const ids = Array.from(REG_SEL);
+      if (!ids.length) return;
+      if (!confirm('Apagar ' + ids.length + ' registro(s) selecionado(s)? Não tem volta.')) return;
+      try { const r = await api('POST', '/registro/apagar', { roblox_ids: ids }); showAlert(r.apagados + ' registro(s) apagado(s)', 'success'); REG_SEL.clear(); loadRegistro(); } catch (e) { showAlert(e.message, 'error'); }
     }
   </script>
 </body>
