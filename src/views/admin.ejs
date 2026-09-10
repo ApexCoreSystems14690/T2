@@ -130,6 +130,16 @@
         <span class="muted" id="rg-info" style="font-size:.75rem;flex:1"></span>
         <button class="btn danger" onclick="wipeGeral()" title="Apaga TODO o registro do jogo (temporada/wipe)">💣 Wipe geral</button>
       </div>
+      <div class="row" style="gap:.5rem;flex-wrap:wrap;background:rgba(255,255,255,.03);padding:.5rem;border-radius:8px;align-items:flex-end">
+        <span class="muted" style="font-size:.8rem;align-self:center"><b>Dar pra TODOS:</b></span>
+        <div class="fg" style="max-width:170px"><label>Item</label><input id="dt-item" list="dt-itens" autocomplete="off" placeholder="item"><datalist id="dt-itens"></datalist></div>
+        <div class="fg" style="max-width:70px"><label>Qtd</label><input id="dt-qtd" type="number" value="1" min="1" max="99"></div>
+        <label style="font-size:.72rem;display:flex;align-items:center;gap:.25rem;padding-bottom:.4rem"><input type="checkbox" id="dt-offline"> incluir offline</label>
+        <button class="btn" onclick="darItemTodos()">🎒 Dar item a todos</button>
+        <span style="width:14px"></span>
+        <div class="fg" style="max-width:170px"><label>Carro</label><input id="dt-carro" list="dt-carros" autocomplete="off" placeholder="carro"><datalist id="dt-carros"></datalist></div>
+        <button class="btn" onclick="darCarroTodos()">🚗 Dar carro a todos</button>
+      </div>
       <div class="row" id="rg-lote-bar" style="display:none">
         <span class="muted" style="font-size:.82rem"><b id="rg-sel-n">0</b> selecionado(s)</span>
         <button class="btn danger" onclick="apagarLote()">🗑️ Apagar selecionados</button>
@@ -550,6 +560,8 @@
         REG = await api('GET', '/registro?limit=1000&q=' + encodeURIComponent(q));
         $('rg-info').textContent = 'Mostrando ' + REG.mostrando + ' de ' + REG.total + ' jogador(es) no registro';
         renderRegistro();
+        $('dt-itens').innerHTML = cat('itens', []).map(it => '<option value="' + esc(it) + '">').join('');
+        $('dt-carros').innerHTML = cat('carros', []).map(c => '<option value="' + esc(c) + '">').join('');
       } catch (e) { showAlert(e.message, 'error'); }
     }
     $('rg-busca').addEventListener('input', () => { clearTimeout(rgT); rgT = setTimeout(loadRegistro, 350); });
@@ -619,6 +631,25 @@
         const r = await api('POST', '/registro/wipe', { confirm: 'WIPE' });
         showAlert('Wipe feito: ' + r.jogadores + ' jogadores, ' + r.fila + ' fila, ' + r.logs + ' logs apagados', 'success');
         REG_SEL.clear(); loadRegistro();
+      } catch (e) { showAlert(e.message, 'error'); }
+    }
+    async function darItemTodos() {
+      const item = ($('dt-item').value || '').trim(); const qtd = Number($('dt-qtd').value) || 1;
+      if (!item) return showAlert('Escolha um item', 'error');
+      const offline = $('dt-offline').checked;
+      if (!confirm('Dar ' + qtd + 'x "' + item + '" pra TODOS' + (offline ? ' (online agora + offline no próximo login)' : ' os jogadores ONLINE agora') + '?')) return;
+      try {
+        const r = await api('POST', '/registro/dar-todos', { tipo: 'item_add', item, qtd, offline });
+        showAlert('Item dado: ' + r.online + ' online' + (r.fila ? (' + ' + r.fila + ' na fila (offline)') : ''), 'success');
+      } catch (e) { showAlert(e.message, 'error'); }
+    }
+    async function darCarroTodos() {
+      const carro = ($('dt-carro').value || '').trim();
+      if (!carro) return showAlert('Escolha um carro', 'error');
+      if (!confirm('Dar o carro "' + carro + '" pra TODOS os jogadores ONLINE agora?\n\n(Carro só vai pros online — offline não tem fila de carro.)')) return;
+      try {
+        const r = await api('POST', '/registro/dar-todos', { tipo: 'carro_add', carro });
+        showAlert('Carro dado a ' + r.online + ' jogador(es) online', 'success');
       } catch (e) { showAlert(e.message, 'error'); }
     }
   </script>

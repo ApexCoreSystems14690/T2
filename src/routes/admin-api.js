@@ -365,4 +365,52 @@ router.post('/registro/wipe', async (req, res) => {
   } catch (err) { console.error('registro/wipe:', err.message); res.status(500).json({ error: 'Erro interno' }); }
 });
 
+// DAR PRA TODOS — item ou carro geral pra todo mundo.
+// tipo: 'item_add' (item + qtd) ou 'carro_add' (carro). Manda um comando por jogador ONLINE em cada servidor.
+// item + offline:true tambem enfileira (game_item_fila) pra quem esta no registro e nao esta online (pega no proximo login).
+// carro so vai pros online (nao existe fila de carro; offline precisaria de peca no jogo).
+router.post('/registro/dar-todos', async (req, res) => {
+  try {
+    const tipo = req.body && req.body.tipo;
+    if (tipo !== 'item_add' && tipo !== 'carro_add') return res.status(400).json({ error: 'tipo inválido' });
+    let payload;
+    if (tipo === 'item_add') {
+      payload = { item: str(req.body.item, 64), qtd: num(req.body.qtd, 1, 99) || 1 };
+      if (!payload.item) return res.status(400).json({ error: 'Escolha um item' });
+    } else {
+      payload = { carro: str(req.body.carro, 64) };
+      if (!payload.carro) return res.status(400).json({ error: 'Escolha um carro' });
+    }
+    const offline = tipo === 'item_add' && !!(req.body && req.body.offline);
+
+    // ONLINE: um comando por jogador em cada servidor ativo
+    const servers = await pool.query(`SELECT job_id, players FROM game_servers WHERE updated_at > NOW() - INTERVAL '90 seconds'`);
+    let online = 0; const onlineIds = new Set();
+    for (const s of servers.rows) {
+      for (const p of (s.players || [])) {
+        const rid = Number(p.userId); if (!rid) continue;
+        onlineIds.add(rid);
+        await pool.query(
+          'INSERT INTO game_commands (tipo, target_roblox_id, target_name, payload, job_id, created_by) VALUES ($1,$2,$3,$4,$5,$6)',
+          [tipo, rid, p.name || null, JSON.stringify(payload), s.job_id, req.user.id]);
+        online++;
+      }
+    }
+
+    // OFFLINE (só item): fila pra todo mundo do registro que não está online
+    let fila = 0;
+    if (offline) {
+      const r = await pool.query(
+        `INSERT INTO game_item_fila (roblox_id, item, qtd, criado_por)
+         SELECT gp.roblox_id, $1, $2, $3 FROM game_players gp
+         WHERE gp.roblox_id <> ALL($4::bigint[])`,
+        [payload.item, payload.qtd, req.user.id, Array.from(onlineIds)]);
+      fila = r.rowCount;
+    }
+
+    await audit(req, 'dar-todos:' + tipo, { payload, online, fila });
+    res.json({ ok: true, online, fila });
+  } catch (err) { console.error('registro/dar-todos:', err.message); res.status(500).json({ error: 'Erro interno' }); }
+});
+
 module.exports = router;
