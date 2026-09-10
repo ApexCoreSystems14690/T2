@@ -351,4 +351,18 @@ router.post('/registro/apagar', async (req, res) => {
   } catch (err) { console.error('registro/apagar:', err.message); res.status(500).json({ error: 'Erro interno' }); }
 });
 
+// WIPE GERAL — apaga TODO o registro escrito do jogo (jogadores + fila de itens + logs). Para temporadas/wipe.
+// Exige body.confirm === 'WIPE' pra evitar acidente. NAO mexe em corporacoes/usuarios/cargos.
+// OBS: NAO apaga o save do jogador (dinheiro/inventario) — isso fica no DataStore do Roblox, resetado pelo jogo.
+router.post('/registro/wipe', async (req, res) => {
+  try {
+    if ((req.body && req.body.confirm) !== 'WIPE') return res.status(400).json({ error: 'Confirmacao invalida (mande confirm: "WIPE")' });
+    const p = await pool.query('DELETE FROM game_players');
+    const f = await pool.query('DELETE FROM game_item_fila');
+    const l = await pool.query('DELETE FROM game_logs');
+    await audit(req, 'registro:wipe', { jogadores: p.rowCount, fila: f.rowCount, logs: l.rowCount });
+    res.json({ ok: true, jogadores: p.rowCount, fila: f.rowCount, logs: l.rowCount });
+  } catch (err) { console.error('registro/wipe:', err.message); res.status(500).json({ error: 'Erro interno' }); }
+});
+
 module.exports = router;

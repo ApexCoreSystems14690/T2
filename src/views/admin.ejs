@@ -128,6 +128,7 @@
         <div class="fg" style="max-width:320px"><label>Buscar</label><input id="rg-busca" placeholder="nome ou Roblox ID"></div>
         <button class="btn sec" onclick="loadRegistro()">Atualizar</button>
         <span class="muted" id="rg-info" style="font-size:.75rem;flex:1"></span>
+        <button class="btn danger" onclick="wipeGeral()" title="Apaga TODO o registro do jogo (temporada/wipe)">💣 Wipe geral</button>
       </div>
       <div class="row" id="rg-lote-bar" style="display:none">
         <span class="muted" style="font-size:.82rem"><b id="rg-sel-n">0</b> selecionado(s)</span>
@@ -610,6 +611,15 @@
       if (!ids.length) return;
       if (!confirm('Apagar ' + ids.length + ' registro(s) selecionado(s)? Não tem volta.')) return;
       try { const r = await api('POST', '/registro/apagar', { roblox_ids: ids }); showAlert(r.apagados + ' registro(s) apagado(s)', 'success'); REG_SEL.clear(); loadRegistro(); } catch (e) { showAlert(e.message, 'error'); }
+    }
+    async function wipeGeral() {
+      const t = prompt('WIPE GERAL — apaga TODO o registro de jogadores, a fila de itens e os logs do jogo. NÃO tem volta.\n\n(Isso NÃO reseta o dinheiro/inventário salvo no jogo — só o registro do painel.)\n\nDigite WIPE pra confirmar:');
+      if (t !== 'WIPE') { if (t !== null) showAlert('Wipe cancelado (precisa digitar WIPE)', 'error'); return; }
+      try {
+        const r = await api('POST', '/registro/wipe', { confirm: 'WIPE' });
+        showAlert('Wipe feito: ' + r.jogadores + ' jogadores, ' + r.fila + ' fila, ' + r.logs + ' logs apagados', 'success');
+        REG_SEL.clear(); loadRegistro();
+      } catch (e) { showAlert(e.message, 'error'); }
     }
   </script>
 </body>
