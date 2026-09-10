@@ -355,6 +355,7 @@
             '<button onclick="openCmd(\'emprego\',' + p.userId + ')">💼 Emprego</button>' +
             '<button onclick="openCmd(\'tp_local\',' + p.userId + ')">📍 TP</button>' +
             '<button onclick="quick(\'curar\',' + p.userId + ')">❤️ Curar</button>' +
+            '<button onclick="openCmd(\'noclip\',' + p.userId + ')">🕊️ Noclip</button>' +
             '<button onclick="openCmd(\'mensagem\',' + p.userId + ')">✉️ Msg</button>' +
             '<button onclick="openCmd(\'mais\',' + p.userId + ')">⚙️ Mais</button>' +
             '<button class="d" onclick="openCmd(\'kick\',' + p.userId + ')">👢 Kick</button>' +
@@ -382,6 +383,9 @@
         { k: 'para', l: 'Jogador', type: 'datalist', opts: () => STATE.players.map(p => p.name) },
         { k: 'x', l: 'X', type: 'number', v: 0 }, { k: 'y', l: 'Y', type: 'number', v: 50 }, { k: 'z', l: 'Z', type: 'number', v: 0 }] },
       mensagem: { t: 'Mensagem privada', f: [{ k: 'texto', l: 'Texto', type: 'text' }] },
+      noclip: { t: 'Noclip (voar / atravessar paredes)', f: [
+        { k: 'modo', l: 'Ação', type: 'select', opts: [['on', 'Ativar'], ['off', 'Desativar']] },
+        { k: 'velocidade', l: 'Velocidade (studs/s · Shift no jogo dá boost)', type: 'number', v: 80 }] },
       kick: { t: 'Expulsar', f: [{ k: 'motivo', l: 'Motivo', type: 'text', v: 'Expulso por um administrador' }], danger: true },
       ban: { t: 'Banir', f: [{ k: 'motivo', l: 'Motivo', type: 'text', v: 'Banido por um administrador' }], danger: true },
       mais: { t: 'Mais ações', f: [
@@ -431,6 +435,7 @@
       else if (kind === 'emprego') { payload = { emprego: val('emprego') || '' }; }
       else if (kind === 'tp_local') { const m = val('modo'); if (m === 'local') { tipo = 'tp_local'; payload = { local: val('local') }; } else if (m === 'jogador') { tipo = 'tp_jogador'; payload = { para: val('para') }; } else if (m === 'trazer') { tipo = 'trazer'; payload = { de: val('para') }; } else { tipo = 'tp_coord'; payload = { x: Number(val('x')), y: Number(val('y')), z: Number(val('z')) }; } }
       else if (kind === 'mensagem') { payload = { texto: val('texto') }; }
+      else if (kind === 'noclip') { tipo = 'noclip'; payload = { ativar: val('modo') === 'on', velocidade: Number(val('velocidade')) || 80 }; }
       else if (kind === 'kick') { payload = { motivo: val('motivo') }; }
       else if (kind === 'ban') { payload = { roblox_id: p.userId, motivo: val('motivo') }; }
       else if (kind === 'mais') { tipo = val('modo'); if (tipo === 'level_set') payload = { level: Number(val('level')) }; if (tipo === 'slots_set') payload = { slots: Number(val('slots')) }; if (tipo === 'carro_add' || tipo === 'carro_remove') payload = { carro: val('carro') }; if (tipo === 'resetar_dados' && !confirm('ZERAR todos os dados de ' + p.name + '? Isso não tem volta.')) return; }

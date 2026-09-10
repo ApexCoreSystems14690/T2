@@ -40,6 +40,7 @@ const COMANDOS = {
   carro_remove:   { alvo: true,  valida: p => ({ carro: str(p.carro) }) },
   resetar_dados:  { alvo: true,  valida: () => ({}) },
   corp_refresh:   { alvo: true,  valida: () => ({}) },
+  noclip:         { alvo: true,  valida: p => ({ ativar: !!p.ativar, velocidade: num(p.velocidade, 16, 800) || 80 }) }, // voar / atravessar paredes
   // alvo por roblox_id, pode estar offline
   ban:            { alvo: 'id',  valida: p => ({ roblox_id: num(p.roblox_id, 1), motivo: str(p.motivo, 200) || 'Banido por um administrador' }) },
   unban:          { alvo: 'id',  valida: p => ({ roblox_id: num(p.roblox_id, 1) }) },
