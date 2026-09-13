@@ -175,6 +175,23 @@ async function start() {
           visitas = GREATEST(game_players.visitas, EXCLUDED.visitas);
       `);
     } catch (e) { console.error('backfill game_players:', e.message); }
+    // PF virou PC (set/2026): no painel a corporação da Polícia Federal foi renomeada pra Polícia Civil,
+    // mas o SLUG (que é o que o jogo consulta em /api/game/player) continuou 'policia-federal', e a corp
+    // 'policia-civil' original ficou vazia. Aqui: aposenta a 'policia-civil' vazia e passa o slug da antiga
+    // PF pra 'policia-civil'. Idempotente — depois da primeira execução não faz nada.
+    try {
+      await pool.query(`
+        UPDATE corporations SET slug = 'policia-civil-vazia', is_active = false, updated_at = NOW()
+         WHERE slug = 'policia-civil'
+           AND EXISTS (SELECT 1 FROM corporations c2 WHERE c2.slug = 'policia-federal')
+           AND NOT EXISTS (SELECT 1 FROM members m WHERE m.corporation_id = corporations.id);
+        UPDATE corporations SET slug = 'policia-civil',
+               name = CASE WHEN name ILIKE '%federal%' THEN 'Polícia Civil' ELSE name END,
+               updated_at = NOW()
+         WHERE slug = 'policia-federal'
+           AND NOT EXISTS (SELECT 1 FROM corporations c2 WHERE c2.slug = 'policia-civil');
+      `);
+    } catch (e) { console.error('migração PF->PC:', e.message); }
     console.log('✅ Banco migrado');
   } catch (err) {
     console.error('❌ Migração falhou:', err.message);
