@@ -192,6 +192,65 @@ async function start() {
            AND NOT EXISTS (SELECT 1 FROM corporations c2 WHERE c2.slug = 'policia-civil');
       `);
     } catch (e) { console.error('migração PF->PC:', e.message); }
+    // Cargos da PC (13/09/2026, pedido do Julio): a corp herdou os cargos da antiga PF (Diretor Geral...).
+    // Aqui: cria os 18 cargos da Polícia Civil (mesmos nomes/salários da tabela SalariosPC do jogo),
+    // move cada membro do cargo PF pro cargo PC equivalente e apaga os cargos da PF.
+    // Idempotente: só roda se a corp 'policia-civil' ainda não tem '[DLG-G] Delegado Geral'.
+    try {
+      await pool.query(`
+        DO $$
+        DECLARE
+          cid INTEGER;
+          novos TEXT[][] := ARRAY[
+            ['[DLG-G] Delegado Geral','19000'], ['[DLG-ADJ] Delegado Adjunto','17000'],
+            ['[DLG-1º] Delegado de Primeira Classe','15000'], ['[DLG-2º] Delegado de Segunda Classe','14500'],
+            ['[DLG-3º] Delegado de Terceira Classe','13500'], ['[ESC] Escrivão','11500'],
+            ['[PRT-C] Perito Criminal','11000'], ['[LEG] Legista','10500'],
+            ['[INV-1º] Investigador de Primeira Classe','10000'], ['[INV-2º] Investigador de Segunda Classe','9500'],
+            ['[INV-3º] Investigador de Terceira Classe','9000'], ['[INV] Investigador','8650'],
+            ['[AGT-1º] Agente de Primeira Classe','7650'], ['[AGT-2º] Agente de Segunda Classe','5950'],
+            ['[AGT-3º] Agente de Terceira Classe','4250'], ['[AGT-P] Agente de Polícia','2550'],
+            ['Aluno','2210'], ['Holder','2125']
+          ];
+          mapa TEXT[][] := ARRAY[
+            ['Diretor Geral','[DLG-G] Delegado Geral'], ['Diretor','[DLG-ADJ] Delegado Adjunto'],
+            ['Diretor Adjunto','[DLG-1º] Delegado de Primeira Classe'], ['Perito Criminal','[PRT-C] Perito Criminal'],
+            ['Investigador','[INV] Investigador'], ['Sub-Investigador','[AGT-1º] Agente de Primeira Classe'],
+            ['Escrivão','[ESC] Escrivão'], ['Agente Especial','[AGT-1º] Agente de Primeira Classe'],
+            ['Agente Operacional','[AGT-2º] Agente de Segunda Classe'], ['Agente 1º Classe','[AGT-3º] Agente de Terceira Classe'],
+            ['Agente 2º Classe','[AGT-P] Agente de Polícia'], ['Agente 3º Classe','[AGT-P] Agente de Polícia'],
+            ['Aluno','Aluno']
+          ];
+          i INTEGER; n INTEGER; velho_id INTEGER; novo_id INTEGER;
+        BEGIN
+          SELECT id INTO cid FROM corporations WHERE slug = 'policia-civil' AND is_active = true;
+          IF cid IS NULL THEN RETURN; END IF;
+          IF EXISTS (SELECT 1 FROM ranks WHERE corporation_id = cid AND name = '[DLG-G] Delegado Geral') THEN RETURN; END IF;
+          n := array_length(novos, 1);
+          -- 1) cria os cargos novos em níveis temporários (100+) pra não colidir com os da PF
+          FOR i IN 1..n LOOP
+            INSERT INTO ranks (corporation_id, name, level, salary)
+            VALUES (cid, novos[i][1], 100 + (n - i + 1), novos[i][2]::INTEGER)
+            ON CONFLICT (corporation_id, name) DO NOTHING;
+          END LOOP;
+          -- 2) move os membros do cargo PF pro equivalente PC
+          FOR i IN 1..array_length(mapa, 1) LOOP
+            SELECT id INTO velho_id FROM ranks WHERE corporation_id = cid AND name = mapa[i][1] AND level < 100;
+            SELECT id INTO novo_id  FROM ranks WHERE corporation_id = cid AND name = mapa[i][2];
+            IF velho_id IS NOT NULL AND novo_id IS NOT NULL THEN
+              UPDATE members SET rank_id = novo_id WHERE corporation_id = cid AND rank_id = velho_id;
+            END IF;
+          END LOOP;
+          -- quem sobrou num cargo PF sem mapa vira Aluno (não fica sem cargo)
+          SELECT id INTO novo_id FROM ranks WHERE corporation_id = cid AND name = 'Aluno' AND level >= 100;
+          UPDATE members SET rank_id = novo_id
+           WHERE corporation_id = cid AND rank_id IN (SELECT id FROM ranks WHERE corporation_id = cid AND level < 100);
+          -- 3) apaga os cargos da PF e renumera os da PC de 18 (topo) até 1
+          DELETE FROM ranks WHERE corporation_id = cid AND level < 100;
+          UPDATE ranks SET level = level - 100 WHERE corporation_id = cid AND level >= 100;
+        END $$;
+      `);
+    } catch (e) { console.error('migração cargos PC:', e.message); }
     console.log('✅ Banco migrado');
   } catch (err) {
     console.error('❌ Migração falhou:', err.message);
