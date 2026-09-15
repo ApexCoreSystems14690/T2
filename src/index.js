@@ -251,6 +251,38 @@ async function start() {
         END $$;
       `);
     } catch (e) { console.error('migração cargos PC:', e.message); }
+    // Jornal Nacional (15/09/2026, pedido do Julio): garante a corp 'jornal' (grupo antigo 15258756 no jogo)
+    // e a regra de quem publica matérias no celular: os 3 cargos de nível mais alto (permissions.publicar_materias).
+    // O jogo já recebe rank.permissions em /api/game/player. Idempotente; a regra é recalculada a cada boot.
+    try {
+      await pool.query(`
+        DO $$
+        DECLARE
+          cid INTEGER;
+        BEGIN
+          -- 1) garante a corp (só cria se não existir; nunca mexe numa que já existe)
+          SELECT id INTO cid FROM corporations WHERE slug = 'jornal';
+          IF cid IS NULL THEN
+            INSERT INTO corporations (name, slug, description, color, max_members, is_active)
+            VALUES ('Jornal Nacional', 'jornal', 'Jornal Nacional. Cobertura jornalística e reportagens da cidade.', '#F59E0B', 100, true)
+            RETURNING id INTO cid;
+          END IF;
+          UPDATE corporations SET is_active = true, updated_at = NOW() WHERE id = cid AND is_active = false;
+          -- 2) cargos iniciais (mesmos nomes/salários da tabela SalariosJN do jogo), só se a corp não tem nenhum
+          IF NOT EXISTS (SELECT 1 FROM ranks WHERE corporation_id = cid) THEN
+            INSERT INTO ranks (corporation_id, name, level, salary) VALUES
+              (cid, 'Diretores', 3, 9350), (cid, 'Jornalista', 2, 1700), (cid, 'Holder', 1, 2125);
+          END IF;
+          -- 3) regra de publicação: os 3 cargos de nível mais alto publicam matérias.
+          --    Recalculada a cada boot, então vale também pra cargos criados/renomeados depois no painel.
+          UPDATE ranks r
+             SET permissions = COALESCE(r.permissions, '{}'::jsonb)
+                               || jsonb_build_object('publicar_materias',
+                                    r.id IN (SELECT id FROM ranks WHERE corporation_id = cid ORDER BY level DESC LIMIT 3))
+           WHERE r.corporation_id = cid;
+        END $$;
+      `);
+    } catch (e) { console.error('migração Jornal:', e.message); }
     console.log('✅ Banco migrado');
   } catch (err) {
     console.error('❌ Migração falhou:', err.message);
