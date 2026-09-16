@@ -82,6 +82,22 @@ CREATE TABLE IF NOT EXISTS session (
   PRIMARY KEY (sid)
 );
 CREATE INDEX IF NOT EXISTS idx_session_expire ON session(expire);
+
+-- ===== CELULAR (Aparelho com uid) — F2 CelularV2 =====
+-- Registro dos aparelhos (identidade). O CONTEUDO (mensagens/galeria) entra em tabelas proprias depois.
+-- apagado_em marca o wipe e e a base da janela de retencao pra pericia da Policia Civil.
+CREATE TABLE IF NOT EXISTS aparelhos (
+  uid VARCHAR(64) PRIMARY KEY,
+  numero VARCHAR(24) NOT NULL,
+  dono_roblox_id BIGINT,
+  dono_nome VARCHAR(64),
+  criado_em TIMESTAMP DEFAULT NOW(),
+  apagado_em TIMESTAMP,
+  ativo BOOLEAN DEFAULT true,
+  atualizado_em TIMESTAMP DEFAULT NOW()
+);
+CREATE INDEX IF NOT EXISTS idx_aparelhos_numero ON aparelhos(numero);
+CREATE INDEX IF NOT EXISTS idx_aparelhos_dono ON aparelhos(dono_roblox_id);
 `;
 
 async function run() {

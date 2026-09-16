@@ -317,4 +317,81 @@ router.post('/item-fila/entregue', async (req, res) => {
   }
 });
 
+// ============================================================
+// CELULAR — Aparelho com uid (registro + retenção pra perícia da PC)
+// Tudo aditivo; o jogo chama por HTTP com a mesma x-api-key.
+// ============================================================
+
+// POST /api/game/celular/registrar  { uid, numero, roblox_id, nome }
+// Cria/atualiza o aparelho ATIVO de um jogador (chamado quando o jogo dá/garante um A10).
+router.post('/celular/registrar', async (req, res) => {
+  try {
+    const { uid, numero, roblox_id, nome } = req.body || {};
+    if (!uid || typeof uid !== 'string' || uid.length > 64) return res.status(400).json({ error: 'uid inválido' });
+    if (!numero || typeof numero !== 'string' || numero.length > 24) return res.status(400).json({ error: 'numero inválido' });
+    await pool.query(
+      `INSERT INTO aparelhos (uid, numero, dono_roblox_id, dono_nome, ativo, atualizado_em)
+       VALUES ($1, $2, $3, $4, true, NOW())
+       ON CONFLICT (uid) DO UPDATE SET
+         numero = EXCLUDED.numero, dono_roblox_id = EXCLUDED.dono_roblox_id,
+         dono_nome = EXCLUDED.dono_nome, ativo = true, atualizado_em = NOW()`,
+      [uid, numero, Number(roblox_id) || null, nome ? String(nome).slice(0, 64) : null]
+    );
+    res.json({ ok: true });
+  } catch (err) { console.error('celular/registrar:', err.message); res.status(500).json({ error: 'Erro interno' }); }
+});
+
+// POST /api/game/celular/dono  { uid, roblox_id, nome }
+// Atualiza só o dono do aparelho (transferência: dar / dropar-pegar / confisco).
+router.post('/celular/dono', async (req, res) => {
+  try {
+    const { uid, roblox_id, nome } = req.body || {};
+    if (!uid) return res.status(400).json({ error: 'uid obrigatório' });
+    await pool.query(
+      `UPDATE aparelhos SET dono_roblox_id = $2, dono_nome = $3, atualizado_em = NOW() WHERE uid = $1`,
+      [uid, Number(roblox_id) || null, nome ? String(nome).slice(0, 64) : null]
+    );
+    res.json({ ok: true });
+  } catch (err) { console.error('celular/dono:', err.message); res.status(500).json({ error: 'Erro interno' }); }
+});
+
+// POST /api/game/celular/wipe  { uid_antigo, uid_novo, numero_novo, roblox_id, nome }
+// "Apagar" nas Configs: o antigo vira INATIVO (apagado_em = now, base da retenção) e o novo entra ativo.
+router.post('/celular/wipe', async (req, res) => {
+  try {
+    const { uid_antigo, uid_novo, numero_novo, roblox_id, nome } = req.body || {};
+    if (uid_antigo) {
+      await pool.query(`UPDATE aparelhos SET ativo = false, apagado_em = NOW(), atualizado_em = NOW() WHERE uid = $1`, [uid_antigo]);
+    }
+    if (uid_novo && numero_novo) {
+      await pool.query(
+        `INSERT INTO aparelhos (uid, numero, dono_roblox_id, dono_nome, ativo, atualizado_em)
+         VALUES ($1, $2, $3, $4, true, NOW())
+         ON CONFLICT (uid) DO UPDATE SET
+           numero = EXCLUDED.numero, dono_roblox_id = EXCLUDED.dono_roblox_id,
+           dono_nome = EXCLUDED.dono_nome, ativo = true, atualizado_em = NOW()`,
+        [uid_novo, String(numero_novo).slice(0, 24), Number(roblox_id) || null, nome ? String(nome).slice(0, 64) : null]
+      );
+    }
+    res.json({ ok: true });
+  } catch (err) { console.error('celular/wipe:', err.message); res.status(500).json({ error: 'Erro interno' }); }
+});
+
+// GET /api/game/celular/pericia/:numero?dias=2
+// Perícia da PC: acha o(s) aparelho(s) por número — ativos, ou apagados DENTRO da janela de retenção.
+router.get('/celular/pericia/:numero', async (req, res) => {
+  try {
+    const numero = String(req.params.numero || '').slice(0, 24);
+    const dias = Math.min(Math.max(Number(req.query.dias) || 2, 1), 30);
+    const r = await pool.query(
+      `SELECT uid, numero, dono_roblox_id, dono_nome, criado_em, apagado_em, ativo
+       FROM aparelhos
+       WHERE numero = $1 AND (ativo = true OR apagado_em > NOW() - (INTERVAL '1 day' * $2))
+       ORDER BY atualizado_em DESC`,
+      [numero, dias]
+    );
+    res.json({ numero, janela_dias: dias, aparelhos: r.rows });
+  } catch (err) { console.error('celular/pericia:', err.message); res.status(500).json({ error: 'Erro interno' }); }
+});
+
 module.exports = router;
