@@ -394,4 +394,81 @@ router.get('/celular/pericia/:numero', async (req, res) => {
   } catch (err) { console.error('celular/pericia:', err.message); res.status(500).json({ error: 'Erro interno' }); }
 });
 
+// ---- Mensagens (RoZap por número) + Contatos ----
+function parKey(a, b) { return [String(a), String(b)].sort().join('|'); }
+
+// POST /api/game/celular/msg/enviar  { de, para, texto, pos:{x,y,z}, rua }
+router.post('/celular/msg/enviar', async (req, res) => {
+  try {
+    const { de, para, texto, pos, rua } = req.body || {};
+    if (!de || !para || !texto) return res.status(400).json({ error: 'de/para/texto obrigatórios' });
+    const p = pos || {};
+    const r = await pool.query(
+      `INSERT INTO celular_mensagens (de_numero, para_numero, par_key, texto, pos_x, pos_y, pos_z, rua)
+       VALUES ($1,$2,$3,$4,$5,$6,$7,$8) RETURNING id, criado_em`,
+      [String(de).slice(0,24), String(para).slice(0,24), parKey(de, para), String(texto).slice(0,300),
+       Number(p.x)||null, Number(p.y)||null, Number(p.z)||null, rua ? String(rua).slice(0,64) : null]
+    );
+    res.json({ ok: true, id: r.rows[0].id, criado_em: r.rows[0].criado_em });
+  } catch (err) { console.error('celular/msg/enviar:', err.message); res.status(500).json({ error: 'Erro interno' }); }
+});
+
+// GET /api/game/celular/msg/conversa?a=..&b=..&limit=200  -> histórico da conversa (ordem antiga->nova)
+router.get('/celular/msg/conversa', async (req, res) => {
+  try {
+    const a = String(req.query.a||'').slice(0,24), b = String(req.query.b||'').slice(0,24);
+    if (!a || !b) return res.status(400).json({ error: 'a e b obrigatórios' });
+    const limit = Math.min(Math.max(Number(req.query.limit)||200, 1), 300);
+    const r = await pool.query(
+      `SELECT id, de_numero, para_numero, texto, criado_em FROM celular_mensagens
+       WHERE par_key = $1 ORDER BY id DESC LIMIT $2`,
+      [parKey(a,b), limit]
+    );
+    res.json({ mensagens: r.rows.reverse() });
+  } catch (err) { console.error('celular/msg/conversa:', err.message); res.status(500).json({ error: 'Erro interno' }); }
+});
+
+// GET /api/game/celular/msg/conversas?numero=..  -> lista de conversas (última msg de cada)
+router.get('/celular/msg/conversas', async (req, res) => {
+  try {
+    const numero = String(req.query.numero||'').slice(0,24);
+    if (!numero) return res.status(400).json({ error: 'numero obrigatório' });
+    const r = await pool.query(
+      `SELECT outro, texto, criado_em FROM (
+         SELECT DISTINCT ON (CASE WHEN de_numero = $1 THEN para_numero ELSE de_numero END)
+           (CASE WHEN de_numero = $1 THEN para_numero ELSE de_numero END) AS outro, texto, criado_em, id
+         FROM celular_mensagens
+         WHERE de_numero = $1 OR para_numero = $1
+         ORDER BY (CASE WHEN de_numero = $1 THEN para_numero ELSE de_numero END), id DESC
+       ) t ORDER BY id DESC LIMIT 100`,
+      [numero]
+    );
+    res.json({ conversas: r.rows });
+  } catch (err) { console.error('celular/msg/conversas:', err.message); res.status(500).json({ error: 'Erro interno' }); }
+});
+
+// POST /api/game/celular/contato  { dono, numero, apelido }
+router.post('/celular/contato', async (req, res) => {
+  try {
+    const { dono, numero, apelido } = req.body || {};
+    if (!dono || !numero) return res.status(400).json({ error: 'dono e numero obrigatórios' });
+    await pool.query(
+      `INSERT INTO celular_contatos (dono_numero, numero, apelido) VALUES ($1,$2,$3)
+       ON CONFLICT (dono_numero, numero) DO UPDATE SET apelido = EXCLUDED.apelido`,
+      [String(dono).slice(0,24), String(numero).slice(0,24), apelido ? String(apelido).slice(0,64) : null]
+    );
+    res.json({ ok: true });
+  } catch (err) { console.error('celular/contato:', err.message); res.status(500).json({ error: 'Erro interno' }); }
+});
+
+// GET /api/game/celular/contatos?numero=..
+router.get('/celular/contatos', async (req, res) => {
+  try {
+    const numero = String(req.query.numero||'').slice(0,24);
+    if (!numero) return res.status(400).json({ error: 'numero obrigatório' });
+    const r = await pool.query(`SELECT numero, apelido, criado_em FROM celular_contatos WHERE dono_numero = $1 ORDER BY apelido NULLS LAST, numero`, [numero]);
+    res.json({ contatos: r.rows });
+  } catch (err) { console.error('celular/contatos:', err.message); res.status(500).json({ error: 'Erro interno' }); }
+});
+
 module.exports = router;

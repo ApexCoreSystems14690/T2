@@ -98,6 +98,31 @@ CREATE TABLE IF NOT EXISTS aparelhos (
 );
 CREATE INDEX IF NOT EXISTS idx_aparelhos_numero ON aparelhos(numero);
 CREATE INDEX IF NOT EXISTS idx_aparelhos_dono ON aparelhos(dono_roblox_id);
+
+-- Contatos por número (agenda de cada aparelho)
+CREATE TABLE IF NOT EXISTS celular_contatos (
+  id SERIAL PRIMARY KEY,
+  dono_numero VARCHAR(24) NOT NULL,
+  numero VARCHAR(24) NOT NULL,
+  apelido VARCHAR(64),
+  criado_em TIMESTAMP DEFAULT NOW(),
+  UNIQUE(dono_numero, numero)
+);
+CREATE INDEX IF NOT EXISTS idx_contatos_dono ON celular_contatos(dono_numero);
+
+-- Mensagens entre números (DM). par_key = par ordenado, acha a conversa rápido.
+-- pos_/rua = rastreio (toda mensagem salva onde foi enviada) pra perícia da PC.
+CREATE TABLE IF NOT EXISTS celular_mensagens (
+  id SERIAL PRIMARY KEY,
+  de_numero VARCHAR(24) NOT NULL,
+  para_numero VARCHAR(24) NOT NULL,
+  par_key VARCHAR(49) NOT NULL,
+  texto VARCHAR(300) NOT NULL,
+  pos_x REAL, pos_y REAL, pos_z REAL, rua VARCHAR(64),
+  criado_em TIMESTAMP DEFAULT NOW()
+);
+CREATE INDEX IF NOT EXISTS idx_msg_par ON celular_mensagens(par_key, id);
+CREATE INDEX IF NOT EXISTS idx_msg_de ON celular_mensagens(de_numero);
 `;
 
 async function run() {
