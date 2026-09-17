@@ -24,9 +24,37 @@ Agora a regra é TABELA e todo caminho pergunta pra ela. Núcleo `Aparelhos.N` �
 | `olx` | sim | não | vendeu |
 | `portamalas` | sim | não | guardou no porta-malas |
 | **`morte`** | **não** | — | **morreu: o celular FICA.** Quem quiser, revista |
-| `combatlog` | sim | não | deslogou em combate |
+| **`combatlog`** | **não** | — | **deslogou em combate: o celular FICA.** Ver abaixo |
 | `reset` | sim | não | perfil resetado |
 | `wipe` | sim | **sim** | apagou nas Configs → uid antigo vai pro DataStore de retenção |
+
+## Por que combat log e morte NÃO levam o celular
+
+Decisão do Julio (17/09), e o motivo é o que importa: **o celular guarda prova de crime**
+(mensagens, deepweb, rastreio de posição). Se deslogar em combate apagasse o aparelho,
+deslogar viraria o jeito mais barato de destruir prova. A punição continua sendo o
+inventário e 98% da carteira — a linha telefônica fica de pé pra polícia poder apreender
+depois e a [[Pericia]] poder ler.
+
+## Os itens que sobrevivem — `N.sobrevive(inv, motivo)`
+
+Mesma lista do `PerdaNaMorte` do trabalho do Caído, de propósito, pra os dois não brigarem.
+
+| motivo | o que fica |
+|---|---|
+| `morte` | A10, CNH, Documento Governamental, Porte de armas, Relatório |
+| `combatlog` | **só o A10** |
+| qualquer outro | nada (leva tudo) |
+
+> ⚠️ Antes de 17/09 os dois caminhos faziam `Inventario = {}` seco: a linha telefônica
+> sobrevivia mas **o A10 era apagado** — e não dá pra apreender prova que não existe.
+
+## O banco não se toca — `N.podeMexerNoBanco(motivo)`
+
+A conta do banco é **compartilhada com o banco físico do mapa**, então `morte`, `revista`,
+`confisco`, `combatlog` e `dropar` não podem encostar nela. Só a carteira.
+Medido no código: nenhuma linha (fora de comentário) desses três caminhos cita `Banco`.
+A multa da algema é a exceção legítima — é o Estado cobrando, não roubo.
 
 ## API
 - `N.aplicar(plrData, motivo)` → `tirou, uid, reg` — a pergunta central.
