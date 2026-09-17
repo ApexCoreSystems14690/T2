@@ -471,4 +471,18 @@ router.get('/celular/contatos', async (req, res) => {
   } catch (err) { console.error('celular/contatos:', err.message); res.status(500).json({ error: 'Erro interno' }); }
 });
 
+// GET /api/game/celular/aparelhos  -> lista de donos de celular (MESMO OFFLINE), 1 por dono (o ativo).
+// O jogo usa isso pra montar a tela de "adicionar contato" (foto + nome), SEM numero visivel.
+router.get('/celular/aparelhos', async (req, res) => {
+  try {
+    const r = await pool.query(
+      `SELECT DISTINCT ON (dono_roblox_id) numero, dono_roblox_id, dono_nome
+       FROM aparelhos
+       WHERE ativo = true AND dono_roblox_id IS NOT NULL
+       ORDER BY dono_roblox_id, atualizado_em DESC`
+    );
+    res.json({ aparelhos: r.rows });
+  } catch (err) { console.error('celular/aparelhos:', err.message); res.status(500).json({ error: 'Erro interno' }); }
+});
+
 module.exports = router;
