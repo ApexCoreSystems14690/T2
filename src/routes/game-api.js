@@ -485,4 +485,48 @@ router.get('/celular/aparelhos', async (req, res) => {
   } catch (err) { console.error('celular/aparelhos:', err.message); res.status(500).json({ error: 'Erro interno' }); }
 });
 
+// ===== DEEPWEB (mural anônimo por chip) =====
+// POST /api/game/celular/deepweb/postar  { chip_nome, autor_numero, autor_roblox_id, corpo, pos:{x,y,z}, rua }
+// Regras (doc): 1 post a cada 2min por chip; corpo<=200; guarda 150 últimos e some em 72h.
+router.post('/celular/deepweb/postar', async (req, res) => {
+  try {
+    const { chip_nome, autor_numero, autor_roblox_id, corpo, pos, rua } = req.body || {};
+    if (!chip_nome || !corpo) return res.status(400).json({ error: 'chip_nome e corpo obrigatórios' });
+    // cooldown 2 min por chip
+    const ult = await pool.query(`SELECT criado_em FROM deepweb_posts WHERE chip_nome = $1 ORDER BY id DESC LIMIT 1`, [String(chip_nome).slice(0,32)]);
+    if (ult.rows.length && (Date.now() - new Date(ult.rows[0].criado_em).getTime()) < 120000) {
+      return res.status(429).json({ error: 'devagar' });
+    }
+    await pool.query(
+      `INSERT INTO deepweb_posts (chip_nome, autor_numero, autor_roblox_id, corpo, pos_x, pos_y, pos_z, rua)
+       VALUES ($1,$2,$3,$4,$5,$6,$7,$8)`,
+      [String(chip_nome).slice(0,32), autor_numero ? String(autor_numero).slice(0,24) : null, autor_roblox_id || null,
+       String(corpo).slice(0,200), pos && pos.x, pos && pos.y, pos && pos.z, rua ? String(rua).slice(0,64) : null]
+    );
+    // limpeza: some em 72h e mantém só os 150 mais novos
+    await pool.query(`DELETE FROM deepweb_posts WHERE criado_em < NOW() - INTERVAL '72 hours'`);
+    await pool.query(`DELETE FROM deepweb_posts WHERE id NOT IN (SELECT id FROM deepweb_posts ORDER BY id DESC LIMIT 150)`);
+    res.json({ ok: true });
+  } catch (err) { console.error('deepweb/postar:', err.message); res.status(500).json({ error: 'Erro interno' }); }
+});
+
+// GET /api/game/celular/deepweb/feed?limit=150  -> mural: chip_nome + corpo (SEM dados de autor)
+router.get('/celular/deepweb/feed', async (req, res) => {
+  try {
+    const limit = Math.min(Math.max(Number(req.query.limit)||150, 1), 150);
+    const r = await pool.query(`SELECT id, chip_nome, corpo, criado_em FROM deepweb_posts ORDER BY id DESC LIMIT $1`, [limit]);
+    res.json({ posts: r.rows });
+  } catch (err) { console.error('deepweb/feed:', err.message); res.status(500).json({ error: 'Erro interno' }); }
+});
+
+// GET /api/game/celular/deepweb/pericia?numero=..  -> só PC: posts daquele número (com chip_nome + rastreio)
+router.get('/celular/deepweb/pericia', async (req, res) => {
+  try {
+    const numero = String(req.query.numero||'').slice(0,24);
+    if (!numero) return res.status(400).json({ error: 'numero obrigatório' });
+    const r = await pool.query(`SELECT id, chip_nome, corpo, pos_x, pos_y, pos_z, rua, criado_em FROM deepweb_posts WHERE autor_numero = $1 ORDER BY id DESC LIMIT 200`, [numero]);
+    res.json({ posts: r.rows });
+  } catch (err) { console.error('deepweb/pericia:', err.message); res.status(500).json({ error: 'Erro interno' }); }
+});
+
 module.exports = router;

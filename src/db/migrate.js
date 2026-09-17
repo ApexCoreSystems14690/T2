@@ -123,6 +123,20 @@ CREATE TABLE IF NOT EXISTS celular_mensagens (
 );
 CREATE INDEX IF NOT EXISTS idx_msg_par ON celular_mensagens(par_key, id);
 CREATE INDEX IF NOT EXISTS idx_msg_de ON celular_mensagens(de_numero);
+
+-- Deepweb: mural. chip_nome = nome ANÔNIMO do chip (é o que aparece no feed, tipo @corvo_71).
+-- autor_numero/roblox_id + pos/rua = SÓ pra perícia da PC (nunca vão pro feed). corpo <=200.
+CREATE TABLE IF NOT EXISTS deepweb_posts (
+  id SERIAL PRIMARY KEY,
+  chip_nome VARCHAR(32) NOT NULL,
+  autor_numero VARCHAR(24),
+  autor_roblox_id BIGINT,
+  corpo VARCHAR(200) NOT NULL,
+  pos_x REAL, pos_y REAL, pos_z REAL, rua VARCHAR(64),
+  criado_em TIMESTAMP DEFAULT NOW()
+);
+CREATE INDEX IF NOT EXISTS idx_deepweb_id ON deepweb_posts(id DESC);
+CREATE INDEX IF NOT EXISTS idx_deepweb_autor ON deepweb_posts(autor_numero);
 `;
 
 async function run() {
