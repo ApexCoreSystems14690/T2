@@ -1,4 +1,8 @@
 require('dotenv').config();
+// NOTA [17/09]: as tabelas do CELULAR agora também nascem no boot (src/index.js),
+// porque o Procfile roda `node src/index.js` e este arquivo só roda à mão
+// (`npm run db:migrate`) — por isso elas nunca existiram no Railway e toda rota
+// /celular/* devolvia 500. Manter os dois em sincronia.
 const { Pool } = require('pg');
 
 const pool = new Pool({ connectionString: process.env.DATABASE_URL, ssl: { rejectUnauthorized: false } });
@@ -98,6 +102,20 @@ CREATE TABLE IF NOT EXISTS aparelhos (
 );
 CREATE INDEX IF NOT EXISTS idx_aparelhos_numero ON aparelhos(numero);
 CREATE INDEX IF NOT EXISTS idx_aparelhos_dono ON aparelhos(dono_roblox_id);
+
+-- Histórico de posse (aba "Rastreio" da perícia da PC). [17/09]
+CREATE TABLE IF NOT EXISTS aparelho_donos (
+  id SERIAL PRIMARY KEY,
+  aparelho_uid VARCHAR(64) NOT NULL,
+  de_roblox_id BIGINT,
+  de_nome VARCHAR(64),
+  para_roblox_id BIGINT,
+  para_nome VARCHAR(64),
+  motivo VARCHAR(24),
+  pos_x REAL, pos_y REAL, pos_z REAL,
+  criado_em TIMESTAMP DEFAULT NOW()
+);
+CREATE INDEX IF NOT EXISTS idx_aparelho_donos_uid ON aparelho_donos(aparelho_uid, id DESC);
 
 -- Contatos por número (agenda de cada aparelho)
 CREATE TABLE IF NOT EXISTS celular_contatos (

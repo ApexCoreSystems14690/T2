@@ -154,6 +154,74 @@ async function start() {
         entregue_em TIMESTAMP
       );
       CREATE INDEX IF NOT EXISTS idx_item_fila_pend ON game_item_fila(roblox_id) WHERE entregue_em IS NULL;
+
+      -- ===== CELULAR (Aparelho com uid) =====
+      -- [fix 17/09] Estas tabelas só existiam em src/db/migrate.js, que roda com
+      -- 'npm run db:migrate'. O Procfile e 'node src/index.js', entao no Railway
+      -- elas NUNCA foram criadas: toda rota /celular/* respondia HTTP 500
+      -- ("relation does not exist"). Agora nascem no boot, como o resto.
+      CREATE TABLE IF NOT EXISTS aparelhos (
+        uid VARCHAR(64) PRIMARY KEY,
+        numero VARCHAR(24) NOT NULL,
+        dono_roblox_id BIGINT,
+        dono_nome VARCHAR(64),
+        criado_em TIMESTAMP DEFAULT NOW(),
+        apagado_em TIMESTAMP,
+        ativo BOOLEAN DEFAULT true,
+        atualizado_em TIMESTAMP DEFAULT NOW()
+      );
+      CREATE INDEX IF NOT EXISTS idx_aparelhos_numero ON aparelhos(numero);
+      CREATE INDEX IF NOT EXISTS idx_aparelhos_dono ON aparelhos(dono_roblox_id);
+
+      -- Histórico de posse: quem teve o aparelho, quando, por quê e onde.
+      -- É a base da aba "Rastreio" da perícia da Polícia Civil. O jogo já manda
+      -- motivo/de/pos em POST /celular/dono desde 17/09.
+      CREATE TABLE IF NOT EXISTS aparelho_donos (
+        id SERIAL PRIMARY KEY,
+        aparelho_uid VARCHAR(64) NOT NULL,
+        de_roblox_id BIGINT,
+        de_nome VARCHAR(64),
+        para_roblox_id BIGINT,
+        para_nome VARCHAR(64),
+        motivo VARCHAR(24),
+        pos_x REAL, pos_y REAL, pos_z REAL,
+        criado_em TIMESTAMP DEFAULT NOW()
+      );
+      CREATE INDEX IF NOT EXISTS idx_aparelho_donos_uid ON aparelho_donos(aparelho_uid, id DESC);
+
+      CREATE TABLE IF NOT EXISTS celular_contatos (
+        id SERIAL PRIMARY KEY,
+        dono_numero VARCHAR(24) NOT NULL,
+        numero VARCHAR(24) NOT NULL,
+        apelido VARCHAR(64),
+        criado_em TIMESTAMP DEFAULT NOW(),
+        UNIQUE(dono_numero, numero)
+      );
+      CREATE INDEX IF NOT EXISTS idx_contatos_dono ON celular_contatos(dono_numero);
+
+      CREATE TABLE IF NOT EXISTS celular_mensagens (
+        id SERIAL PRIMARY KEY,
+        de_numero VARCHAR(24) NOT NULL,
+        para_numero VARCHAR(24) NOT NULL,
+        par_key VARCHAR(49) NOT NULL,
+        texto VARCHAR(300) NOT NULL,
+        pos_x REAL, pos_y REAL, pos_z REAL, rua VARCHAR(64),
+        criado_em TIMESTAMP DEFAULT NOW()
+      );
+      CREATE INDEX IF NOT EXISTS idx_msg_par ON celular_mensagens(par_key, id);
+      CREATE INDEX IF NOT EXISTS idx_msg_de ON celular_mensagens(de_numero);
+
+      CREATE TABLE IF NOT EXISTS deepweb_posts (
+        id SERIAL PRIMARY KEY,
+        chip_nome VARCHAR(32) NOT NULL,
+        autor_numero VARCHAR(24),
+        autor_roblox_id BIGINT,
+        corpo VARCHAR(200) NOT NULL,
+        pos_x REAL, pos_y REAL, pos_z REAL, rua VARCHAR(64),
+        criado_em TIMESTAMP DEFAULT NOW()
+      );
+      CREATE INDEX IF NOT EXISTS idx_deepweb_id ON deepweb_posts(id DESC);
+      CREATE INDEX IF NOT EXISTS idx_deepweb_autor ON deepweb_posts(autor_numero);
     `);
     // Backfill: popula game_players a partir dos logs de "entrou" que já existem,
     // pra aba Registro já nascer com histórico. Roda toda vez, mas é idempotente.

@@ -342,17 +342,53 @@ router.post('/celular/registrar', async (req, res) => {
 });
 
 // POST /api/game/celular/dono  { uid, roblox_id, nome }
-// Atualiza só o dono do aparelho (transferência: dar / dropar-pegar / confisco).
+// Campos OPCIONAIS (o jogo manda desde 17/09): de_roblox_id, de_nome, motivo, pos:{x,y,z}
+// motivo: dropar · pegar · dar · confisco · revista · olx · portamalas · morte · combatlog · reset · wipe
+// Atualiza o dono E grava uma linha no histórico (aba "Rastreio" da perícia da PC).
 router.post('/celular/dono', async (req, res) => {
   try {
-    const { uid, roblox_id, nome } = req.body || {};
+    const { uid, roblox_id, nome, de_roblox_id, de_nome, motivo, pos } = req.body || {};
     if (!uid) return res.status(400).json({ error: 'uid obrigatório' });
     await pool.query(
       `UPDATE aparelhos SET dono_roblox_id = $2, dono_nome = $3, atualizado_em = NOW() WHERE uid = $1`,
       [uid, Number(roblox_id) || null, nome ? String(nome).slice(0, 64) : null]
     );
+    // Só grava histórico quando o jogo disse POR QUE moveu. Chamada antiga (sem
+    // motivo) continua funcionando e não polui a tabela.
+    if (motivo) {
+      await pool.query(
+        `INSERT INTO aparelho_donos
+           (aparelho_uid, de_roblox_id, de_nome, para_roblox_id, para_nome, motivo, pos_x, pos_y, pos_z)
+         VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9)`,
+        [
+          String(uid).slice(0, 64),
+          Number(de_roblox_id) || null,
+          de_nome ? String(de_nome).slice(0, 64) : null,
+          Number(roblox_id) || null,
+          nome ? String(nome).slice(0, 64) : null,
+          String(motivo).slice(0, 24),
+          pos && Number.isFinite(Number(pos.x)) ? Number(pos.x) : null,
+          pos && Number.isFinite(Number(pos.y)) ? Number(pos.y) : null,
+          pos && Number.isFinite(Number(pos.z)) ? Number(pos.z) : null,
+        ]
+      );
+    }
     res.json({ ok: true });
   } catch (err) { console.error('celular/dono:', err.message); res.status(500).json({ error: 'Erro interno' }); }
+});
+
+// GET /api/game/celular/:uid/donos?limit=50  -> histórico de posse (perícia: aba Rastreio)
+router.get('/celular/:uid/donos', async (req, res) => {
+  try {
+    const uid = String(req.params.uid || '').slice(0, 64);
+    const limit = Math.min(Math.max(Number(req.query.limit) || 50, 1), 200);
+    const r = await pool.query(
+      `SELECT de_nome, para_nome, motivo, pos_x, pos_y, pos_z, criado_em
+       FROM aparelho_donos WHERE aparelho_uid = $1 ORDER BY id DESC LIMIT $2`,
+      [uid, limit]
+    );
+    res.json({ uid, donos: r.rows });
+  } catch (err) { console.error('celular/donos:', err.message); res.status(500).json({ error: 'Erro interno' }); }
 });
 
 // POST /api/game/celular/wipe  { uid_antigo, uid_novo, numero_novo, roblox_id, nome }
