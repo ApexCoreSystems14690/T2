@@ -104,8 +104,15 @@ Estados: **Desacordado** 10:00 (queda/fome/tiro em braço-perna; atendimento aut
 - **Sequestro (novo):** corda na mão, alvo rendido/algemado/caído. Amarra→carrega→porta-malas; tampa fechada = preso sem arma/item; sai quando abrem/arrombam. Vítima vê tela escura c/ celular liberado (se não confiscado).
 
 ## 13 · Ordem
-Segurança(feito) → Consertos rápidos → HUD base → **Sprint celular** → Empregos c/ minigame → Polícia/crime → Caído/socorro → Armas no motor → Inventário/craft. (HUD antes dos sistemas novos; celular antes do Uber.)
+Segurança(feito) → Consertos rápidos → HUD base → **Sprint celular** → Empregos c/ minigame → Polícia/crime → Caído/socorro → Armas no motor → Inventário/craft → **Lobby de servidores**. (HUD antes dos sistemas novos; celular antes do Uber.)
 
 ## 14 · O que falta (assets + decisões)
 Julio entrega: escada+anims; chip+anim; anim celular na mesa; computador da central; opcional bot acenar; anim carregar+deitado.
 Já decidido: tudo no site; jornal só cargos altos; salário na mão na central ou banco após 2min; chip R$3.500 na AVendaIlegal3; taxa 2% avisada (teto R$50); transferir por contato; celular leva tudo e é confiscável; galeria 5 fotos+10 prints; senha opcional 4 díg (PC quebra); caído sangrando 5min / cabeça 40s / bolinha F / morte tira armas+item da mão nunca celular; mesa de perícia = a que já existe (PC que abria deepweb).
+
+## 15 · Lobby / lista de servidores (a tela de entrada) — add. 17/09
+O jogo abre num **servidor temporário só do jogador**. Menu decorado (foto de fundo do jogo, botões laterais de filtro Oficial/Não-oficial) listando **UM servidor: o oficial, 100 vagas**. Clicar nele é a única coisa funcional; o resto é decoração de propósito.
+- **Por que agora:** acostumar o público com a tela antes de a lista encher. Filtro que aparece vira promessa — só escrever o que vai ser cumprido.
+- **Ciclo de 4:** Origem = cai sozinho na antessala · Ação = clica no card · Recompensa = entra na cidade com dinheiro/celular junto · HUD = card com nome, selo Oficial e "47 / 100" (cheio vira "Cheio", não some).
+- **Aposta:** deixar gente criar as **próprias cidades** dentro (Discord, corporações, regras) e virar **host**, o que o FiveM é pro GTA — a jogada pra dominar hard RP no Roblox.
+- Spec completa, perguntas em aberto e estado do código: [[Lobby_Servidores]]. Execução: F10 em [[FONTE_Santa_Fe_Execucao]].

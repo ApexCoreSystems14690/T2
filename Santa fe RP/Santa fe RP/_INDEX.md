@@ -8,7 +8,7 @@
 - As notas de `01_/02_` são fatias destes; em conflito, a FONTE manda.
 
 ## SEÇÃO A — Protocolo de Auto-Manutenção
-1. **Consulta obrigatória:** antes de qualquer ação, ache notas/scripts AQUI. PROIBIDO busca global (list/find/grep/dump).
+1. **Consulta obrigatória:** antes de qualquer ação, ache notas/scripts AQUI. PROIBIDO busca global (list/find/grep/dump). **Abriu o vault? lê este arquivo PRIMEIRO** — o caminho sai daqui, não de varredura.
 2. **Auto-correção de caminhos:** achou um caminho errado/mudado? atualize este `_INDEX.md` na hora, sem perguntar.
 3. **Auto-atualização:** criou script no Studio ou nota no Obsidian? adicione a linha de mapeamento aqui imediatamente.
 4. **Notas atômicas:** nunca notas longas. Cresceu? divide em duas e adiciona as duas ao índice.
@@ -66,6 +66,11 @@ Se a ideia falhar na técnica OU não fizer sentido subjetivamente no universo d
 - Colete (polícia/crime): `01_Especificacoes/Colete.md`
 - Limites de mensagens: `01_Especificacoes/Limites.md`
 - Fases (ordem das entregas): `01_Especificacoes/Fases.md`
+- **Lobby / lista de servidores (virar host): `01_Especificacoes/Lobby_Servidores.md`**
+- Ficha da skill de UI: `01_Especificacoes/Skill_UI_Roblox.md`
+- **Iluminação (exposição, bloom, atmosfera, teto de brilho, critério do Neon): `01_Especificacoes/Iluminacao.md`**
+- **Ruas e endereços (nomes das ruas, bairros, GetBairro): `01_Especificacoes/Ruas_Enderecos.md`**
+- Minimapa (ViewportFrame sobre clone assado da cidade + tiles; NÃO usa EditableImage): `01_Especificacoes/Minimapa.md`
 - Assets que o Julio entrega: `01_Especificacoes/Assets_Julio.md`
 
 ### 🛠️ Sistemas (Studio ↔ Obsidian)
@@ -85,7 +90,26 @@ Se a ideia falhar na técnica OU não fizer sentido subjetivamente no universo d
 - Notas (client): `...GuiHandler.Celular.Notas` -> `02_Sistemas_Studio/Notas.md`
 - GuiHandler: `StarterPlayer...Client.GuiHandler` -> `02_Sistemas_Studio/GuiHandler.md`
 - Telas (pilha): `StarterPlayer...Client.Telas` -> `02_Sistemas_Studio/Telas.md`
+- **Hud (F3, núcleo puro): `StarterPlayer...Client.Hud` (+ filho `N`) -> `02_Sistemas_Studio/Hud.md`**
+- **Ruas (endereço, núcleo puro): `ReplicatedStorage.Resources.Ruas` -> `01_Especificacoes/Ruas_Enderecos.md`**
+- **Minimapa (F3, núcleo puro): `StarterPlayer...Client.Minimapa` (+ filho `N`) -> `02_Sistemas_Studio/Minimapa.md`**
+- **Mapa grande (app do celular): `StarterPlayer...Client.GuiHandler.Celular.Mapa` — pega as quadras EMPRESTADAS do Minimapa, nunca clona -> `02_Sistemas_Studio/Minimapa.md`**
+- Assador do mapa: `ServerStorage.AssarMapa` -> gera `ReplicatedStorage.Shared.MapaDados`
+- **Desenho do mapa (traçado, NÃO fotografia): `ServerStorage.MapaDesenho` (+ cache `ServerStorage.GRADE_CACHE`) -> `02_Sistemas_Studio/MapaDesenho.md`**
+- Entrega pra IA de imagem: `D:\T2\Santa fe RP\04_Mapa\santafe_malha.png` (e `_sem_nomes.png`)
+- **QA Veredito (teste guiado, SEM print de tela): `ReplicatedStorage.QA_Roteiro` + `StarterPlayerScripts.QA_Veredito` -> `02_Sistemas_Studio/QA_Veredito.md`**
 - Celular (GUI): `StarterGui.Main.Celular` -> `02_Sistemas_Studio/Celular_GUI.md`
+
+### 🧰 Skills (ferramentas, fora do vault)
+- **UI no Roblox (medir → clonar → núcleo puro → FOTO): skill `ui-roblox`** — ler antes de criar/alterar QUALQUER tela, HUD, billboard ou app do celular. Ficha: `01_Especificacoes/Skill_UI_Roblox.md`
+- Assets 3D / animação / gauntlet loop: skill `o-olho`
+- Aprovar veículo (estrutural + visual): skill `qa-veiculo`
+- Porta-malas que abre de verdade: skill `porta-malas-nativo`
+- Skill é da conta do Julio, não é arquivo daqui: para mudar, pedir no chat (card de revisão). Editar arquivo de skill no disco não vale.
+- **Antes de pedir screenshot de qualquer coisa: usar `02_Sistemas_Studio/QA_Veredito.md`** — o jogo se leva até o estado e pergunta ao Julio; a resposta volta pelo output.
+
+### 📥 Esperando o Julio
+- **O que só ele destrava, com a decisão já tomada: `00_Indice/Entrega_Julio.md`** — LER ANTES DE COMEÇAR O DIA.
 
 ### 🗺️ Mapa / Auditoria
 - Celular alvo×feito×gap: `00_Indice/Mapa_Celular.md`

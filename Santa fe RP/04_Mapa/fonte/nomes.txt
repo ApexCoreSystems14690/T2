@@ -1,0 +1,67 @@
+VIA LO 50 -945 555 34 Av. Vargas
+VIA NS -9 -650 1150 34 Av. Brasil
+VIA NS -336 -670 660 30 Av. Astorga
+VIA LO -643 -975 295 31 Av. Paraná
+VIA LO 643 -1035 265 30 Av. Pioneiros
+VIA NS -947 -640 660 33 Av. Carezzato
+VIA LO 950 -675 -15 30 R. Zavate
+VIA LO -157 -5 435 34 R. Ozelim
+VIA LO -1198 -1275 -795 42 R. Aparecida
+VIA NS 488 -1240 -650 32 R. Emídio
+VIA NS -539 660 1100 30 R. Mendes
+VIA NS -383 660 1100 30 R. Oliveira
+VIA NS -198 660 1100 30 R. Sobrinho
+VIA NS 376 -640 -195 34 R. Caxias
+VIA NS -791 -1400 -990 42 R. dos Ipês
+VIA NS -882 -860 -650 42 R. Grevíleas
+VIA LO 1062 -565 15 112 Rod. do Café
+VIA NS 420 -145 -70 10 Tv. do Posto
+N -12 -20 Praça Santa Fé
+N -872 -117 Praça Pioneiro
+N -625 958 Largo da Feira
+N -11 1132 Trevo do Café
+N -837 -925 R. S. Cristóvão
+N -928 -925 R. S. Cristóvão
+N -837 -1463 R. Sta. Terezinha
+BAI -420 260 -420 380 Centro
+BAI -700 -420 -420 380 J. Alvorada
+BAI -700 260 -900 -420 V. Operária
+BAI -1280 -700 -1800 -620 Sol Nascente
+BAI -1280 -700 -620 820 Chácaras
+BAI -700 260 380 1000 J. Bandeirantes
+BAI -700 60 1000 1200 Palmeiras
+BAI 260 920 -1250 600 D. Industrial
+BAI 300 1500 600 1950 V. Pantanal
+BAI 1400 1950 -1750 -1150 J. Pavuna
+P 177 -166 Posto
+P -26 -2 Posto
+P 314 -494 Posto
+P -1076 -1316 Posto
+P -1063 -1700 Posto
+P -821 -319 Posto
+P 453 -243 Posto
+P -815 -150 Posto
+P -867 236 Hospital
+P 180 -335 Empregos
+P -260 700 Roupas
+P -330 177 Roupas
+P -370 177 Barbearia
+P -212 -109 Barbearia
+P 175 -170 Oficina
+P -20 -4 Oficina
+P 305 -496 Oficina
+P -815 310 Oficina
+P -1077 -1324 Oficina
+P -1075 -1703 Oficina
+P -495 -700 Banco
+P -671 -99 Banco
+P 362 139 Banco
+P -148 -71 Banco
+P 415 -267 Banco
+P -134 856 Correios
+P -1069 -1452 Base
+P -901 -374 Base
+P -66 211 Mercado
+P 674 -316 Mercado
+P 991 1341 Mercado
+P -511 521 Mercado

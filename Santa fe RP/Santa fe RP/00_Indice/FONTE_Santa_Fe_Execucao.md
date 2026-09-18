@@ -82,7 +82,8 @@ Studio sem Play, câmera alta FOV=1 (ortográfica), dia, esconde telhados/árvor
 - **F7 armas no ArmaMotor (6d):** migrar 12 armas; colete em todas.
 - **F8 polícia/crime/socorro (7d):** colete crime; telas prender/revistar; confisco; caído (sangrando 300s, grave 40s, morte tira armas+item); bolinha F; minigame SAMU; carregar+sequestro.
 - **F9 inventário/craft (4d):** inventário novo; craft + loot recalculada.
-Dependências: F2→F3·F7 · F2+F3→F4→F5·Uber(F6) · Eletricista(F6) pode antes · F7→F8 · F3→F9.
+- **F10 lobby de servidores (3d, add. 17/09):** decidir 1 place ou 2; reescrever o `MainService` sem o `require(script["Sertex"])` (módulo de terceiro que sumiu e derruba o serviço — NÃO apagar o arquivo); tela do lobby (fundo do jogo, filtros Oficial/Não-oficial, 1 card 100 vagas) pela pilha Telas e só Scale; `TeleportAsync` puro + `TeleportInitFailed` tratado; provar com 2 players que o perfil atravessa e que o lobby não segura a sessão do ProfileService. PRONTO: entra sozinho, clica no card, chega na cidade com o mesmo dinheiro e celular. Ver [[Lobby_Servidores]].
+Dependências: F2→F3·F7 · F2+F3→F4→F5·Uber(F6) · Eletricista(F6) pode antes · F7→F8 · F3→F9 · F2+F3→F10 (pode vir a qualquer momento depois).
 
 ## 11 · Provas (testes)
 Regras puras no luau CLI (bordas: taxa R$1/49/10000, minigame nos 80ms, limite de fotos). Servidor: compilação byte-a-byte antes de aplicar; harness com jogadores falsos; Play só com ok do Julio. Visual: screen_capture de cada tela/estado, checklist (abre animado, fecha Esc, nada sobreposto 16:9 e 4:3). Site: migrações Postgres 16 local (vazio/repetição/dados antigos); curl incl. compra dupla OLX (1 venda+1 409). Carga: 40 jogadores <400 req/min. Segurança: cada remote com tipo errado/negativo/spam/alvo longe = recusado sem erro.
