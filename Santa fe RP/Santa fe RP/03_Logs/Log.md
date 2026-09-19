@@ -77,3 +77,75 @@ Dado grande não passa bem pelo chat. O que funcionou:
 
 - **Encolher o formato** antes de transferir: índices de grade em vez de coordenadas de mundo; máscara da cidade em RLE por linha em vez de milhares de retângulos. **101.871 chars → 20.509.**
 - `HttpService:PostAsync` do Studio pra um pastebin **funciona** (paste.rs devolveu 201), mas o container da Cowork tem allowlist de saída e não consegue buscar de volta (só `api.github.com` e `raw.githubusercontent.com` respondem), e o `device_bash` estava fora do ar. Então a ponte real foi encolher + transcrever, **com conferência**: toda linha da máscara tem que somar 164 células — deu 164/164.
+
+---
+
+## 18/09 — o minimapa vira HOLOGRAMA (e a cartografia é abandonada)
+
+Depois de eu insistir na malha de ruas, o Julio cortou o nó:
+
+> *"Não tem como usar algum método que deixa o mapa ao seu redor meio que 'holográfico', lendo sempre
+> o que está ao SEU redor como objetos tridimensionais? E transparentes — se eu entrar num prédio
+> consigo ver lá dentro... não vai ser tão útil mas vai ser bonito."*
+
+Isso resolve o impasse de raiz: **para de interpretar o mundo e passa a mostrar o mundo.** O
+`ReplicatedStorage.MapaModelo` (42.427 lajes assadas) sai de cena, e com ele o `AssarMapa`/`MapaGrade`
+no caminho do minimapa. Detalhes em `02_Sistemas_Studio/Minimapa_Holografico.md`.
+
+### O que a foto ensinou, em três voltas
+
+1. **Transparência sobre transparência vira mingau.** Tudo translúcido = borrão azul sem borda.
+   O que funciona é sólido, com o chão quase preto.
+2. **A rua aparece sozinha, como o vazio entre os blocos.** É exatamente o impasse das v7–v13
+   resolvido por não existir mais.
+3. **O chão pintado pelo material** (grama escura, piso duro mais claro) faz o caminho aparecer sem
+   classificar nada. Grama × concreto o motor acerta 100%.
+
+### O teste que o Julio deu, e que virou a régua
+
+> *"Só vale quando você olhar para o mapa e dizer: eu conseguiria me guiar por isso, saber o que é
+> aquele prédio, saber o que é aquele azul mais forte."*
+
+Na primeira versão a resposta era não — era tudo o mesmo azul. A correção foi separar os dois eixos:
+**cor = o que a coisa é**, **brilho/transparência = altura em relação a você**. Mais até 3 rótulos de
+serviço na tela, tirados das tags `Interact` do próprio jogo.
+
+### Celular
+
+Tela do mapa vira **GPS FORA DO AR**, por decisão dele. O app abre e fecha normal e diz a verdade;
+os botões de zoom somem. Quando a navegação voltar, é ali que ela entra — botão, tela e encaixe já
+estão prontos. Backup em `ServerStorage.Backups.CelularMapa_antes_gps_fora`.
+
+### Armadilha nova, cara
+
+**`require` do módulo a partir do contexto do assistente devolve outra instância, não a que o jogo
+está rodando.** Gastei três voltas ajustando cor e câmera ao vivo sem nenhum efeito, até ler os
+valores de volta e ver que continuavam os originais. Ajuste ao vivo de módulo em Play não existe:
+editar a fonte, parar, reiniciar.
+
+---
+
+## 18/09 — as quatro evidências: como a rua finalmente ficou destacada
+
+> *"Ainda tem muitos buracos, decalcs que são só detalhes no asfalto sendo lidos como parede... e as
+> ruas, os caminhos, precisam ficar destacados de alguma forma, descubra um método."*
+
+**O método:** parar de tentar *detectar* rua e **desenhar as pistas que o autor do mapa já deixou.**
+Meio-fio fecha 63%, poste 69%, nome da peça 54% — nenhuma serve como classificador. Mas desenhadas
+juntas, o olho funde as quatro em "rua". Num raio de 110 no Centro há 1.171 studs de meio-fio, 34
+postes, 7 lajes com nome e 3 faixas, numa área de 220 studs de lado. É de sobra.
+
+Peso de linha importa: um meio-fio de 1 stud some num quadro de 200px, então o eixo curto engorda
+pra 3 studs e sobe 0,8. O poste vira pontinho na base, não risco vertical — fileira de ponto lê como
+rua sozinha.
+
+**A hierarquia que fechou:** a rua é a coisa mais clara da tela e todo o resto recua. Na primeira
+volta o prédio era ciano vivo e roubava o olho do contorno da pista; virou massa apagada.
+
+**E o "decalque virando parede" não era decalque.** Medi em vez de adivinhar: são banco de praça,
+cadeira, mesa e barraca — 66 peças rasas no nível do chão virando bloco sólido e tapando a pista,
+mais 21 pedaços de árvore. Regra: é tralha se for baixa **e** curta **e** não rasa; alto ou comprido
+é parede de verdade e fica.
+
+Os buracos eram o contrário: o chão é fino e o filtro de volume o deixava de fora. Agora peça entra
+por **pegada** também — 269 → 343 caixas no mesmo ponto.

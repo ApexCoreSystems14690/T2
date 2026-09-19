@@ -221,3 +221,36 @@ Se a Praça Santa Fé (225×436) aparecer como traço branco, o `LARG_PATIO` reg
 ### A entrega pra IA de imagem
 `04_Mapa/santafe_malha.png` — conferir a olho: as 18 ruas nomeadas aparecem, os 32 pontinhos âmbar
 não empilham nome em cima de nome, e o mato não tem mancha cinza solta longe de rua.
+
+---
+
+## Minimapa holográfico
+
+### Ele desenha?
+Em Play, com a chave `HUDv2` ligada:
+```lua
+-- no cliente
+local f = game.Players.LocalPlayer.PlayerGui.Main.HudMinimapa
+local w = f:FindFirstChildOfClass("ViewportFrame"):FindFirstChildOfClass("WorldModel")
+print(#w:GetChildren())   -- esperado: 280 a 500 caixas
+```
+Zero caixas = o filtro de volume subiu demais ou a varredura parou.
+
+### Passa no teste do Julio?
+Olhar o minimapa e responder as três, em voz alta:
+1. **Eu conseguiria me guiar por isso?** (o caminho claro tem que se destacar do verde escuro)
+2. **Sei o que é aquele prédio?** (serviço perto = rótulo na tela + blocos na cor do serviço)
+3. **Sei o que é aquele azul mais forte?** (sólido = na sua altura · vidro = acima da sua cabeça)
+
+Qualquer "não" reprova a volta.
+
+### Entrei no prédio, vejo lá dentro?
+Entrar numa loja e olhar: o telhado tem que estar quase invisível e as paredes internas visíveis.
+Se o quadro ficar chapado, `ALTO_DESDE` ou a rampa de transparência regrediu.
+
+### Rótulos aparecem?
+Parar a ≤110 studs de um Posto/Banco/Oficina. Tem que acender o nome na cor do serviço em até 6 s
+(é o relógio do reindex). Nunca acender = as tags `Interact` não chegaram no cliente.
+
+### Celular
+Abrir o app Mapa: tem que dizer **GPS FORA DO AR**, sem botão de zoom, e fechar normal no X.

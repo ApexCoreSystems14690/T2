@@ -92,8 +92,9 @@ Se a ideia falhar na técnica OU não fizer sentido subjetivamente no universo d
 - Telas (pilha): `StarterPlayer...Client.Telas` -> `02_Sistemas_Studio/Telas.md`
 - **Hud (F3, núcleo puro): `StarterPlayer...Client.Hud` (+ filho `N`) -> `02_Sistemas_Studio/Hud.md`**
 - **Ruas (endereço, núcleo puro): `ReplicatedStorage.Resources.Ruas` -> `01_Especificacoes/Ruas_Enderecos.md`**
-- **Minimapa (F3, núcleo puro): `StarterPlayer...Client.Minimapa` (+ filho `N`) -> `02_Sistemas_Studio/Minimapa.md`**
-- **Mapa grande (app do celular): `StarterPlayer...Client.GuiHandler.Celular.Mapa` — pega as quadras EMPRESTADAS do Minimapa, nunca clona -> `02_Sistemas_Studio/Minimapa.md`**
+- **Minimapa HOLOGRÁFICO (F3): `StarterPlayer...Client.Minimapa` (+ filho `N`) -> `02_Sistemas_Studio/Minimapa_Holografico.md`** — lê o mundo em 3D em volta do jogador; NÃO usa o MapaModelo
+- Histórico da cartografia abandonada: `02_Sistemas_Studio/Minimapa.md` e `02_Sistemas_Studio/MapaDesenho.md`
+- **Mapa do celular: `StarterPlayer...Client.GuiHandler.Celular.Mapa` — hoje é só a tela "GPS FORA DO AR" (decisão de 18/09) -> `02_Sistemas_Studio/Minimapa_Holografico.md`**
 - Assador do mapa: `ServerStorage.AssarMapa` -> gera `ReplicatedStorage.Shared.MapaDados`
 - **Desenho do mapa (traçado, NÃO fotografia): `ServerStorage.MapaDesenho` (+ cache `ServerStorage.GRADE_CACHE`) -> `02_Sistemas_Studio/MapaDesenho.md`**
 - Entrega pra IA de imagem: `D:\T2\Santa fe RP\04_Mapa\santafe_malha.png` (e `_sem_nomes.png`)
