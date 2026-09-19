@@ -480,30 +480,40 @@ router.post('/registro/apagar', requirePoder('registro'), async (req, res) => {
 // WIPE GERAL — apaga TODO o registro escrito do jogo (jogadores + fila de itens + logs). Para temporadas/wipe.
 // Exige body.confirm === 'WIPE' pra evitar acidente. NAO mexe em corporacoes/usuarios/cargos.
 // OBS: NAO apaga o save do jogador (dinheiro/inventario) — isso fica no DataStore do Roblox, resetado pelo jogo.
-// [REESCRITO 19/09 — Julio: "wipe e um reset brutal"]
-// Roda TUDO em UMA transação: ou apaga tudo, ou não apaga nada. A versão antiga
-// fazia três DELETEs soltos — se o terceiro falhasse (e falhava: apagava
-// game_players mas deixava os logs, e o backfill do boot ressuscitava todo
-// mundo) o wipe ficava pela metade e parecia "não funcionar".
+// ===========================================================================
+// WIPE GERAL — reset de TEMPORADA
 //
-// Sempre apaga: registro, fila de itens, logs, comandos.
-// Opcional (caixinhas do painel, ligadas por padrão):
-//   celular     -> aparelhos, histórico de posse, contatos, mensagens, deepweb
-//   auditoria   -> admin_audit (o próprio histórico de ações de admin)
-//   saves       -> manda resetar_dados pra todo mundo online AGORA e grava o
-//                  marcador game_config.wipe_em. O save de verdade mora no
-//                  DataStore do Roblox: quem está offline só é resetado quando
-//                  o jogo passar a respeitar o marcador (pendente no Studio).
-// NUNCA apaga: usuários do site, admins, corporações, cargos e membros. Isso
-// derrubaria o seu próprio acesso e a estrutura da PC/PF junto.
+// Julio, 19/09: "o wipe deve deletar tudo de TODO MUNDO, não só quem tá online,
+// deve apagar o banco de dados por completo in game, zerar tudo; só não deve
+// tocar nos cargos de corp, isso mantém após wipe; e quem tiver no servidor na
+// hora deve ser derrubado".
+//
+// O PULO DO GATO: o save de verdade (dinheiro, inventário, casa, carro) NÃO
+// mora aqui. Mora no DataStore do Roblox, numa loja do ProfileService chamada
+// "CBRP_V1.2". O site não alcança aquilo, e apagar save por save de milhares de
+// jogadores offline é inviável. Então o wipe não apaga saves: ele VIRA A
+// TEMPORADA. Incrementa game_config.temporada, o jogo passa a usar a loja
+// "CBRP_V1.2_T2", e TODO MUNDO — online, offline, quem sumiu faz meses — nasce
+// zerado no próximo login, de uma vez. O save antigo fica intacto na loja
+// antiga, então um wipe por engano se desfaz baixando o número de volta.
+//
+// O que ele apaga aqui no banco do site: registro, fila de itens, logs,
+// comandos, auditoria, celular (aparelhos, posse, contatos, mensagens) e
+// deepweb. Ou seja, todo o rastro in-game.
+//
+// O que ele NUNCA toca: corporações, cargos e membros (pedido explícito dele),
+// e os usuários/admins do site — apagar isso derrubaria o acesso dele junto.
+//
+// Quem está no servidor na hora: um comando 'wipe' por servidor ativo, e o jogo
+// derruba todo mundo. Não precisa bloquear o save de saída: quando eles saem, o
+// perfil é gravado na loja ANTIGA, que ninguém mais vai ler.
+//
+// Tudo numa transação: ou apaga tudo, ou não apaga nada.
+// ===========================================================================
 router.post('/registro/wipe', requirePoder('wipe'), async (req, res) => {
   const cli = await pool.connect();
   try {
     if ((req.body && req.body.confirm) !== 'WIPE') return res.status(400).json({ error: 'Confirmação inválida (digite WIPE)' });
-    const o = req.body || {};
-    const comCelular   = o.celular   !== false;
-    const comAuditoria = o.auditoria !== false;
-    const comSaves     = o.saves     !== false;
 
     const conta = {};
     await cli.query('BEGIN');
@@ -516,49 +526,50 @@ router.post('/registro/wipe', requirePoder('wipe'), async (req, res) => {
       }
     };
 
+    // --- todo o rastro in-game ---
     await del('jogadores', 'DELETE FROM game_players');
     await del('fila',      'DELETE FROM game_item_fila');
     await del('logs',      'DELETE FROM game_logs');
     await del('comandos',  'DELETE FROM game_commands');
+    await del('aparelhos', 'DELETE FROM aparelhos');
+    await del('posse',     'DELETE FROM aparelho_donos');
+    await del('contatos',  'DELETE FROM celular_contatos');
+    await del('mensagens', 'DELETE FROM celular_mensagens');
+    await del('deepweb',   'DELETE FROM deepweb_posts');
+    await del('auditoria', 'DELETE FROM admin_audit');
 
-    if (comCelular) {
-      await del('aparelhos',  'DELETE FROM aparelhos');
-      await del('posse',      'DELETE FROM aparelho_donos');
-      await del('contatos',   'DELETE FROM celular_contatos');
-      await del('mensagens',  'DELETE FROM celular_mensagens');
-      await del('deepweb',    'DELETE FROM deepweb_posts');
-    }
-
-    // Marcador do wipe. Duas funções: (1) trava o backfill do boot, que é o que
-    // ressuscitava o registro; (2) o jogo lê isto pra saber que todo save mais
-    // velho que esta data está morto.
+    // --- TEMPORADA NOVA: é isto que zera o save de TODO MUNDO, online ou não ---
+    const t = await cli.query(`SELECT value FROM game_config WHERE key = 'temporada' FOR UPDATE`);
+    const atual = Math.max(1, parseInt(t.rows[0] && t.rows[0].value && t.rows[0].value.n) || 1);
+    const nova = atual + 1;
+    const agora = new Date().toISOString();
+    await cli.query(
+      `INSERT INTO game_config (key, value, updated_at) VALUES ('temporada', $1::jsonb, NOW())
+       ON CONFLICT (key) DO UPDATE SET value = EXCLUDED.value, updated_at = NOW()`,
+      [JSON.stringify({ n: nova, em: agora, por: req.user.id })]);
     await cli.query(
       `INSERT INTO game_config (key, value, updated_at) VALUES ('wipe_em', $1::jsonb, NOW())
        ON CONFLICT (key) DO UPDATE SET value = EXCLUDED.value, updated_at = NOW()`,
-      [JSON.stringify({ em: new Date().toISOString(), por: req.user.id, saves: comSaves })]);
+      [JSON.stringify({ em: agora, por: req.user.id, temporada: nova })]);
 
-    // resetar_dados pra quem está online agora (o único caminho que já funciona
-    // hoje pro save de verdade). Enfileirado ANTES de limpar a auditoria.
-    let resets = 0;
-    if (comSaves) {
-      const servers = await cli.query(`SELECT job_id, players FROM game_servers WHERE updated_at > NOW() - INTERVAL '90 seconds'`);
-      for (const sv of servers.rows) {
-        for (const pl of (sv.players || [])) {
-          const rid = Number(pl.userId); if (!rid) continue;
-          await cli.query(
-            'INSERT INTO game_commands (tipo, target_roblox_id, target_name, payload, job_id, created_by) VALUES ($1,$2,$3,$4,$5,$6)',
-            ['resetar_dados', rid, pl.name || null, '{}', sv.job_id, req.user.id]);
-          resets++;
-        }
-      }
+    // --- derruba quem está dentro: um comando por servidor ativo ---
+    // Vai DEPOIS do DELETE de game_commands, senão ele apagaria estes.
+    const servers = await cli.query(`SELECT job_id, players FROM game_servers WHERE updated_at > NOW() - INTERVAL '90 seconds'`);
+    let derrubados = 0;
+    for (const sv of servers.rows) {
+      derrubados += (sv.players || []).length;
+      await cli.query(
+        'INSERT INTO game_commands (tipo, payload, job_id, created_by) VALUES ($1,$2,$3,$4)',
+        ['wipe', JSON.stringify({ temporada: nova, motivo: 'Temporada nova — o servidor foi zerado.' }), sv.job_id, req.user.id]);
     }
-    conta.resets_online = resets;
+    conta.temporada = nova;
+    conta.servidores = servers.rows.length;
+    conta.derrubados = derrubados;
 
-    if (comAuditoria) await del('auditoria', 'DELETE FROM admin_audit');
     await cli.query('COMMIT');
 
     // a auditoria do próprio wipe entra DEPOIS do commit, senão ela mesma some
-    await audit(req, 'registro:wipe', Object.assign({ celular: comCelular, auditoria: comAuditoria, saves: comSaves }, conta));
+    await audit(req, 'registro:wipe', conta);
     res.json(Object.assign({ ok: true }, conta));
   } catch (err) {
     try { await cli.query('ROLLBACK'); } catch (e) {}

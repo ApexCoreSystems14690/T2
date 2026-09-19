@@ -235,7 +235,17 @@ async function start() {
     // Backfill: popula game_players a partir dos logs de "entrou" que já existem,
     // pra aba Registro já nascer com histórico. Roda toda vez, mas é idempotente.
     try {
-      // [CONSERTO 19/09] O backfill era o motivo de "apagar jogador nao
+      // [19/09] TEMPORADA. Comeca em 1 e so sobe, pelo wipe. O jogo usa este numero
+    // pra escolher a loja do ProfileService: 1 = "CBRP_V1.2" (a de hoje, nada muda),
+    // 2 = "CBRP_V1.2_T2", etc. E assim que o wipe zera o save de TODO MUNDO de uma
+    // vez, inclusive quem esta offline -- sem varrer save nenhum.
+    try {
+      await pool.query(
+        `INSERT INTO game_config (key, value, updated_at) VALUES ('temporada', '{"n":1}'::jsonb, NOW())
+         ON CONFLICT (key) DO NOTHING`);
+    } catch (e) { console.error('seed temporada:', e.message); }
+
+    // [CONSERTO 19/09] O backfill era o motivo de "apagar jogador nao
       // funciona": ele repovoa game_players a partir dos logs a CADA boot, e o
       // Railway reinicia em todo deploy. Apagou o jogador, subiu uma versao,
       // ele voltava. Agora so considera log posterior ao ultimo wipe, e o

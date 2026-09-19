@@ -711,25 +711,24 @@
     }
 
     async function wipeGeral() {
-      const celular   = confirm('WIPE GERAL — reset da temporada.\n\nApagar TAMBÉM o celular?\n(aparelhos, números, contatos, mensagens, histórico de posse e deepweb)\n\nOK = apaga · Cancelar = mantém');
-      const auditoria = confirm('Apagar TAMBÉM o histórico de ações de admin (auditoria)?\n\nOK = apaga · Cancelar = mantém');
-      const saves     = confirm('Resetar TAMBÉM o save dos jogadores (dinheiro, inventário)?\n\nQuem estiver online agora é resetado na hora.\nQuem está offline só cai quando o jogo passar a ler o marcador de wipe.\n\nOK = reseta · Cancelar = mantém');
       const t = prompt(
-        'ÚLTIMA CONFIRMAÇÃO — o wipe apaga:\n' +
-        '  • registro de jogadores, fila de itens, logs e comandos\n' +
-        (celular   ? '  • celular e deepweb\n' : '') +
-        (auditoria ? '  • auditoria de admin\n' : '') +
-        (saves     ? '  • save de quem está online + marca a temporada nova\n' : '') +
-        '\nNÃO apaga: usuários do site, admins, corporações, cargos e membros.\nNão tem volta.\n\nDigite WIPE pra confirmar:');
+        'WIPE GERAL — TEMPORADA NOVA. Não tem volta pelo painel.\n\n' +
+        'APAGA: registro de jogadores, fila de itens, logs, comandos, auditoria,\n' +
+        'celular (aparelhos, números, contatos, mensagens) e deepweb.\n\n' +
+        'ZERA O SAVE DE TODO MUNDO — online, offline, quem sumiu faz meses.\n' +
+        'Dinheiro, inventário, casa, carro: todo mundo recomeça do zero.\n\n' +
+        'DERRUBA todo mundo que estiver no servidor agora.\n\n' +
+        'MANTÉM: corporações, cargos e membros. E os admins do site.\n\n' +
+        'Digite WIPE pra confirmar:');
       if (t !== 'WIPE') { if (t !== null) showAlert('Wipe cancelado (precisa digitar WIPE)', 'error'); return; }
       try {
-        const r = await api('POST', '/registro/wipe', { confirm: 'WIPE', celular, auditoria, saves });
+        const r = await api('POST', '/registro/wipe', { confirm: 'WIPE' });
         const partes = [];
         const add = (rot, v) => { if (v != null) partes.push(v + ' ' + rot); };
-        add('jogadores', r.jogadores); add('fila', r.fila); add('logs', r.logs); add('comandos', r.comandos);
-        add('aparelhos', r.aparelhos); add('mensagens', r.mensagens); add('posts', r.deepweb);
-        if (r.resets_online) partes.push(r.resets_online + ' save(s) resetado(s) online');
-        showAlert('Wipe feito — ' + partes.join(', '), 'success');
+        add('jogadores', r.jogadores); add('logs', r.logs); add('mensagens', r.mensagens); add('aparelhos', r.aparelhos);
+        let m = 'Temporada ' + r.temporada + ' começou. ' + partes.join(', ') + ' apagados';
+        if (r.derrubados) m += ' · ' + r.derrubados + ' jogador(es) sendo derrubado(s) em ' + r.servidores + ' servidor(es)';
+        showAlert(m, 'success');
         REG_SEL.clear(); loadRegistro();
       } catch (e) { showAlert(e.message, 'error'); }
     }

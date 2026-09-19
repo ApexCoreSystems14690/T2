@@ -91,7 +91,7 @@ async function req(metodo, caminho, corpo) {
 
 // ---------------------------------------------------------------- dados
 async function semear() {
-  await pool.query(`TRUNCATE users, game_players, game_item_fila, game_logs, game_commands, game_config,
+  await pool.query(`TRUNCATE users, corporations, ranks, members, game_players, game_item_fila, game_logs, game_commands, game_config,
     admin_audit, aparelhos, aparelho_donos, celular_contatos, celular_mensagens, deepweb_posts, game_servers RESTART IDENTITY CASCADE`);
   const u = {};
   const cria = async (nome, cargo, admin) => {
@@ -197,37 +197,79 @@ async function semear() {
   const ap2 = await req('POST', '/registro/apagar', { roblox_ids: [222, 333] });
   ok(ap2.body.online === 1, 'avisou que 1 dos apagados está online e vai voltar');
 
-  tit('7. Wipe brutal, em transação');
+  tit('7. Wipe = TEMPORADA NOVA, em transação');
   await pool.query(`INSERT INTO game_players (roblox_id, nome) VALUES (111,'Ana'),(222,'Bia') ON CONFLICT (roblox_id) DO NOTHING`);
   await pool.query(`INSERT INTO game_logs (tipo, jogador, detalhe) VALUES ('entrou','Ana','{"userId":"111"}')`);
   await pool.query(`INSERT INTO game_item_fila (roblox_id, item) VALUES (111,'pao')`);
   await pool.query(`INSERT INTO celular_mensagens (de_numero,para_numero,par_key,texto) VALUES ('1','2','1-2','oi')`);
   await pool.query(`INSERT INTO deepweb_posts (chip_nome, corpo) VALUES ('corvo_71','teste')`);
   await pool.query(`INSERT INTO aparelhos (uid, numero, dono_roblox_id) VALUES ('ap2','5552',222)`);
+  await pool.query(`INSERT INTO celular_contatos (dono_numero, numero) VALUES ('1','2')`);
+  await pool.query(`INSERT INTO corporations (name, slug) VALUES ('Policia Civil','policia-civil')`);
+  await pool.query(`INSERT INTO ranks (corporation_id, name, level) SELECT id,'Delegado',18 FROM corporations WHERE slug='policia-civil'`);
+  await pool.query(`INSERT INTO members (corporation_id, user_id, rank_id) SELECT c.id, $1, r.id FROM corporations c JOIN ranks r ON r.corporation_id=c.id WHERE c.slug='policia-civil'`, [U['dono'].id]);
+  await pool.query(`INSERT INTO game_config (key, value) VALUES ('temporada','{"n":1}') ON CONFLICT (key) DO UPDATE SET value=EXCLUDED.value`);
 
   USUARIO_ATUAL = U['dono'];
   ok((await req('POST', '/registro/wipe', { confirm: 'NAO' })).status === 400, 'wipe sem digitar WIPE é recusado');
-  const w = await req('POST', '/registro/wipe', { confirm: 'WIPE', celular: true, auditoria: true, saves: true });
+  const w = await req('POST', '/registro/wipe', { confirm: 'WIPE' });
   ok(w.status === 200, 'wipe respondeu 200');
-  for (const t of ['game_players', 'game_item_fila', 'game_logs', 'celular_mensagens', 'deepweb_posts', 'aparelhos']) {
+
+  for (const t of ['game_players', 'game_item_fila', 'game_logs', 'celular_mensagens', 'celular_contatos', 'deepweb_posts', 'aparelhos', 'aparelho_donos']) {
     const n = await pool.query('SELECT COUNT(*)::int n FROM ' + t);
     ok(n.rows[0].n === 0, t + ' zerada');
   }
-  ok(w.body.resets_online === 1, 'enfileirou resetar_dados pro jogador online (' + w.body.resets_online + ')');
-  const cmd = await pool.query(`SELECT tipo FROM game_commands WHERE tipo='resetar_dados'`);
-  ok(cmd.rows.length === 1, 'o comando resetar_dados sobreviveu ao wipe (foi criado depois da limpeza)');
-  const marca = await pool.query(`SELECT value->>'em' em FROM game_config WHERE key='wipe_em'`);
-  ok(!!marca.rows[0], 'gravou o marcador wipe_em');
+  // a auditoria tambem e apagada, mas o registro DO PROPRIO WIPE entra depois do
+  // commit -- de proposito, senao o wipe apagaria a prova de que aconteceu
+  const aud = await pool.query('SELECT acao FROM admin_audit');
+  ok(aud.rows.length === 1 && aud.rows[0].acao === 'registro:wipe', 'auditoria zerada, sobrando só o registro do próprio wipe');
+
+  tit('7b. O que o wipe NÃO pode tocar');
+  for (const t of ['corporations', 'ranks', 'members', 'users']) {
+    const n = await pool.query('SELECT COUNT(*)::int n FROM ' + t);
+    ok(n.rows[0].n > 0, t + ' INTACTA (' + n.rows[0].n + ') — pedido explícito do Julio');
+  }
+  const eu = await pool.query('SELECT is_admin, admin_cargo FROM users WHERE id=$1', [U['dono'].id]);
+  ok(eu.rows[0].is_admin === true && eu.rows[0].admin_cargo === null, 'o Dono continua Dono depois do wipe');
+
+  tit('7c. A temporada virou — é isso que zera o save de todo mundo');
+  ok(w.body.temporada === 2, 'temporada 1 -> 2 (resposta: ' + w.body.temporada + ')');
+  const tp = await pool.query(`SELECT value->>'n' n FROM game_config WHERE key='temporada'`);
+  ok(Number(tp.rows[0].n) === 2, 'gravada no game_config, que é o que o jogo lê');
+  ok(w.body.derrubados === 1, 'contou 1 jogador pra derrubar (' + w.body.derrubados + ')');
+  const cmds = await pool.query(`SELECT tipo, payload, job_id FROM game_commands`);
+  ok(cmds.rows.length === 1 && cmds.rows[0].tipo === 'wipe', 'sobrou exatamente 1 comando e é o wipe (os antigos foram apagados ANTES dele nascer)');
+  ok(Number(cmds.rows[0].payload.temporada) === 2, 'o comando leva a temporada 2 pro jogo');
+  const w2 = await req('POST', '/registro/wipe', { confirm: 'WIPE' });
+  ok(w2.body.temporada === 3, 'wipe de novo -> temporada 3 (sempre sobe, nunca reusa)');
+
+  tit('7d. Wipe que explode no meio não apaga NADA (transação)');
+  await pool.query(`INSERT INTO game_players (roblox_id, nome) VALUES (777,'Teste')`);
+  await pool.query(`INSERT INTO celular_mensagens (de_numero,para_numero,par_key,texto) VALUES ('9','8','8-9','sobrevive?')`);
+  // gatilho que estoura: celular_mensagens é apagada DEPOIS de game_players
+  await pool.query(`CREATE OR REPLACE FUNCTION explode() RETURNS trigger AS $$ BEGIN RAISE EXCEPTION 'falha de proposito'; END; $$ LANGUAGE plpgsql`);
+  await pool.query(`CREATE TRIGGER t_explode BEFORE DELETE ON celular_mensagens FOR EACH ROW EXECUTE FUNCTION explode()`);
+  const tAntes = (await pool.query(`SELECT value->>'n' n FROM game_config WHERE key='temporada'`)).rows[0].n;
+  const cmdAntes = (await pool.query(`SELECT COUNT(*)::int n FROM game_commands WHERE tipo='wipe'`)).rows[0].n;
+
+  const wf = await req('POST', '/registro/wipe', { confirm: 'WIPE' });
+  ok(wf.status === 500, 'o wipe falhou, como o teste queria (' + wf.status + ')');
+  ok((await pool.query('SELECT COUNT(*)::int n FROM game_players')).rows[0].n === 1, 'o jogador NÃO foi apagado — rollback funcionou');
+  const tDepois = (await pool.query(`SELECT value->>'n' n FROM game_config WHERE key='temporada'`)).rows[0].n;
+  ok(tDepois === tAntes, 'a temporada NÃO virou num wipe que falhou (' + tAntes + ' -> ' + tDepois + ')');
+  ok((await pool.query(`SELECT COUNT(*)::int n FROM game_commands WHERE tipo='wipe'`)).rows[0].n === cmdAntes, 'e nenhum comando de derrubar foi criado à toa');
+
+  await pool.query('DROP TRIGGER t_explode ON celular_mensagens');
+  await pool.query('DELETE FROM celular_mensagens');
+  await pool.query('DELETE FROM game_players');
 
   tit('8. Depois do wipe, o backfill não repõe nada');
   await pool.query(`INSERT INTO game_logs (tipo, jogador, detalhe, created_at) VALUES ('entrou','Ana','{"userId":"111"}', NOW() - INTERVAL '2 days')`);
   await backfillDoBoot();
-  const depois = await pool.query('SELECT COUNT(*)::int n FROM game_players');
-  ok(depois.rows[0].n === 0, 'log velho (anterior ao wipe) NÃO repovoa o registro');
+  ok((await pool.query('SELECT COUNT(*)::int n FROM game_players')).rows[0].n === 0, 'log velho (anterior ao wipe) NÃO repovoa o registro');
   await pool.query(`INSERT INTO game_logs (tipo, jogador, detalhe) VALUES ('entrou','Novo','{"userId":"999"}')`);
   await backfillDoBoot();
-  const novo = await pool.query('SELECT COUNT(*)::int n FROM game_players');
-  ok(novo.rows[0].n === 1, 'mas quem entrou DEPOIS do wipe entra normal (temporada nova)');
+  ok((await pool.query('SELECT COUNT(*)::int n FROM game_players')).rows[0].n === 1, 'mas quem entrou DEPOIS do wipe entra normal (temporada nova)');
 
   tit('9. Comando novo sem poder mapeado é recusado, não liberado');
   const semMapa = Object.keys(perm.PODER_DO_COMANDO);

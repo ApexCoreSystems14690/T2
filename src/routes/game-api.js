@@ -5,6 +5,32 @@ const { requireApiKey } = require('../middleware/auth');
 // Todas as rotas aqui precisam da API key
 router.use(requireApiKey);
 
+// ---------------------------------------------------------------------------
+// GET /api/game/temporada
+// [19/09] O WIPE E UMA TEMPORADA NOVA, nao um DELETE jogador a jogador.
+// O save de verdade mora no DataStore do Roblox (ProfileService, loja
+// "CBRP_V1.2"), onde o site nao alcanca. Em vez de tentar apagar milhares de
+// saves um a um, o wipe INCREMENTA este numero e o jogo passa a usar uma loja
+// nova ("CBRP_V1.2_T2", "_T3"...). Todo mundo -- online, offline, quem nunca
+// mais entrou -- nasce zerado no proximo login, de uma vez, sem varrer nada.
+// Bonus: o save antigo continua existindo na loja antiga, entao um wipe errado
+// e reversivel baixando o numero de volta.
+// O jogo le isto no BOOT (antes de carregar o primeiro jogador) e a cada
+// heartbeat. Ele guarda uma copia em DataStore e usa sempre o MAIOR dos dois,
+// entao o site fora do ar nunca ressuscita a temporada passada.
+// ---------------------------------------------------------------------------
+router.get('/temporada', async (req, res) => {
+  try {
+    const r = await pool.query(`SELECT value FROM game_config WHERE key = 'temporada'`);
+    const n = Math.max(1, parseInt(r.rows[0] && r.rows[0].value && r.rows[0].value.n) || 1);
+    const w = await pool.query(`SELECT value FROM game_config WHERE key = 'wipe_em'`);
+    res.json({ temporada: n, wipe_em: (w.rows[0] && w.rows[0].value && w.rows[0].value.em) || null });
+  } catch (err) {
+    console.error('temporada:', err.message);
+    res.status(500).json({ error: 'Erro interno' });
+  }
+});
+
 // GET /api/game/player/:robloxId
 // Retorna todas as corporações que o jogador pertence, com cargo e salário
 // Usado pelo servidor Roblox ao invés de plr:IsInGroup()
