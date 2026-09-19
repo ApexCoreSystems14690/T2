@@ -49,6 +49,19 @@ CREATE TABLE IF NOT EXISTS deepweb_posts (id SERIAL PRIMARY KEY, chip_nome VARCH
 // A migração nova, copiada verbatim do src/index.js.
 const MIGRACAO = `ALTER TABLE users ADD COLUMN IF NOT EXISTS admin_cargo VARCHAR(24);`;
 
+// A migracao do boot que tira o admin de quem era "dono por banco", copiada do index.js.
+async function migracaoDonoFixo() {
+  const donos = perm.DONO_DISCORD;
+  await pool.query(
+    `UPDATE users SET is_admin = true, updated_at = NOW()
+     WHERE LOWER(TRIM(COALESCE(discord_username, ''))) = ANY($1::text[])`, [donos]);
+  const r = await pool.query(
+    `UPDATE users SET is_admin = false, admin_cargo = NULL, updated_at = NOW()
+     WHERE is_admin = true AND admin_cargo IS NULL
+       AND LOWER(TRIM(COALESCE(discord_username, ''))) <> ALL($1::text[])`, [donos]);
+  return r.rowCount;
+}
+
 // O backfill do boot, também copiado verbatim (é o que ressuscitava jogador).
 async function backfillDoBoot() {
   let desde = '1970-01-01';
@@ -100,7 +113,9 @@ async function semear() {
       ['d_' + nome, nome, admin, cargo]);
     u[nome] = r.rows[0];
   };
-  await cria('dono', null, true);              // setado "direto no banco": cargo NULL
+  await cria('julio14690', null, true);        // o DONO: reconhecido pelo usuario do Discord
+  await cria('exdono', null, true);            // era "dono por banco" (is_admin + cargo NULL)
+  await cria('estagiario', 'estagiario', true);
   await cria('diretor', 'diretor', true);
   await cria('supervisor', 'supervisor', true);
   await cria('administrador', 'administrador', true);
@@ -124,6 +139,7 @@ async function semear() {
 
   tit('2. Matriz cargo x poder vs. a lista do Julio');
   const esperado = {
+    estagiario:    { tem: ['ver_registro', 'mensagem', 'expulsar', 'item'],                 naoTem: ['banir', 'noclip', 'item_todos', 'servidor', 'wipe', 'registro', 'admins'] },
     moderador:     { tem: ['banir', 'expulsar', 'item'],                                   naoTem: ['noclip', 'item_todos', 'servidor', 'wipe', 'registro'] },
     administrador: { tem: ['banir', 'expulsar', 'item', 'noclip'],                          naoTem: ['item_todos', 'servidor', 'wipe', 'registro'] },
     supervisor:    { tem: ['banir', 'expulsar', 'item', 'item_todos', 'servidor', 'noclip', 'economia', 'teleporte', 'corp'], naoTem: ['wipe', 'registro', 'admins'] },
@@ -131,12 +147,39 @@ async function semear() {
     dono:          { tem: ['wipe', 'admins', 'registro', 'item_todos'],                     naoTem: [] },
   };
   for (const [cargo, e] of Object.entries(esperado)) {
-    const fake = { is_admin: true, admin_cargo: cargo === 'dono' ? null : cargo };
+    // o Dono agora e reconhecido pelo usuario do Discord, nao por cargo NULL
+    const fake = cargo === 'dono'
+      ? { discord_username: 'julio14690', is_admin: true }
+      : { discord_username: 'staff_' + cargo, is_admin: true, admin_cargo: cargo };
     for (const p of e.tem)    ok(perm.pode(fake, p),  cargo + ' TEM ' + p);
     for (const p of e.naoTem) ok(!perm.pode(fake, p), cargo + ' NÃO tem ' + p);
   }
-  ok(perm.cargoDe({ is_admin: true, admin_cargo: null }) === 'dono', 'is_admin com admin_cargo NULL = DONO (setado no banco)');
-  ok(perm.cargoDe({ is_admin: false, admin_cargo: 'diretor' }) === null, 'sem is_admin não é admin nenhum, mesmo com cargo');
+
+  tit('2b. DONO é conta fixa, não vem do banco');
+  ok(perm.cargoDe({ discord_username: 'julio14690', is_admin: false }) === 'dono', 'julio14690 é DONO mesmo com is_admin false no banco');
+  ok(perm.cargoDe({ discord_username: '  JULIO14690 ', is_admin: false }) === 'dono', 'reconhece com maiúscula e espaço sobrando');
+  ok(perm.cargoDe({ discord_username: 'fulano', is_admin: true, admin_cargo: null }) === 'estagiario',
+    'admin SEM cargo cai no MENOR degrau, não no maior — é o bug antigo invertido');
+  ok(perm.cargoDe({ discord_username: 'fulano', is_admin: true, admin_cargo: 'dono' }) === 'estagiario',
+    'ninguém vira Dono escrevendo "dono" no banco');
+  ok(perm.cargoDe({ discord_username: 'fulano', is_admin: false, admin_cargo: 'diretor' }) === null, 'sem is_admin não é staff, mesmo com cargo');
+  ok(!perm.podeDarCargo({ discord_username: 'julio14690' }, 'dono'), 'nem o Dono consegue conceder Dono pelo painel');
+
+  tit('2c. A migração do boot tira o admin de quem era "dono por banco"');
+  const rebaixados = await migracaoDonoFixo();
+  ok(rebaixados === 1, 'rebaixou exatamente o exdono (' + rebaixados + ')');
+  const ex = await pool.query(`SELECT is_admin, admin_cargo FROM users WHERE discord_username = 'exdono'`);
+  ok(ex.rows[0].is_admin === false, 'o exdono perdeu o admin inteiro, como o Julio pediu');
+  const ju = await pool.query(`SELECT is_admin FROM users WHERE discord_username = 'julio14690'`);
+  ok(ju.rows[0].is_admin === true, 'o julio14690 continua com is_admin (rotas antigas ainda olham essa coluna)');
+  const dir = await pool.query(`SELECT is_admin, admin_cargo FROM users WHERE discord_username = 'diretor'`);
+  ok(dir.rows[0].is_admin === true && dir.rows[0].admin_cargo === 'diretor', 'quem tinha cargo de verdade não foi tocado');
+  ok((await migracaoDonoFixo()) === 0, 'rodar de novo não rebaixa mais ninguém (idempotente)');
+  // recarrega os usuarios em memoria depois da migracao
+  for (const nome of Object.keys(U)) {
+    const q = await pool.query('SELECT * FROM users WHERE id = $1', [U[nome].id]);
+    if (q.rows[0]) U[nome] = q.rows[0];
+  }
 
   tit('3. O BACK barra de verdade (não só o botão sumir)');
   USUARIO_ATUAL = U['moderador'];
@@ -157,14 +200,14 @@ async function semear() {
 
   tit('4. Escada de admin: ninguém alcança quem está acima');
   USUARIO_ATUAL = U['diretor'];
-  ok((await req('POST', '/users/' + U['dono'].id + '/cargo', { cargo: 'moderador' })).status === 403, 'diretor NÃO rebaixa o dono');
+  ok((await req('POST', '/users/' + U['julio14690'].id + '/cargo', { cargo: 'moderador' })).status === 403, 'diretor NÃO rebaixa o dono');
   ok((await req('POST', '/users/' + U['diretor'].id + '/cargo', { cargo: 'moderador' })).status === 400, 'diretor não mexe em si mesmo');
   ok((await req('POST', '/users/' + U['moderador'].id + '/cargo', { cargo: 'diretor' })).status === 403, 'diretor não promove ninguém a diretor (seu próprio nível)');
   const promo = await req('POST', '/users/' + U['moderador'].id + '/cargo', { cargo: 'supervisor' });
   ok(promo.status === 200, 'diretor promove moderador a supervisor');
   const chk = await pool.query('SELECT admin_cargo FROM users WHERE id=$1', [U['moderador'].id]);
   ok(chk.rows[0].admin_cargo === 'supervisor', 'gravou supervisor no banco');
-  USUARIO_ATUAL = U['dono'];
+  USUARIO_ATUAL = U['julio14690'];
   ok((await req('POST', '/users/' + U['diretor'].id + '/cargo', { cargo: null })).status === 200, 'dono tira o admin do diretor');
   await pool.query('UPDATE users SET is_admin=true, admin_cargo=$1 WHERE id=$2', ['diretor', U['diretor'].id]);
 
@@ -175,7 +218,7 @@ async function semear() {
   await pool.query(`INSERT INTO game_item_fila (roblox_id, item, qtd, entregue_em) VALUES (111,'pao',1,NOW())`);
   await pool.query(`INSERT INTO aparelhos (uid, numero, dono_roblox_id) VALUES ('ap1','5551',111)`);
 
-  USUARIO_ATUAL = U['dono'];
+  USUARIO_ATUAL = U['julio14690'];
   const ap = await req('POST', '/registro/apagar', { roblox_id: 111 });
   ok(ap.status === 200 && ap.body.apagados === 1, 'apagou a Ana');
   ok(ap.body.logs === 1, 'levou o log de entrada junto (' + ap.body.logs + ')');
@@ -207,10 +250,10 @@ async function semear() {
   await pool.query(`INSERT INTO celular_contatos (dono_numero, numero) VALUES ('1','2')`);
   await pool.query(`INSERT INTO corporations (name, slug) VALUES ('Policia Civil','policia-civil')`);
   await pool.query(`INSERT INTO ranks (corporation_id, name, level) SELECT id,'Delegado',18 FROM corporations WHERE slug='policia-civil'`);
-  await pool.query(`INSERT INTO members (corporation_id, user_id, rank_id) SELECT c.id, $1, r.id FROM corporations c JOIN ranks r ON r.corporation_id=c.id WHERE c.slug='policia-civil'`, [U['dono'].id]);
+  await pool.query(`INSERT INTO members (corporation_id, user_id, rank_id) SELECT c.id, $1, r.id FROM corporations c JOIN ranks r ON r.corporation_id=c.id WHERE c.slug='policia-civil'`, [U['julio14690'].id]);
   await pool.query(`INSERT INTO game_config (key, value) VALUES ('temporada','{"n":1}') ON CONFLICT (key) DO UPDATE SET value=EXCLUDED.value`);
 
-  USUARIO_ATUAL = U['dono'];
+  USUARIO_ATUAL = U['julio14690'];
   ok((await req('POST', '/registro/wipe', { confirm: 'NAO' })).status === 400, 'wipe sem digitar WIPE é recusado');
   const w = await req('POST', '/registro/wipe', { confirm: 'WIPE' });
   ok(w.status === 200, 'wipe respondeu 200');
@@ -229,7 +272,7 @@ async function semear() {
     const n = await pool.query('SELECT COUNT(*)::int n FROM ' + t);
     ok(n.rows[0].n > 0, t + ' INTACTA (' + n.rows[0].n + ') — pedido explícito do Julio');
   }
-  const eu = await pool.query('SELECT is_admin, admin_cargo FROM users WHERE id=$1', [U['dono'].id]);
+  const eu = await pool.query('SELECT is_admin, admin_cargo FROM users WHERE id=$1', [U['julio14690'].id]);
   ok(eu.rows[0].is_admin === true && eu.rows[0].admin_cargo === null, 'o Dono continua Dono depois do wipe');
 
   tit('7c. A temporada virou — é isso que zera o save de todo mundo');

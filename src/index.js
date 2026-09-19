@@ -92,6 +92,26 @@ async function start() {
       -- deploy. Rebaixar quem nao deveria ser dono e um clique no painel.
       ALTER TABLE users ADD COLUMN IF NOT EXISTS admin_cargo VARCHAR(24);
     `);
+    // [19/09] DONO VIROU CONTA FIXA. Julio: "somente o discord julio14690 vai ter
+    // poder de DONO, essa db de dono ai nao tem que existir, e quem ja ta de dono
+    // tira". Antes, is_admin com admin_cargo NULL significava Dono -- ou seja, TODO
+    // admin que ja existia virou Dono no deploy anterior. Aqui isso e desfeito:
+    //   (a) o Julio fica com is_admin (varias rotas antigas ainda olham essa coluna);
+    //   (b) todo o resto que estava "Dono por banco" PERDE o admin, por decisao dele.
+    // Quem ja tem um cargo de verdade (dado pelo painel) nao e tocado. Roda em todo
+    // boot e e idempotente: depois da primeira vez nao sobra ninguem pra rebaixar.
+    try {
+      const perm = require('./permissoes');
+      const donos = perm.DONO_DISCORD;
+      await pool.query(
+        `UPDATE users SET is_admin = true, updated_at = NOW()
+         WHERE LOWER(TRIM(COALESCE(discord_username, ''))) = ANY($1::text[])`, [donos]);
+      const r = await pool.query(
+        `UPDATE users SET is_admin = false, admin_cargo = NULL, updated_at = NOW()
+         WHERE is_admin = true AND admin_cargo IS NULL
+           AND LOWER(TRIM(COALESCE(discord_username, ''))) <> ALL($1::text[])`, [donos]);
+      if (r.rowCount > 0) console.log('[migracao] ' + r.rowCount + ' "dono por banco" perderam o admin (so ' + donos.join(', ') + ' e Dono)');
+    } catch (e) { console.error('migracao dono fixo:', e.message); }
     // Painel admin: fila de comandos, logs do jogo, servidores online, auditoria
     await pool.query(`
       CREATE TABLE IF NOT EXISTS game_servers (

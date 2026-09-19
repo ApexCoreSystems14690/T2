@@ -96,10 +96,12 @@ async function requireCorpOwner(req, res, next) {
   }
 }
 
-// Verifica se é admin global (qualquer cargo). O que ele PODE fazer dentro do
-// painel é decidido por requirePoder, cargo a cargo.
+// Verifica se é staff (qualquer cargo). O que ele PODE fazer dentro do painel é
+// decidido por requirePoder, cargo a cargo.
+// [19/09] Pergunta pro permissoes.js em vez de olhar is_admin cru: a conta Dono
+// é fixa no código e tem que entrar mesmo que o banco esteja errado sobre ela.
 function requireAdmin(req, res, next) {
-  if (req.user && req.user.is_admin) return next();
+  if (req.user && require('../permissoes').cargoDe(req.user)) return next();
   res.status(403).json({ error: 'Acesso negado' });
 }
 
@@ -109,7 +111,9 @@ function requireAdmin(req, res, next) {
 const perm = require('../permissoes');
 function requirePoder(poder) {
   return function (req, res, next) {
-    if (!req.user || !req.user.is_admin) return res.status(403).json({ error: 'Acesso negado' });
+    // olha o CARGO, nao o is_admin cru -- senao a conta Dono passaria pelo
+    // requireAdmin e travaria aqui, se o banco estivesse errado sobre ela
+    if (!req.user || !perm.cargoDe(req.user)) return res.status(403).json({ error: 'Acesso negado' });
     if (perm.pode(req.user, poder)) return next();
     const p = perm.PODERES[poder];
     const meu = perm.CARGOS[perm.cargoDe(req.user)];

@@ -12,38 +12,45 @@
 //   Diretor Geral ... tudo que existir, MENOS o wipe
 //   Dono ............ tudo, inclusive o wipe
 //
-// QUEM É DONO: quem tem is_admin = true e admin_cargo NULL no banco. Ou seja,
-// quem foi setado DIRETO NO BANCO por SQL — o painel nunca escreve NULL, ele
-// sempre grava um cargo. Isso faz o "setado direto na db tem poder absoluto"
-// valer sozinho, sem lista de ID em lugar nenhum: um UPDATE users SET
-// is_admin = true é o bastante, e pra tirar o poder absoluto de alguém basta
-// dar um cargo a ele pelo painel.
+// QUEM É DONO (mudou em 19/09, decisão do Julio: "somente o discord julio14690
+// vai ter poder de DONO, essa db de dono aí não tem que existir"):
+// DONO é UMA conta do Discord, fixa aqui embaixo em DONO_DISCORD. Não vem mais
+// do banco. Antes a regra era "is_admin com admin_cargo NULL", e isso tinha um
+// problema: qualquer UPDATE no banco criava outro poder absoluto, e todo admin
+// que já existia virou Dono de uma vez. Agora não existe caminho de banco que
+// crie um Dono — nem SQL, nem painel. Só trocando esta lista no código.
 //
 // REGRA DE OURO: o front esconde botão, o BACK é quem barra. Toda rota do
 // painel confere o poder no servidor, em cada request. Esconder botão é
 // conforto, não segurança.
 // ============================================================================
 
+// A conta do Discord que é Dono. Fixa no código de propósito — ver o cabeçalho.
+const DONO_DISCORD = ['julio14690'];
+
 // Escada. O 'nivel' é o que decide quem manda em quem.
 const CARGOS = {
-  dono:          { nome: 'Dono',          nivel: 100, cor: '#F59E0B', desc: 'Setado direto no banco. Poder absoluto, inclusive o wipe. Só sai por SQL.' },
+  dono:          { nome: 'Dono',          nivel: 100, cor: '#F59E0B', desc: 'Poder absoluto, inclusive o wipe. Conta fixa no código; não se concede nem se tira pelo painel.' },
   diretor:       { nome: 'Diretor Geral', nivel: 80,  cor: '#EF4444', desc: 'Tudo que existe no painel, menos o wipe geral.' },
   supervisor:    { nome: 'Supervisor',    nivel: 60,  cor: '#8B5CF6', desc: 'Banir, expulsar, dar item a todos, clima e hora, noclip, economia, teleporte e cargo em corp.' },
   administrador: { nome: 'Administrador', nivel: 40,  cor: '#3B82F6', desc: 'Banir, expulsar, dar item individual e noclip.' },
   moderador:     { nome: 'Moderador',     nivel: 20,  cor: '#10B981', desc: 'Banir, expulsar e dar item individual. Sem noclip.' },
+  estagiario:    { nome: 'Estagiário',    nivel: 10,  cor: '#64748B', desc: 'Ver registro e logs, mandar mensagem, expulsar e dar item individual. NÃO bane.' },
 };
 
-const ORDEM = ['dono', 'diretor', 'supervisor', 'administrador', 'moderador'];
+const ORDEM = ['dono', 'diretor', 'supervisor', 'administrador', 'moderador', 'estagiario'];
 // Cargos que o painel pode atribuir. 'dono' fica de fora de propósito.
-const CARGOS_ATRIBUIVEIS = ['diretor', 'supervisor', 'administrador', 'moderador'];
+const CARGOS_ATRIBUIVEIS = ['diretor', 'supervisor', 'administrador', 'moderador', 'estagiario'];
 
 // Cada poder diz o cargo MÍNIMO que o exerce. Quem está acima também tem.
 const PODERES = {
-  expulsar:      { rotulo: 'Expulsar (kick)',                min: 'moderador' },
-  banir:         { rotulo: 'Banir e desbanir',               min: 'moderador' },
-  mensagem:      { rotulo: 'Mensagem privada a um jogador',  min: 'moderador' },
-  item:          { rotulo: 'Dar item ou carro (individual)', min: 'moderador' },
-  ver_registro:  { rotulo: 'Ver registro e logs',            min: 'moderador' },
+  // o Estagiário faz tudo isto; o que separa ele do Moderador é o BANIR
+  ver_registro:  { rotulo: 'Ver registro e logs',            min: 'estagiario' },
+  mensagem:      { rotulo: 'Mensagem privada a um jogador',  min: 'estagiario' },
+  expulsar:      { rotulo: 'Expulsar (kick)',                min: 'estagiario' },
+  item:          { rotulo: 'Dar item ou carro (individual)', min: 'estagiario' },
+
+  banir:         { rotulo: 'Banir e desbanir',               min: 'moderador'  },
 
   noclip:        { rotulo: 'Noclip (voar / atravessar)',     min: 'administrador' },
 
@@ -99,15 +106,28 @@ function nivelDoCargo(cargo) {
   return c ? c.nivel : 0;
 }
 
+// É a conta Dono? Compara o usuário do Discord, sem caixa e sem espaço.
+function ehDono(user) {
+  if (!user) return false;
+  const u = String(user.discord_username || '').trim().toLowerCase();
+  return u.length > 0 && DONO_DISCORD.includes(u);
+}
+
 // O cargo efetivo de um usuário do site.
-// is_admin false -> null (não é admin).
-// is_admin true + admin_cargo vazio -> 'dono' (foi setado direto no banco).
-// is_admin true + admin_cargo conhecido -> esse cargo.
+//   é o julio14690            -> 'dono', mesmo que o banco diga outra coisa
+//   is_admin false            -> null (não é staff)
+//   is_admin true + cargo     -> esse cargo
+//   is_admin true sem cargo   -> 'estagiario', o MENOR da escada.
+// Essa última linha é de propósito: antes "sem cargo" significava DONO, e era
+// por isso que um UPDATE no banco dava poder absoluto sem querer. Agora, se
+// sobrar um registro sem cargo, ele cai no degrau mais baixo em vez do mais
+// alto — errar pra menos, nunca pra mais.
 function cargoDe(user) {
+  if (ehDono(user)) return 'dono';
   if (!user || !user.is_admin) return null;
   const c = user.admin_cargo;
-  if (!c) return 'dono';
-  return CARGOS[c] ? c : 'dono';
+  if (!c || !CARGOS[c] || c === 'dono') return 'estagiario';
+  return c;
 }
 
 function pode(user, poder) {
@@ -160,6 +180,6 @@ function matriz() {
 }
 
 module.exports = {
-  CARGOS, ORDEM, CARGOS_ATRIBUIVEIS, PODERES, PODER_DO_COMANDO,
-  cargoDe, pode, poderesDe, podeMexerEm, podeDarCargo, nivelDoCargo, matriz,
+  CARGOS, ORDEM, CARGOS_ATRIBUIVEIS, PODERES, PODER_DO_COMANDO, DONO_DISCORD,
+  ehDono, cargoDe, pode, poderesDe, podeMexerEm, podeDarCargo, nivelDoCargo, matriz,
 };

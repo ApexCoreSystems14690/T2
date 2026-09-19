@@ -545,7 +545,7 @@
       $('us-body').innerHTML = list.map(u => {
         let acao;
         if (u.cargo === 'dono') {
-          acao = '<span class="muted" style="font-size:.78rem">setado no banco · só sai por SQL</span>';
+          acao = '<span class="muted" style="font-size:.78rem">dono do jogo · fixo no código</span>';
         } else if (u.is_placeholder) {
           acao = '<span class="muted" style="font-size:.78rem">precisa entrar com Discord</span>';
         } else if (!u.posso_mexer) {
