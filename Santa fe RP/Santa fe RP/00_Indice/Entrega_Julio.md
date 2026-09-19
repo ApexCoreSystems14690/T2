@@ -6,33 +6,36 @@
 
 ---
 
-## 👀 0 · OLHA O MAPA — rua viva e mapas mais perto
+## 👀 0 · OLHA O HOLOGRAMA (minimapa) — 3 perguntas, em voz alta
 
-**O que mudou:** a faixa de pedestre virava mancha porque eu perfurava a coluna
-descendo 0,35 stud e o decalque tem 0,05 — eu começava abaixo do asfalto e nunca
-o achava (0 de 40). Agora perfuro excluindo a peça: 73%. E a região da rua passou
-a mostrar a **cor real do que está em cima dela**, então faixa aparece como faixa.
-Os dois mapas vieram pra perto (raio 75/150) e o ponteiro encolheu.
+A cartografia (v1–v12) morreu; o minimapa agora **mostra** o mundo em volta de você em 3D
+(ver [[Minimapa_Holografico]]). Dá Play como testador e responde:
+1. Eu conseguiria me guiar por isso?
+2. Sei o que é aquele prédio? (serviço perto = rótulo + cor do serviço)
+3. Sei o que é aquele azul mais forte? (sólido = na tua altura · vidro = acima da cabeça)
 
-**O que olhar:**
-- Parar em cima de uma faixa de pedestre e ver se ela aparece no minimapa.
-- Se sobrou alguma mancha escura no meio da pista — me diga onde.
-- O zoom: está no ponto ou ainda quer mais perto?
+Qualquer "não" reprova a volta. Depois entra numa loja e vê se o telhado some e as paredes de dentro aparecem.
 
-**Uma escolha tua:** o asfalto do jogo é `Concrete` quase branco (248) — o que o
-escurece no jogo é a textura, não a cor. Por isso a rua sai clara no mapa. É a cor
-real do dado, mas não é o tom que teu olho vê dirigindo. Se preferir asfalto
-escuro com faixa branca, é uma linha.
+---
 
-Checklist completo em [[Lista_Testes]].
+## 🧹 1 · Uma linha tua no Studio: arquivar o `MapaModelo`
 
----|---|
-| 400 | 5.863 | você disse que ignorava muita coisa |
-| 150 | 12.533 | meio-termo |
-| 60 | 17.147 | quase tudo |
-| **25** (agora) | **23.322** | nada que se veja de cima |
+`ReplicatedStorage.MapaModelo` ainda tem **42.427 peças** replicando pra todo cliente e ninguém usa
+(o holograma não lê ele; só o `Shared.MapaDados` velho cita o nome). Eu não tenho permissão pra mover.
+No Edit, barra de comando:
+```lua
+local m = game.ReplicatedStorage.MapaModelo
+m.Name = "MapaModelo_v11_arquivado"; m.Parent = game.ServerStorage.Backups
+```
+Depois Ctrl+S + Publish. Reverter é o inverso. `AssarMapa`/`MapaGrade`/`MapaDesenho` podem ficar em ServerStorage (não replicam).
 
-Trocar o número e rodar `require(game.ServerStorage.AssarMapa).assar()`.
+---
+
+## ✅ 1b · Os checklists que só você fecha (Play)
+
+Tudo em [[Lista_Testes]], seção "Pra ti conferir jogando": **F1** (carteiro, prisão + relog, mochila 3 logins,
+cúpula, multa M) · **F3** (feed, objetivo andando, chips, holograma) · **celular com 2 players** (mensagens salvas).
+É o que fecha F1 e F3 de verdade.
 
 ---
 
@@ -106,11 +109,10 @@ Na primeira foto a barrinha aparecia cheia também em peça sem número (`Mirand
 `Algemado`) e lia como "100% de alguma coisa". Agora barra só em colete/capacete;
 severidade virou **cor do texto**.
 
-### 5.4 · Cor do minimapa: a RUA é a coisa mais clara
-Na primeira versão a rua sumia no meio dos prédios. Inverti: chão e prédio
-escuros, **rua clara**, vegetação verde escuro. É o que faz o mapa servir pra
-navegar. Se quiser outro clima (sépia, azulado), é a tabela `N.PALETA` em
-`Client.Minimapa.N` — 11 linhas.
+### 5.4 · Cores do holograma: COR = o que é, BRILHO = altura
+Serviço na cor do serviço, carro âmbar, resto azul; acima da tua cabeça vira vidro, abaixo escurece.
+Chão pintado pelo material (grama escura, piso mais claro). Trocar: tabelas de cor em `Client.Minimapa`.
+(A regra antiga "rua é a cor mais clara" era da cartografia, que morreu.)
 
 ### 5.5 · Onde o minimapa fica
 Canto **inferior esquerdo**, como o plano manda. **Ainda não movi nada** —
@@ -135,22 +137,22 @@ não tem nome de rua mesmo.
 **Se quiser nomear**, me diga e eu ponho — o registro certo seria *Estrada da
 Vila Pantanal* pro acesso principal e *Beco do…* pros ramais. É uma linha por via.
 
-### 5.8 · O mapa precisa ser assado uma vez (e salvo)
-`ReplicatedStorage.MapaModelo` some entre sessões de Play até o place ser salvo.
-Se abrir o jogo e o minimapa não aparecer, é só rodar no Studio:
-```lua
-require(game.ServerStorage.AssarMapa).assar()
-```
-Depois de um **Ctrl+S + Publish** ele fica gravado e isso não acontece mais.
-Rode de novo sempre que mexer no mapa — é o que atualiza o minimapa.
-
 ### 5.9 · O feed de avisos mudou de lugar (era a decisão 5.5)
 Você tinha isso em aberto. Escolhi a opção (a): o feed **continua no mesmo canto**,
 só passou a terminar acima do minimapa. Coluna esquerda agora, medida em Play:
 objetivo 49–117 · feed 119–474 · minimapa 483–684 · Infos 698–752. Sem sobreposição.
 Reversível pelos atributos `QA_pos_orig` / `QA_size_orig` no `Main.ServerInfos`.
 
-## ✅ Nada disso trava o resto
-Tudo o que foi feito nesta noite está atrás da chave `HUDv2` e só aparece pra quem
-está em `Chaves.TESTADORES`. Com a chave desligada o jogo se comporta exatamente
-como antes.
+## 🚗 6 · Fusca nativo — olhar e decidir (16/09)
+`ServerStorage.PortaMalasFrota.Modelos.FuscaNativo` é o Fusca refeito com porta-malas dianteiro de verdade
+(cuba, calha, capô sólido, 4 slots) e tampa do motor modelada mas **desligada** (só porta-malas, como você mandou).
+Bancada em `workspace.FuscaOriginal_REF` / `AMG_REF` (Y=900).
+- Dá Play, spawna ele e abre o porta-malas. Se aprovar: trocar `Assets.Carros.Fusca` pelo `Modelos.FuscaNativo` + Ctrl+S + Publish.
+- **Decisão AMG:** o carro do Blender é um S-Class W223 sedan; a AMG do jogo é um GLE Coupé (56 MeshParts). Não são o mesmo carro.
+  Você disse pra seguir com o S-Class (interior leve, menos polígonos, só o interior do porta-malas fiel). Confirma e eu começo.
+- Método inteiro na skill `porta-malas-nativo` (Kombi, Uno e o resto da fila usam ela).
+
+## 🔓 Chaves: TODAS LIGADAS desde 19/09 (lançamento)
+Decisão tua: `HUDv2`, `CelularV2` e as outras 6 estão `true` em `ReplicatedStorage.ChavesValores`,
+pra todo mundo. Se algo quebrar ao vivo, o kill switch é virar o BoolValue pra `false`
+(vale pra quem entrar depois). O valor antigo está no atributo `QA_valor_antes_lancamento`.

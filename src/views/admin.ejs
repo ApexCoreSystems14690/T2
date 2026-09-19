@@ -87,6 +87,8 @@
       <span>Servidores online: <b id="st-servers">–</b></span>
       <span>Jogadores online: <b id="st-players">–</b></span>
       <span>Atualizado: <b id="st-upd">–</b></span>
+      <span style="flex:1"></span>
+      <span>Seu cargo: <span class="pill" id="eu-cargo">–</span></span>
     </div>
 
     <div class="tabs">
@@ -128,9 +130,9 @@
         <div class="fg" style="max-width:320px"><label>Buscar</label><input id="rg-busca" placeholder="nome ou Roblox ID"></div>
         <button class="btn sec" onclick="loadRegistro()">Atualizar</button>
         <span class="muted" id="rg-info" style="font-size:.75rem;flex:1"></span>
-        <button class="btn danger" onclick="wipeGeral()" title="Apaga TODO o registro do jogo (temporada/wipe)">💣 Wipe geral</button>
+        <button class="btn danger" data-poder="wipe" onclick="wipeGeral()" title="Reset brutal da temporada. Só o Dono.">💣 Wipe geral</button>
       </div>
-      <div class="row" style="gap:.5rem;flex-wrap:wrap;background:rgba(255,255,255,.03);padding:.5rem;border-radius:8px;align-items:flex-end">
+      <div class="row" data-poder="item_todos" style="gap:.5rem;flex-wrap:wrap;background:rgba(255,255,255,.03);padding:.5rem;border-radius:8px;align-items:flex-end">
         <span class="muted" style="font-size:.8rem;align-self:center"><b>Dar pra TODOS:</b></span>
         <div class="fg" style="max-width:170px"><label>Item</label><input id="dt-item" list="dt-itens" autocomplete="off" placeholder="item"><datalist id="dt-itens"></datalist></div>
         <div class="fg" style="max-width:70px"><label>Qtd</label><input id="dt-qtd" type="number" value="1" min="1" max="99"></div>
@@ -142,7 +144,7 @@
       </div>
       <div class="row" id="rg-lote-bar" style="display:none">
         <span class="muted" style="font-size:.82rem"><b id="rg-sel-n">0</b> selecionado(s)</span>
-        <button class="btn danger" onclick="apagarLote()">🗑️ Apagar selecionados</button>
+        <button class="btn danger" data-poder="registro" onclick="apagarLote()">🗑️ Apagar selecionados</button>
         <button class="btn sec" onclick="limparSel()">Limpar seleção</button>
       </div>
       <div style="overflow-x:auto">
@@ -214,7 +216,7 @@
         <div class="fg" style="max-width:260px"><label>Jogador</label><input id="log-q" placeholder="nome"></div>
         <button class="btn sec" onclick="loadLogs()">Filtrar</button>
         <span id="log-counts" class="muted" style="font-size:.75rem;flex:1"></span>
-        <button class="btn danger" onclick="resetLogs()">Resetar logs (tipo selecionado)</button>
+        <button class="btn danger" data-poder="logs" onclick="resetLogs()">Resetar logs (tipo selecionado)</button>
       </div>
       <div style="overflow-x:auto">
         <table>
@@ -311,6 +313,38 @@
     const fmtN = n => (Number(n) || 0).toLocaleString('pt-BR');
     const fmtT = t => { const d = new Date(t); return d.toLocaleDateString('pt-BR') + ' ' + d.toLocaleTimeString('pt-BR'); };
 
+    // ---------- CARGO DO ADMIN LOGADO (19/09) ----------
+    // O painel esconde o que este cargo não pode fazer. Isso é CONFORTO: quem
+    // barra de verdade é o servidor, que confere o poder em cada request.
+    let EU = { cargo: null, nivel: 0, poderes: {}, CARGOS: {}, ORDEM: [], ATRIBUIVEIS: [], PODERES: {}, PODER_DO_COMANDO: {}, matriz: [] };
+    const podeP = p => !!EU.poderes[p];
+    const podeCmd = tipo => { const p = EU.PODER_DO_COMANDO[tipo]; return p ? !!EU.poderes[p] : false; };
+    // botão só entra na linha se o cargo pode usar
+    const btnSe = (tipo, html) => podeCmd(tipo) ? html : '';
+
+    // Painéis e abas por poder. Aba sem nenhum poder some do topo.
+    const PODER_DA_ABA = { jogadores: null, registro: 'ver_registro', servidor: 'servidor', logs: 'ver_registro', cargos: 'corp', usuarios: 'admins', historico: 'admins' };
+
+    async function carregarEu() {
+      EU = await api('GET', '/eu');
+      const c = EU.CARGOS[EU.cargo] || {};
+      const cx = document.getElementById('eu-cargo');
+      if (cx) {
+        cx.textContent = c.nome || 'admin';
+        cx.style.background = (c.cor || '#666') + '22';
+        cx.style.color = c.cor || '#ccc';
+        cx.style.border = '1px solid ' + (c.cor || '#666') + '55';
+        cx.title = c.desc || '';
+      }
+      document.querySelectorAll('.tab').forEach(t => {
+        const p = PODER_DA_ABA[t.dataset.tab];
+        if (p && !podeP(p)) t.style.display = 'none';
+      });
+      document.querySelectorAll('[data-poder]').forEach(el => {
+        if (!podeP(el.dataset.poder)) el.style.display = 'none';
+      });
+    }
+
     document.querySelectorAll('.tab').forEach(tab => tab.addEventListener('click', () => {
       document.querySelectorAll('.tab').forEach(t => t.classList.remove('active'));
       document.querySelectorAll('.panel').forEach(p => p.classList.remove('active'));
@@ -350,21 +384,22 @@
           '<td>' + esc(p.emprego || '—') + '</td><td>' + esc(p.level || '–') + '</td>' +
           '<td class="muted" style="font-size:.72rem">' + esc(pos) + '</td>' +
           '<td><div class="acts">' +
-            '<button onclick="openCmd(\'dinheiro_set\',' + p.userId + ')">💰 Dinheiro</button>' +
-            '<button onclick="openCmd(\'item_add\',' + p.userId + ')">🎒 Item</button>' +
-            '<button onclick="openCmd(\'emprego\',' + p.userId + ')">💼 Emprego</button>' +
-            '<button onclick="openCmd(\'tp_local\',' + p.userId + ')">📍 TP</button>' +
-            '<button onclick="quick(\'curar\',' + p.userId + ')">❤️ Curar</button>' +
-            '<button onclick="openCmd(\'noclip\',' + p.userId + ')">🕊️ Noclip</button>' +
-            '<button onclick="openCmd(\'mensagem\',' + p.userId + ')">✉️ Msg</button>' +
+            btnSe('dinheiro_set', '<button onclick="openCmd(\'dinheiro_set\',' + p.userId + ')">💰 Dinheiro</button>') +
+            btnSe('item_add',      '<button onclick="openCmd(\'item_add\',' + p.userId + ')">🎒 Item</button>') +
+            btnSe('emprego',       '<button onclick="openCmd(\'emprego\',' + p.userId + ')">💼 Emprego</button>') +
+            btnSe('tp_local',      '<button onclick="openCmd(\'tp_local\',' + p.userId + ')">📍 TP</button>') +
+            btnSe('curar',         '<button onclick="quick(\'curar\',' + p.userId + ')">❤️ Curar</button>') +
+            btnSe('noclip',        '<button onclick="openCmd(\'noclip\',' + p.userId + ')">🕊️ Noclip</button>') +
+            btnSe('mensagem',      '<button onclick="openCmd(\'mensagem\',' + p.userId + ')">✉️ Msg</button>') +
             '<button onclick="openCmd(\'mais\',' + p.userId + ')">⚙️ Mais</button>' +
-            '<button class="d" onclick="openCmd(\'kick\',' + p.userId + ')">👢 Kick</button>' +
-            '<button class="d" onclick="openCmd(\'ban\',' + p.userId + ')">🔨 Ban</button>' +
+            btnSe('kick',          '<button class="d" onclick="openCmd(\'kick\',' + p.userId + ')">👢 Kick</button>') +
+            btnSe('ban',           '<button class="d" onclick="openCmd(\'ban\',' + p.userId + ')">🔨 Ban</button>') +
           '</div></td></tr>';
       }).join('');
     }
     setInterval(loadState, 5000);
-    loadState();
+    // /eu primeiro: sem o cargo em mãos a tabela de jogadores nasceria sem botão
+    carregarEu().catch(e => showAlert('Não consegui ler seu cargo: ' + e.message, 'error')).finally(loadState);
 
     // ---------- comandos ----------
     function cat(k, fallback) { return (STATE.catalog && Array.isArray(STATE.catalog[k]) && STATE.catalog[k].length) ? STATE.catalog[k] : fallback; }
@@ -493,21 +528,57 @@
       try { const r = await api('DELETE', '/logs?tipo=' + encodeURIComponent(tipo)); showAlert(r.apagados + ' registros apagados', 'success'); loadLogs(); } catch (e) { showAlert(e.message, 'error'); }
     }
 
-    // ---------- usuários ----------
+    // ---------- usuários: CARGO DE ADMIN (19/09) ----------
+    // O admin deixou de ser liga/desliga. DONO é quem foi setado direto no banco
+    // (is_admin com admin_cargo NULL) — o painel não concede nem tira DONO.
     let USERS = [];
     async function loadUsers() { try { USERS = (await api('GET', '/users')).users; renderUsers(); } catch (e) { showAlert(e.message, 'error'); } }
+
+    function selo(u) {
+      if (!u.cargo) return '<span class="pill">usuário</span>';
+      return '<span class="pill" style="background:' + esc(u.cargo_cor) + '22;color:' + esc(u.cargo_cor) + ';border:1px solid ' + esc(u.cargo_cor) + '55">' + esc(u.cargo_nome) + '</span>';
+    }
+
     function renderUsers() {
       const q = ($('us-busca').value || '').toLowerCase();
       const list = USERS.filter(u => !q || [u.discord_username, u.roblox_username, u.roblox_id, u.id].some(v => v != null && String(v).toLowerCase().includes(q)));
-      $('us-body').innerHTML = list.map(u => '<tr><td>' + (u.is_placeholder ? '<span class="muted">sem Discord</span>' : esc(u.discord_username)) + ' <span class="muted" style="font-size:.7rem">#' + u.id + '</span></td>' +
-        '<td>' + (u.roblox_id ? esc(u.roblox_username || '') + ' <span class="muted" style="font-size:.7rem">' + u.roblox_id + '</span>' : '<span class="muted">não vinculado</span>') + '</td>' +
-        '<td>' + (u.is_admin ? '<span class="pill err">ADMIN</span>' : '<span class="pill">usuário</span>') + '</td>' +
-        '<td>' + (u.is_placeholder ? '' : (u.is_admin ? '<button class="btn sm sec" onclick="setAdmin(' + u.id + ',false)">Retirar admin</button>' : '<button class="btn sm danger" onclick="setAdmin(' + u.id + ',true)">Tornar admin</button>')) + '</td></tr>').join('');
+      $('us-body').innerHTML = list.map(u => {
+        let acao;
+        if (u.cargo === 'dono') {
+          acao = '<span class="muted" style="font-size:.78rem">setado no banco · só sai por SQL</span>';
+        } else if (u.is_placeholder) {
+          acao = '<span class="muted" style="font-size:.78rem">precisa entrar com Discord</span>';
+        } else if (!u.posso_mexer) {
+          acao = '<span class="muted" style="font-size:.78rem">fora do seu alcance</span>';
+        } else {
+          const opts = ['<option value=""' + (u.cargo ? '' : ' selected') + '>— sem cargo —</option>']
+            .concat((EU.ATRIBUIVEIS || []).map(c => {
+              const podeDar = EU.nivel > (EU.CARGOS[c] || {}).nivel;
+              return '<option value="' + c + '"' + (u.cargo === c ? ' selected' : '') + (podeDar ? '' : ' disabled') + '>' + esc((EU.CARGOS[c] || {}).nome || c) + '</option>';
+            }));
+          acao = '<select class="inp sm" onchange="setCargo(' + u.id + ', this.value, this)">' + opts.join('') + '</select>';
+        }
+        return '<tr><td>' + (u.is_placeholder ? '<span class="muted">sem Discord</span>' : esc(u.discord_username)) + ' <span class="muted" style="font-size:.7rem">#' + u.id + '</span></td>' +
+          '<td>' + (u.roblox_id ? esc(u.roblox_username || '') + ' <span class="muted" style="font-size:.7rem">' + u.roblox_id + '</span>' : '<span class="muted">não vinculado</span>') + '</td>' +
+          '<td>' + selo(u) + '</td>' +
+          '<td>' + acao + '</td></tr>';
+      }).join('');
     }
-    async function setAdmin(id, value) {
-      if (!confirm((value ? 'CONCEDER' : 'RETIRAR') + ' admin? Admin tem controle total do servidor.')) return;
-      try { await api('POST', '/users/' + id + '/admin', { value }); showAlert('Atualizado', 'success'); loadUsers(); } catch (e) { showAlert(e.message, 'error'); }
+
+    async function setCargo(id, cargo, el) {
+      const nome = cargo ? ((EU.CARGOS[cargo] || {}).nome || cargo) : null;
+      const msg = nome
+        ? ('Dar o cargo ' + nome + ' a este usuário?\n\n' + ((EU.CARGOS[cargo] || {}).desc || ''))
+        : 'Tirar o admin deste usuário?';
+      if (!confirm(msg)) { loadUsers(); return; }
+      if (el) el.disabled = true;
+      try { await api('POST', '/users/' + id + '/cargo', { cargo: cargo || null }); showAlert(nome ? ('Agora é ' + nome) : 'Admin retirado', 'success'); }
+      catch (e) { showAlert(e.message, 'error'); }
+      loadUsers();
     }
+
+    // legado: se alguma tela velha ainda chamar
+    async function setAdmin(id, value) { return setCargo(id, value ? 'moderador' : null, null); }
 
     // ---------- cargos ----------
     let CORPS = { corps: [], ranks: [] }, CG_SEL = null;
@@ -621,20 +692,44 @@
     async function apagarUm(rid) {
       const p = (REG.players || []).find(x => Number(x.roblox_id) === Number(rid));
       if (!confirm('Apagar o registro de ' + ((p && p.nome) || rid) + '?')) return;
-      try { const r = await api('POST', '/registro/apagar', { roblox_id: Number(rid) }); showAlert(r.apagados + ' registro(s) apagado(s)', 'success'); REG_SEL.delete(Number(rid)); loadRegistro(); } catch (e) { showAlert(e.message, 'error'); }
+      try { const r = await api('POST', '/registro/apagar', { roblox_id: Number(rid) }); showAlert(msgApagar(r), r.online ? 'error' : 'success'); REG_SEL.delete(Number(rid)); loadRegistro(); } catch (e) { showAlert(e.message, 'error'); }
     }
     async function apagarLote() {
       const ids = Array.from(REG_SEL);
       if (!ids.length) return;
       if (!confirm('Apagar ' + ids.length + ' registro(s) selecionado(s)? Não tem volta.')) return;
-      try { const r = await api('POST', '/registro/apagar', { roblox_ids: ids }); showAlert(r.apagados + ' registro(s) apagado(s)', 'success'); REG_SEL.clear(); loadRegistro(); } catch (e) { showAlert(e.message, 'error'); }
+      try { const r = await api('POST', '/registro/apagar', { roblox_ids: ids }); showAlert(msgApagar(r), r.online ? 'error' : 'success'); REG_SEL.clear(); loadRegistro(); } catch (e) { showAlert(e.message, 'error'); }
     }
+    // Quem está DENTRO do servidor agora volta pro registro no próximo heartbeat
+    // (alguns segundos). Isso é correto — ele está lá — mas tem que ser dito, senão
+    // parece que o apagar não funcionou.
+    function msgApagar(r) {
+      let m = r.apagados + ' registro(s) apagado(s)';
+      if (r.logs) m += ' · ' + r.logs + ' log(s)';
+      if (r.online) m += ' — ATENÇÃO: ' + r.online + ' está(ão) online e volta(m) pro registro em segundos. Kicke antes.';
+      return m;
+    }
+
     async function wipeGeral() {
-      const t = prompt('WIPE GERAL — apaga TODO o registro de jogadores, a fila de itens e os logs do jogo. NÃO tem volta.\n\n(Isso NÃO reseta o dinheiro/inventário salvo no jogo — só o registro do painel.)\n\nDigite WIPE pra confirmar:');
+      const celular   = confirm('WIPE GERAL — reset da temporada.\n\nApagar TAMBÉM o celular?\n(aparelhos, números, contatos, mensagens, histórico de posse e deepweb)\n\nOK = apaga · Cancelar = mantém');
+      const auditoria = confirm('Apagar TAMBÉM o histórico de ações de admin (auditoria)?\n\nOK = apaga · Cancelar = mantém');
+      const saves     = confirm('Resetar TAMBÉM o save dos jogadores (dinheiro, inventário)?\n\nQuem estiver online agora é resetado na hora.\nQuem está offline só cai quando o jogo passar a ler o marcador de wipe.\n\nOK = reseta · Cancelar = mantém');
+      const t = prompt(
+        'ÚLTIMA CONFIRMAÇÃO — o wipe apaga:\n' +
+        '  • registro de jogadores, fila de itens, logs e comandos\n' +
+        (celular   ? '  • celular e deepweb\n' : '') +
+        (auditoria ? '  • auditoria de admin\n' : '') +
+        (saves     ? '  • save de quem está online + marca a temporada nova\n' : '') +
+        '\nNÃO apaga: usuários do site, admins, corporações, cargos e membros.\nNão tem volta.\n\nDigite WIPE pra confirmar:');
       if (t !== 'WIPE') { if (t !== null) showAlert('Wipe cancelado (precisa digitar WIPE)', 'error'); return; }
       try {
-        const r = await api('POST', '/registro/wipe', { confirm: 'WIPE' });
-        showAlert('Wipe feito: ' + r.jogadores + ' jogadores, ' + r.fila + ' fila, ' + r.logs + ' logs apagados', 'success');
+        const r = await api('POST', '/registro/wipe', { confirm: 'WIPE', celular, auditoria, saves });
+        const partes = [];
+        const add = (rot, v) => { if (v != null) partes.push(v + ' ' + rot); };
+        add('jogadores', r.jogadores); add('fila', r.fila); add('logs', r.logs); add('comandos', r.comandos);
+        add('aparelhos', r.aparelhos); add('mensagens', r.mensagens); add('posts', r.deepweb);
+        if (r.resets_online) partes.push(r.resets_online + ' save(s) resetado(s) online');
+        showAlert('Wipe feito — ' + partes.join(', '), 'success');
         REG_SEL.clear(); loadRegistro();
       } catch (e) { showAlert(e.message, 'error'); }
     }

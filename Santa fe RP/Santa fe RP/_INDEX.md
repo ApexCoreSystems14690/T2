@@ -65,12 +65,12 @@ Se a ideia falhar na técnica OU não fizer sentido subjetivamente no universo d
 - Caído e morte: `01_Especificacoes/Caido_Morte.md`
 - Colete (polícia/crime): `01_Especificacoes/Colete.md`
 - Limites de mensagens: `01_Especificacoes/Limites.md`
-- Fases (ordem das entregas): `01_Especificacoes/Fases.md`
+- **Fases (ordem + ESTADO ATUAL + próximo passo): `01_Especificacoes/Fases.md`**
 - **Lobby / lista de servidores (virar host): `01_Especificacoes/Lobby_Servidores.md`**
 - Ficha da skill de UI: `01_Especificacoes/Skill_UI_Roblox.md`
 - **Iluminação (exposição, bloom, atmosfera, teto de brilho, critério do Neon): `01_Especificacoes/Iluminacao.md`**
 - **Ruas e endereços (nomes das ruas, bairros, GetBairro): `01_Especificacoes/Ruas_Enderecos.md`**
-- Minimapa (ViewportFrame sobre clone assado da cidade + tiles; NÃO usa EditableImage): `01_Especificacoes/Minimapa.md`
+- Minimapa — spec da cartografia ABANDONADA (histórico): `01_Especificacoes/Minimapa.md`; o que vale é `02_Sistemas_Studio/Minimapa_Holografico.md`
 - Assets que o Julio entrega: `01_Especificacoes/Assets_Julio.md`
 
 ### 🛠️ Sistemas (Studio ↔ Obsidian)
@@ -95,11 +95,16 @@ Se a ideia falhar na técnica OU não fizer sentido subjetivamente no universo d
 - **Minimapa HOLOGRÁFICO (F3): `StarterPlayer...Client.Minimapa` (+ filho `N`) -> `02_Sistemas_Studio/Minimapa_Holografico.md`** — lê o mundo em 3D em volta do jogador; NÃO usa o MapaModelo
 - Histórico da cartografia abandonada: `02_Sistemas_Studio/Minimapa.md` e `02_Sistemas_Studio/MapaDesenho.md`
 - **Mapa do celular: `StarterPlayer...Client.GuiHandler.Celular.Mapa` — hoje é só a tela "GPS FORA DO AR" (decisão de 18/09) -> `02_Sistemas_Studio/Minimapa_Holografico.md`**
-- Assador do mapa: `ServerStorage.AssarMapa` -> gera `ReplicatedStorage.Shared.MapaDados`
+- Assador do mapa (cartografia abandonada, só histórico): `ServerStorage.AssarMapa` + `MapaGrade` -> `ReplicatedStorage.Shared.MapaDados`. O `ReplicatedStorage.MapaModelo` (42k peças) deve ir pra `ServerStorage.Backups` — ver `00_Indice/Entrega_Julio.md` item 1
 - **Desenho do mapa (traçado, NÃO fotografia): `ServerStorage.MapaDesenho` (+ cache `ServerStorage.GRADE_CACHE`) -> `02_Sistemas_Studio/MapaDesenho.md`**
 - Entrega pra IA de imagem: `D:\T2\Santa fe RP\04_Mapa\santafe_malha.png` (e `_sem_nomes.png`)
 - **QA Veredito (teste guiado, SEM print de tela): `ReplicatedStorage.QA_Roteiro` + `StarterPlayerScripts.QA_Veredito` -> `02_Sistemas_Studio/QA_Veredito.md`**
 - Celular (GUI): `StarterGui.Main.Celular` -> `02_Sistemas_Studio/Celular_GUI.md`
+- Lobby / MainService (com o `Sertex` que não existe; não carrega, não apagar): `ServerScriptService.Server.Services.MainService` -> `01_Especificacoes/Lobby_Servidores.md`
+- Prisão em minutos: `ServerScriptService.Server.Services.Prisao` (branch Prender do RemotesHandler + `Main.MotivosHandler.Tempo`)
+- Porta-malas da frota: `ServerScriptService.Server.Services.PortaMalasService` + `TampaMotorService` (desligado) · `ServerStorage.PortaMalasFrota` (Ponte, Modelos.FuscaNativo, AssetsFuscaNativo) · `Client.PortaMalasClient` -> skill `porta-malas-nativo` e `qa-veiculo`
+- Caído v2 PARADO (não aplicar sem o Julio): `ServerStorage.Backups.Caido2_pronto_nao_aplicado` -> `01_Especificacoes/Caido_Morte.md`
+- Evento PvP (desligado; `ligar()/desligar()` por loadstring): `ServerStorage.EVENTO_PVP`
 
 ### 🧰 Skills (ferramentas, fora do vault)
 - **UI no Roblox (medir → clonar → núcleo puro → FOTO): skill `ui-roblox`** — ler antes de criar/alterar QUALQUER tela, HUD, billboard ou app do celular. Ficha: `01_Especificacoes/Skill_UI_Roblox.md`

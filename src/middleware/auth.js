@@ -96,10 +96,29 @@ async function requireCorpOwner(req, res, next) {
   }
 }
 
-// Verifica se é admin global
+// Verifica se é admin global (qualquer cargo). O que ele PODE fazer dentro do
+// painel é decidido por requirePoder, cargo a cargo.
 function requireAdmin(req, res, next) {
   if (req.user && req.user.is_admin) return next();
   res.status(403).json({ error: 'Acesso negado' });
 }
 
-module.exports = { requireAuth, requireApiKey, requireCorpOwner, requireAdmin };
+// [19/09] Portão por PODER. O front esconde botão; quem barra é isto aqui, em
+// cada request. Sem este middleware, um admin de cargo baixo mandando POST na
+// mão continuaria fazendo tudo.
+const perm = require('../permissoes');
+function requirePoder(poder) {
+  return function (req, res, next) {
+    if (!req.user || !req.user.is_admin) return res.status(403).json({ error: 'Acesso negado' });
+    if (perm.pode(req.user, poder)) return next();
+    const p = perm.PODERES[poder];
+    const meu = perm.CARGOS[perm.cargoDe(req.user)];
+    return res.status(403).json({
+      error: 'Seu cargo não permite: ' + ((p && p.rotulo) || poder),
+      seu_cargo: meu ? meu.nome : null,
+      precisa: p ? (perm.CARGOS[p.min] || {}).nome : null,
+    });
+  };
+}
+
+module.exports = { requireAuth, requireApiKey, requireCorpOwner, requireAdmin, requirePoder };

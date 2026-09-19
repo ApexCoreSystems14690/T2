@@ -1,5 +1,6 @@
 # Log (resumido)
 - 16/09: F1 fechado. F2 telas (pilha) + identidade Aparelho uid/número + drop/confisco/wipe + Rede v2 + UI Ajustes. Central v1 (aparelhos no site).
+- 16/09 (Fusca): **FUSCA NATIVO** — 1º carro refeito no Blender em "car separated boot": tampa cortada pelos vincos côncavos da própria malha, flange, cuba, capô sólido, 11 meshes publicadas (`ServerStorage.PortaMalasFrota.AssetsFuscaNativo`) e montadas no contrato do `PortaMalasService`. Porta-malas é o DIANTEIRO (o Julio corrigiu com desenho); tampa do motor modelada e **desligada** (`TampaMotorService` existe, sem peça de interação). Provado que o "A-chassis" é montado em runtime pelo `Criar` — não precisa refazer. Método na skill `porta-malas-nativo`. Trabalho do CAÍDO (5 bugs + regras novas) foi só pro plano (seção 12 do Funcional, F8 do Execução) e **revertido do jogo** a pedido dele.
 - 17/09: RoZap por foto+nome; home reorganizada (grid+nome); Banco (transferir sem taxa); Chip+Deepweb (stand-in + mural); correções (celular cortado→CEL_ABERTO 0.94; grid some ao abrir app; Chaves IsEdit; MensagemZAP lazy). Site: endpoints celular/aparelhos/deepweb committed. Deploy feito pelo Julio.
 - 17/09 (b): App Notas — Tela (lista de cards + editor c/ auto-save 2s), ícone home (9º app), módulo `Celular.Notas`. Data.Notas + ordem SalvarNotas + ação notas_salvar (30 notas/60/1000). Banco: abas Sacar/Depositar (taxa 2% via Regras.Taxa). Índice: protocolo Sense Check (Lead Dev & Game Designer) na Seção A.
 - Backups: ServerStorage.Backups.TOTAL_celular_* + *_antes_*.
@@ -149,3 +150,32 @@ mais 21 pedaços de árvore. Regra: é tralha se for baixa **e** curta **e** nã
 
 Os buracos eram o contrário: o chão é fino e o filtro de volume o deixava de fora. Agora peça entra
 por **pegada** também — 269 → 343 caixas no mesmo ponto.
+
+---
+
+## 19/09 — "a arma não dá dano" + revisão geral do vault
+
+**Bug:** nenhuma arma tirava vida. Medido na instância REAL (Script injetado, não `require` do assistente): o tiro
+acerta, `Motor._acertou` entra e trava em `CaidoService.ContextoTiro` — antes do `TakeDamage`. Causa: os serviços
+usam "instância única" com um `BindableFunction` **QA**; ele foi **salvo no place** (`CaidoService.QA`, `FerimentoService.QA`),
+então o primeiro require já caía no ramo PROXY sem ninguém ligar o `OnInvoke` → `Invoke` pendurado pra sempre.
+Conserto: apagar os dois `QA` no Edit. Provado: `instanciaDeProducao = true`, boneco 100 → 52.8 → 5.4 (AK47).
+**Regra:** `QA` dentro de ModuleScript no Explorer = salvo por engano, apagar antes de publicar.
+Armadilha: `require` desses serviços pelo assistente devolve o proxy e trava o `execute_luau` por 60 s.
+
+**Revisão (Julio pediu: "revise a situação atual e se eu fiz tudo de acordo com o plano").** Medido no DEVTS v1122:
+Chaves (8, todas off), Regras, Motion, Aparelhos, Site, Prisao, Hud+N, Minimapa (holo), QA_Veredito, Ruas, 10 apps
+do celular, FuscaNativo, 283 backups — tudo lá; GuiHandler/RemotesHandler/DataHandler/InteractionHandler/Hud/Minimapa
+compilam. **Armadilha:** a 1ª medição caiu em OUTRO Studio (`Place4`, id 110642176235494, v463) sem nada disso —
+confirmar `list_roblox_studios` (nome DEVTS) antes de concluir "não existe".
+Veredito: o ritual foi seguido (backups, chaves, testes, memória). Desvios anotados em [[Fases]]: F4 antes do F3
+(recuperado), spike da foto nunca rodou, minimapa virou holograma (decisão dele — Funcional §9 ainda diz costurado),
+`Regras` reduzido a Taxa (remontado). Sincronizados: [[Fases]] (estado 19/09 + próximo passo), [[Entrega_Julio]]
+(itens da cartografia morta saíram; entrou holograma, MapaModelo, checklists, Fusca/AMG), [[Mapa_Celular]] (Mapa = GPS
+fora do ar), [[Lista_Testes]], `_INDEX`. **Pendente que é dele:** arquivar `ReplicatedStorage.MapaModelo` (42.427 peças
+replicando à toa; o assistente não tem permissão pra mover) — uma linha, em [[Entrega_Julio]] item 1.
+
+**19/09 (lançamento às 23h) — TODAS AS CHAVES LIGADAS PRA TODO MUNDO**, decisão do Julio ("isso tá limitando a gente de testar 90% das mecânicas; vamos lançar com tudo ativo"). Medido antes: só `HUDv2` (Hud, Minimapa, QA_Veredito) e `CelularV2` (DataHandler ×2, RemotesHandler ×3, CelularService, RoZap, Banco) gateiam código; `Minigames`, `Pericia`, `Central` (só Overflow), `UberBots`, `EletricistaV2`, `ColeteCrime` não ligam nada ainda. Os 8 BoolValues de `ReplicatedStorage.ChavesValores` viraram `true`; o valor anterior ficou no atributo `QA_valor_antes_lancamento`. **Kill switch:** virar o BoolValue pra `false` desliga pra quem entrar depois (Hud/Minimapa leem no `iniciar`; o servidor lê a cada chamada). `Chaves.TESTADORES` continua existindo, mas agora é irrelevante.
+
+**19/09 (tarde) — HOLOGRAMA DE TODA ALTURA + rodada de Play pré-lançamento.** Julio: *"ele meio que só identifica o que está na minha altura, tinha que fazer o holográfico praticamente de toda altura"*. Causa: `Client.Minimapa.pintar` virava vidro (0,74–0,96) tudo acima de `ALTO_DESDE = 10` studs — prédio sumia da cintura pra cima. Agora: **tudo sólido em qualquer altura** (mais alto = um pouco mais claro, `COR_ALTO_CLARO`); só o que está **em cima da sua cabeça** (pegada da peça contém você e o fundo dela está acima de você + 2,5) vira vidro (`VIDRO_TETO` 0,82) — é o que mantém o "entrei no prédio, vejo dentro"; o que está muito acima (>18) ganha vidro leve até 0,5 (`VIDRO_ALTO`) pra não tapar a rua atrás na câmera de 55°. Medido em Play: 255 caixas, Y de 5 a 137 (antes ficava só na faixa do jogador), foto conferida. Backup `Minimapa_antes_altura`.
+Na mesma rodada de Play (chaves ligadas, sem testador): HUD nova subiu, `Main` com 52 filhos, feed com 5, sem erro de Chaves/Hud/Minimapa/RoZap no output. **Achados:** (1) 7 rodapés escritos "CAMPO BELO RP" (tela de gênero, Empregos, Caixa, Móveis, Tempo da prisão, reserva) → trocados pra "SANTA FÉ" (`QA_texto_orig`); (2) o output do Studio lista **dezenas de animações e sons "sem permissão de acesso"** (ids 10106…/1081…/13251270466/10736583708 etc.) — no Studio isso é o dono do asset não ter compartilhado com a experiência; se em produção for igual, pose de arma e sons somem. Item pro Julio conferir ANTES das 23h; (3) erro velho `CriarHiluxBope:85 Explosao is not a valid member` (não é novo, não quebra nada).

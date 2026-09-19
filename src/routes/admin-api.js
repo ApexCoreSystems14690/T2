@@ -1,7 +1,10 @@
 // API do Painel Admin. TUDO aqui exige login + is_admin (checado no servidor, em cada request).
+// [19/09] Cada rota exige, ALÉM disso, o PODER correspondente ao cargo do admin
+// (ver src/permissoes.js). O painel esconde o botão; quem barra é o servidor.
 const router = require('express').Router();
 const pool = require('../db/pool');
-const { requireAuth, requireAdmin } = require('../middleware/auth');
+const { requireAuth, requireAdmin, requirePoder } = require('../middleware/auth');
+const perm = require('../permissoes');
 
 router.use(requireAuth);
 router.use(requireAdmin);
@@ -80,6 +83,30 @@ router.get('/state', async (req, res) => {
 });
 
 // ------------------------------------------------------------
+// Quem sou eu: cargo, poderes e a escada inteira. O painel usa isto pra
+// esconder o que este admin nao pode fazer. (Esconder e conforto; quem barra
+// de verdade e o requirePoder de cada rota.)
+// ------------------------------------------------------------
+router.get('/eu', (req, res) => {
+  const cargo = perm.cargoDe(req.user);
+  res.json({
+    id: req.user.id,
+    nome: req.user.discord_username || req.user.roblox_username || ('user#' + req.user.id),
+    cargo,
+    cargo_nome: (perm.CARGOS[cargo] || {}).nome || null,
+    cargo_cor: (perm.CARGOS[cargo] || {}).cor || null,
+    nivel: perm.nivelDoCargo(cargo),
+    poderes: perm.poderesDe(req.user),
+    CARGOS: perm.CARGOS,
+    ORDEM: perm.ORDEM,
+    ATRIBUIVEIS: perm.CARGOS_ATRIBUIVEIS,
+    PODERES: perm.PODERES,
+    PODER_DO_COMANDO: perm.PODER_DO_COMANDO,
+    matriz: perm.matriz(),
+  });
+});
+
+// ------------------------------------------------------------
 // Enviar comando pro jogo
 // ------------------------------------------------------------
 router.post('/command', async (req, res) => {
@@ -87,6 +114,21 @@ router.post('/command', async (req, res) => {
     const { tipo, target_roblox_id, target_name, payload } = req.body || {};
     const spec = COMANDOS[tipo];
     if (!spec) return res.status(400).json({ error: 'Comando desconhecido' });
+
+    // [19/09] PORTÃO POR CARGO. Comando sem poder mapeado é RECUSADO: esquecer
+    // de mapear um comando novo não pode virar "liberado pra qualquer cargo".
+    const poder = perm.PODER_DO_COMANDO[tipo];
+    if (!poder) return res.status(403).json({ error: 'Comando sem permissão definida: ' + tipo });
+    if (!perm.pode(req.user, poder)) {
+      const p = perm.PODERES[poder] || {};
+      await audit(req, 'negado:' + tipo, { poder, cargo: perm.cargoDe(req.user) });
+      return res.status(403).json({
+        error: 'Seu cargo não permite: ' + (p.rotulo || poder),
+        seu_cargo: (perm.CARGOS[perm.cargoDe(req.user)] || {}).nome || null,
+        precisa: (perm.CARGOS[p.min] || {}).nome || null,
+      });
+    }
+
     const dados = spec.valida(payload || {});
     for (const k of Object.keys(dados)) {
       if (dados[k] === null || dados[k] === undefined) return res.status(400).json({ error: 'Parâmetro inválido: ' + k });
@@ -154,7 +196,7 @@ router.post('/command', async (req, res) => {
 });
 
 // Histórico de comandos (com resultado)
-router.get('/commands', async (req, res) => {
+router.get('/commands', requirePoder('ver_registro'), async (req, res) => {
   try {
     const r = await pool.query(
       `SELECT c.*, u.discord_username AS admin FROM game_commands c LEFT JOIN users u ON u.id = c.created_by
@@ -166,7 +208,7 @@ router.get('/commands', async (req, res) => {
 // ------------------------------------------------------------
 // Logs do jogo
 // ------------------------------------------------------------
-router.get('/logs', async (req, res) => {
+router.get('/logs', requirePoder('ver_registro'), async (req, res) => {
   try {
     const tipo = str(req.query.tipo, 32);
     const q = str(req.query.q, 64);
@@ -187,7 +229,7 @@ router.get('/logs', async (req, res) => {
   }
 });
 
-router.delete('/logs', async (req, res) => {
+router.delete('/logs', requirePoder('logs'), async (req, res) => {
   try {
     const tipo = str(req.query.tipo, 32);
     let r;
@@ -201,7 +243,7 @@ router.delete('/logs', async (req, res) => {
 // ------------------------------------------------------------
 // Auditoria das ações do painel
 // ------------------------------------------------------------
-router.get('/audit', async (req, res) => {
+router.get('/audit', requirePoder('admins'), async (req, res) => {
   try {
     const r = await pool.query('SELECT * FROM admin_audit ORDER BY id DESC LIMIT 200');
     res.json({ audit: r.rows });
@@ -211,37 +253,84 @@ router.get('/audit', async (req, res) => {
 // ------------------------------------------------------------
 // Usuários do site: conceder/retirar admin
 // ------------------------------------------------------------
-router.get('/users', async (req, res) => {
+router.get('/users', requirePoder('admins'), async (req, res) => {
   try {
     const r = await pool.query(
-      `SELECT id, discord_username, discord_id, discord_avatar, roblox_id, roblox_username, is_admin, created_at,
+      `SELECT id, discord_username, discord_id, discord_avatar, roblox_id, roblox_username, is_admin, admin_cargo, created_at,
               (discord_id LIKE 'roblox_%') AS is_placeholder
        FROM users ORDER BY is_admin DESC, LOWER(COALESCE(discord_username, roblox_username, '')) ASC`);
-    res.json({ users: r.rows });
+    // cargo resolvido no servidor: is_admin com admin_cargo vazio = DONO (setado direto no banco)
+    res.json({ users: r.rows.map(u => {
+      const cargo = perm.cargoDe(u);
+      return Object.assign({}, u, {
+        cargo,
+        cargo_nome: (perm.CARGOS[cargo] || {}).nome || null,
+        cargo_cor: (perm.CARGOS[cargo] || {}).cor || null,
+        nivel: perm.nivelDoCargo(cargo),
+        posso_mexer: perm.podeMexerEm(req.user, u),
+      });
+    }) });
   } catch (err) { res.status(500).json({ error: 'Erro interno' }); }
 });
 
-router.post('/users/:id/admin', async (req, res) => {
+// [19/09] CARGO DE ADMIN. Substitui o antigo liga/desliga.
+//   cargo = null            -> tira o admin
+//   cargo = 'moderador'...  -> concede/altera
+//   'dono' NUNCA sai daqui: dono e quem tem is_admin com admin_cargo NULL no
+//   banco, ou seja, quem foi setado por SQL. Pra criar um dono:
+//       UPDATE users SET is_admin = true, admin_cargo = NULL WHERE id = <id>;
+// Regras: nao mexe em si mesmo, nao mexe em quem tem cargo igual ou maior, e
+// nao concede cargo igual ou acima do proprio.
+async function definirCargo(req, res, id, cargo) {
   try {
-    const id = parseInt(req.params.id);
-    const value = !!(req.body && req.body.value);
     if (!id) return res.status(400).json({ error: 'id inválido' });
-    if (id === req.user.id && !value) return res.status(400).json({ error: 'Você não pode remover seu próprio admin' });
-    const alvo = await pool.query('SELECT * FROM users WHERE id = $1', [id]);
-    if (alvo.rows.length === 0) return res.status(404).json({ error: 'Usuário não encontrado' });
-    if (value && String(alvo.rows[0].discord_id).startsWith('roblox_')) {
+    if (cargo === '' || cargo === undefined) cargo = null;
+
+    const q = await pool.query('SELECT * FROM users WHERE id = $1', [id]);
+    if (q.rows.length === 0) return res.status(404).json({ error: 'Usuário não encontrado' });
+    const alvo = q.rows[0];
+
+    if (id === req.user.id) return res.status(400).json({ error: 'Você não pode mudar o seu próprio cargo' });
+    if (!perm.podeMexerEm(req.user, alvo)) {
+      const c = perm.CARGOS[perm.cargoDe(alvo)];
+      return res.status(403).json({ error: c ? ('Você não pode mexer em um ' + c.nome) : 'Você não pode mexer nesse usuário' });
+    }
+
+    if (cargo === null) {
+      await pool.query('UPDATE users SET is_admin = false, admin_cargo = NULL, updated_at = NOW() WHERE id = $1', [id]);
+      await audit(req, 'admin:retirar', { user_id: id, nome: alvo.discord_username || alvo.roblox_username });
+      return res.json({ ok: true, cargo: null });
+    }
+
+    if (!perm.podeDarCargo(req.user, cargo)) {
+      return res.status(403).json({ error: 'Você não pode conceder o cargo ' + ((perm.CARGOS[cargo] || {}).nome || cargo) });
+    }
+    if (String(alvo.discord_id).startsWith('roblox_')) {
       return res.status(400).json({ error: 'Esse usuário ainda não entrou com Discord; não pode ser admin' });
     }
-    await pool.query('UPDATE users SET is_admin = $1, updated_at = NOW() WHERE id = $2', [value, id]);
-    await audit(req, value ? 'admin:conceder' : 'admin:retirar', { user_id: id, nome: alvo.rows[0].discord_username || alvo.rows[0].roblox_username });
-    res.json({ ok: true });
-  } catch (err) { res.status(500).json({ error: 'Erro interno' }); }
-});
+
+    await pool.query('UPDATE users SET is_admin = true, admin_cargo = $1, updated_at = NOW() WHERE id = $2', [cargo, id]);
+    await audit(req, 'admin:cargo', { user_id: id, nome: alvo.discord_username || alvo.roblox_username, de: perm.cargoDe(alvo), para: cargo });
+    res.json({ ok: true, cargo });
+  } catch (err) {
+    console.error('users/cargo:', err.message);
+    res.status(500).json({ error: 'Erro interno' });
+  }
+}
+
+router.post('/users/:id/cargo', requirePoder('admins'), (req, res) =>
+  definirCargo(req, res, parseInt(req.params.id), req.body && req.body.cargo));
+
+// Compatibilidade: o toggle antigo (value true/false) continua respondendo, pra
+// quem estiver com a pagina velha aberta. Conceder por aqui da o cargo mais
+// baixo — nunca dono.
+router.post('/users/:id/admin', requirePoder('admins'), (req, res) =>
+  definirCargo(req, res, parseInt(req.params.id), (req.body && req.body.value) ? 'moderador' : null));
 
 // ------------------------------------------------------------
 // Cargo em corporação (atalho do painel): user_id + corp_id + rank_id
 // ------------------------------------------------------------
-router.get('/corps', async (req, res) => {
+router.get('/corps', requirePoder('corp'), async (req, res) => {
   try {
     const corps = await pool.query('SELECT id, name, slug FROM corporations WHERE is_active = true ORDER BY name');
     const ranks = await pool.query('SELECT id, corporation_id, name, level FROM ranks ORDER BY corporation_id, level DESC');
@@ -249,7 +338,7 @@ router.get('/corps', async (req, res) => {
   } catch (err) { res.status(500).json({ error: 'Erro interno' }); }
 });
 
-router.post('/cargo', async (req, res) => {
+router.post('/cargo', requirePoder('corp'), async (req, res) => {
   try {
     const user_id = parseInt(req.body.user_id), corp_id = parseInt(req.body.corp_id);
     const rank_id = req.body.rank_id ? parseInt(req.body.rank_id) : null;
@@ -284,7 +373,7 @@ async function idsOnline() {
   return set;
 }
 
-router.get('/registro', async (req, res) => {
+router.get('/registro', requirePoder('ver_registro'), async (req, res) => {
   try {
     const q = str(req.query.q, 64);
     const limit = Math.min(Math.max(parseInt(req.query.limit) || 500, 1), 2000);
@@ -313,7 +402,7 @@ router.get('/registro', async (req, res) => {
 });
 
 // Dar item pra um jogador do registro. Online = na hora; offline = entra na fila.
-router.post('/registro/item', async (req, res) => {
+router.post('/registro/item', requirePoder('item'), async (req, res) => {
   try {
     const roblox_id = num(req.body.roblox_id, 1);
     const item = str(req.body.item, 64);
@@ -339,38 +428,150 @@ router.post('/registro/item', async (req, res) => {
 });
 
 // Apagar registro(s): aceita um só (roblox_id) ou vários (roblox_ids: [...])
-router.post('/registro/apagar', async (req, res) => {
+//
+// [CONSERTO 19/09 — "apagar jogadores não funciona"]
+// Causa medida, e eram DUAS, as duas ressuscitando o jogador:
+//   1. O BACKFILL DO BOOT (src/index.js) repovoa game_players a partir de
+//      game_logs tipo 'entrou'. Apagar só o game_players não adiantava nada:
+//      no próximo deploy/restart do Railway todo mundo voltava, com visitas e
+//      datas. Agora o apagar leva junto os logs do jogador.
+//   2. O HEARTBEAT (routes/game-api.js) faz INSERT ... ON CONFLICT com quem
+//      está online. Quem está dentro do servidor AGORA volta em segundos, e
+//      isso é correto — ele está lá. Por isso a resposta devolve quantos dos
+//      apagados estavam online, pro painel avisar em vez de mentir.
+// Leva junto: fila de itens (inclusive as já entregues, que ficavam órfãs),
+// comandos pendentes e o aparelho de celular do jogador.
+router.post('/registro/apagar', requirePoder('registro'), async (req, res) => {
+  const cli = await pool.connect();
   try {
     let ids = req.body && req.body.roblox_ids;
     if (!Array.isArray(ids)) ids = (req.body && req.body.roblox_id != null) ? [req.body.roblox_id] : [];
     ids = ids.map(Number).filter(n => Number.isFinite(n) && n > 0).slice(0, 1000);
     if (!ids.length) return res.status(400).json({ error: 'Nenhum jogador selecionado' });
-    await pool.query('DELETE FROM game_item_fila WHERE roblox_id = ANY($1) AND entregue_em IS NULL', [ids]);
-    const r = await pool.query('DELETE FROM game_players WHERE roblox_id = ANY($1)', [ids]);
-    await audit(req, 'registro:apagar', { quantidade: ids.length, apagados: r.rowCount });
-    res.json({ ok: true, apagados: r.rowCount });
-  } catch (err) { console.error('registro/apagar:', err.message); res.status(500).json({ error: 'Erro interno' }); }
+
+    const online = await idsOnline();
+    const aindaOnline = ids.filter(i => online.has(i));
+
+    await cli.query('BEGIN');
+    await cli.query('DELETE FROM game_item_fila WHERE roblox_id = ANY($1)', [ids]);
+    await cli.query(`DELETE FROM game_commands WHERE target_roblox_id = ANY($1) AND status = 'pending'`, [ids]);
+    // os logs SÃO a fonte do backfill: sem apagar isto, o jogador volta no boot
+    const lg = await cli.query(`DELETE FROM game_logs WHERE (detalhe->>'userId') ~ '^[0-9]+$' AND (detalhe->>'userId')::bigint = ANY($1)`, [ids]);
+    // celular do jogador (aparelho, histórico de posse e posts da deepweb)
+    let aparelhos = 0;
+    try {
+      const ap = await cli.query('DELETE FROM aparelhos WHERE dono_roblox_id = ANY($1)', [ids]);
+      aparelhos = ap.rowCount;
+      await cli.query('DELETE FROM aparelho_donos WHERE de_roblox_id = ANY($1) OR para_roblox_id = ANY($1)', [ids]);
+      await cli.query('DELETE FROM deepweb_posts WHERE autor_roblox_id = ANY($1)', [ids]);
+    } catch (e) { /* base antiga sem as tabelas do celular: segue */ }
+    const r = await cli.query('DELETE FROM game_players WHERE roblox_id = ANY($1)', [ids]);
+    await cli.query('COMMIT');
+
+    await audit(req, 'registro:apagar', { quantidade: ids.length, apagados: r.rowCount, logs: lg.rowCount, aparelhos, online: aindaOnline.length });
+    res.json({ ok: true, apagados: r.rowCount, logs: lg.rowCount, aparelhos, online: aindaOnline.length });
+  } catch (err) {
+    try { await cli.query('ROLLBACK'); } catch (e) {}
+    console.error('registro/apagar:', err.message);
+    res.status(500).json({ error: 'Erro interno: ' + err.message });
+  } finally { cli.release(); }
 });
 
 // WIPE GERAL — apaga TODO o registro escrito do jogo (jogadores + fila de itens + logs). Para temporadas/wipe.
 // Exige body.confirm === 'WIPE' pra evitar acidente. NAO mexe em corporacoes/usuarios/cargos.
 // OBS: NAO apaga o save do jogador (dinheiro/inventario) — isso fica no DataStore do Roblox, resetado pelo jogo.
-router.post('/registro/wipe', async (req, res) => {
+// [REESCRITO 19/09 — Julio: "wipe e um reset brutal"]
+// Roda TUDO em UMA transação: ou apaga tudo, ou não apaga nada. A versão antiga
+// fazia três DELETEs soltos — se o terceiro falhasse (e falhava: apagava
+// game_players mas deixava os logs, e o backfill do boot ressuscitava todo
+// mundo) o wipe ficava pela metade e parecia "não funcionar".
+//
+// Sempre apaga: registro, fila de itens, logs, comandos.
+// Opcional (caixinhas do painel, ligadas por padrão):
+//   celular     -> aparelhos, histórico de posse, contatos, mensagens, deepweb
+//   auditoria   -> admin_audit (o próprio histórico de ações de admin)
+//   saves       -> manda resetar_dados pra todo mundo online AGORA e grava o
+//                  marcador game_config.wipe_em. O save de verdade mora no
+//                  DataStore do Roblox: quem está offline só é resetado quando
+//                  o jogo passar a respeitar o marcador (pendente no Studio).
+// NUNCA apaga: usuários do site, admins, corporações, cargos e membros. Isso
+// derrubaria o seu próprio acesso e a estrutura da PC/PF junto.
+router.post('/registro/wipe', requirePoder('wipe'), async (req, res) => {
+  const cli = await pool.connect();
   try {
-    if ((req.body && req.body.confirm) !== 'WIPE') return res.status(400).json({ error: 'Confirmacao invalida (mande confirm: "WIPE")' });
-    const p = await pool.query('DELETE FROM game_players');
-    const f = await pool.query('DELETE FROM game_item_fila');
-    const l = await pool.query('DELETE FROM game_logs');
-    await audit(req, 'registro:wipe', { jogadores: p.rowCount, fila: f.rowCount, logs: l.rowCount });
-    res.json({ ok: true, jogadores: p.rowCount, fila: f.rowCount, logs: l.rowCount });
-  } catch (err) { console.error('registro/wipe:', err.message); res.status(500).json({ error: 'Erro interno' }); }
+    if ((req.body && req.body.confirm) !== 'WIPE') return res.status(400).json({ error: 'Confirmação inválida (digite WIPE)' });
+    const o = req.body || {};
+    const comCelular   = o.celular   !== false;
+    const comAuditoria = o.auditoria !== false;
+    const comSaves     = o.saves     !== false;
+
+    const conta = {};
+    await cli.query('BEGIN');
+
+    const del = async (nome, sql) => {
+      try { const r = await cli.query(sql); conta[nome] = r.rowCount; }
+      catch (e) {
+        if (e.code === '42P01') { conta[nome] = null; }   // tabela não existe nesta base: segue
+        else throw e;
+      }
+    };
+
+    await del('jogadores', 'DELETE FROM game_players');
+    await del('fila',      'DELETE FROM game_item_fila');
+    await del('logs',      'DELETE FROM game_logs');
+    await del('comandos',  'DELETE FROM game_commands');
+
+    if (comCelular) {
+      await del('aparelhos',  'DELETE FROM aparelhos');
+      await del('posse',      'DELETE FROM aparelho_donos');
+      await del('contatos',   'DELETE FROM celular_contatos');
+      await del('mensagens',  'DELETE FROM celular_mensagens');
+      await del('deepweb',    'DELETE FROM deepweb_posts');
+    }
+
+    // Marcador do wipe. Duas funções: (1) trava o backfill do boot, que é o que
+    // ressuscitava o registro; (2) o jogo lê isto pra saber que todo save mais
+    // velho que esta data está morto.
+    await cli.query(
+      `INSERT INTO game_config (key, value, updated_at) VALUES ('wipe_em', $1::jsonb, NOW())
+       ON CONFLICT (key) DO UPDATE SET value = EXCLUDED.value, updated_at = NOW()`,
+      [JSON.stringify({ em: new Date().toISOString(), por: req.user.id, saves: comSaves })]);
+
+    // resetar_dados pra quem está online agora (o único caminho que já funciona
+    // hoje pro save de verdade). Enfileirado ANTES de limpar a auditoria.
+    let resets = 0;
+    if (comSaves) {
+      const servers = await cli.query(`SELECT job_id, players FROM game_servers WHERE updated_at > NOW() - INTERVAL '90 seconds'`);
+      for (const sv of servers.rows) {
+        for (const pl of (sv.players || [])) {
+          const rid = Number(pl.userId); if (!rid) continue;
+          await cli.query(
+            'INSERT INTO game_commands (tipo, target_roblox_id, target_name, payload, job_id, created_by) VALUES ($1,$2,$3,$4,$5,$6)',
+            ['resetar_dados', rid, pl.name || null, '{}', sv.job_id, req.user.id]);
+          resets++;
+        }
+      }
+    }
+    conta.resets_online = resets;
+
+    if (comAuditoria) await del('auditoria', 'DELETE FROM admin_audit');
+    await cli.query('COMMIT');
+
+    // a auditoria do próprio wipe entra DEPOIS do commit, senão ela mesma some
+    await audit(req, 'registro:wipe', Object.assign({ celular: comCelular, auditoria: comAuditoria, saves: comSaves }, conta));
+    res.json(Object.assign({ ok: true }, conta));
+  } catch (err) {
+    try { await cli.query('ROLLBACK'); } catch (e) {}
+    console.error('registro/wipe:', err.message);
+    res.status(500).json({ error: 'Wipe abortado, nada foi apagado: ' + err.message });
+  } finally { cli.release(); }
 });
 
 // DAR PRA TODOS — item ou carro geral pra todo mundo.
 // tipo: 'item_add' (item + qtd) ou 'carro_add' (carro). Manda um comando por jogador ONLINE em cada servidor.
 // item + offline:true tambem enfileira (game_item_fila) pra quem esta no registro e nao esta online (pega no proximo login).
 // carro so vai pros online (nao existe fila de carro; offline precisaria de peca no jogo).
-router.post('/registro/dar-todos', async (req, res) => {
+router.post('/registro/dar-todos', requirePoder('item_todos'), async (req, res) => {
   try {
     const tipo = req.body && req.body.tipo;
     if (tipo !== 'item_add' && tipo !== 'carro_add') return res.status(400).json({ error: 'tipo inválido' });

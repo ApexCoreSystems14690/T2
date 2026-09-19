@@ -82,6 +82,15 @@ async function start() {
     await pool.query(`
       ALTER TABLE corporations ADD COLUMN IF NOT EXISTS icon_data BYTEA;
       ALTER TABLE corporations ADD COLUMN IF NOT EXISTS icon_mime VARCHAR(64);
+      -- [19/09] CARGOS DE ADMIN. O admin deixou de ser liga/desliga.
+      -- REGRA: is_admin = true com admin_cargo NULL significa DONO (poder
+      -- absoluto, inclusive wipe). O painel SEMPRE grava um cargo, entao NULL
+      -- so acontece quando alguem foi setado direto no banco por SQL -- que e
+      -- exatamente a definicao que o Julio pediu.
+      -- DE PROPOSITO NAO EXISTE BACKFILL: todo admin que ja existia continua
+      -- com admin_cargo NULL, ou seja, vira DONO. Ninguem perde acesso no
+      -- deploy. Rebaixar quem nao deveria ser dono e um clique no painel.
+      ALTER TABLE users ADD COLUMN IF NOT EXISTS admin_cargo VARCHAR(24);
     `);
     // Painel admin: fila de comandos, logs do jogo, servidores online, auditoria
     await pool.query(`
@@ -226,6 +235,16 @@ async function start() {
     // Backfill: popula game_players a partir dos logs de "entrou" que já existem,
     // pra aba Registro já nascer com histórico. Roda toda vez, mas é idempotente.
     try {
+      // [CONSERTO 19/09] O backfill era o motivo de "apagar jogador nao
+      // funciona": ele repovoa game_players a partir dos logs a CADA boot, e o
+      // Railway reinicia em todo deploy. Apagou o jogador, subiu uma versao,
+      // ele voltava. Agora so considera log posterior ao ultimo wipe, e o
+      // /registro/apagar leva os logs do jogador junto.
+      let desde = '1970-01-01';
+      try {
+        const w = await pool.query(`SELECT value->>'em' AS em FROM game_config WHERE key = 'wipe_em'`);
+        if (w.rows[0] && w.rows[0].em) desde = w.rows[0].em;
+      } catch (e) {}
       await pool.query(`
         INSERT INTO game_players (roblox_id, nome, primeira_vez, ultima_vez, visitas)
         SELECT (detalhe->>'userId')::bigint AS rid,
@@ -235,13 +254,14 @@ async function start() {
                COUNT(*) AS n
         FROM game_logs
         WHERE tipo = 'entrou' AND detalhe->>'userId' ~ '^[0-9]+$'
+          AND COALESCE(ocorrido_em, created_at) > $1::timestamptz
         GROUP BY (detalhe->>'userId')::bigint
         ON CONFLICT (roblox_id) DO UPDATE SET
           nome = COALESCE(EXCLUDED.nome, game_players.nome),
           primeira_vez = LEAST(game_players.primeira_vez, EXCLUDED.primeira_vez),
           ultima_vez = GREATEST(game_players.ultima_vez, EXCLUDED.ultima_vez),
           visitas = GREATEST(game_players.visitas, EXCLUDED.visitas);
-      `);
+      `, [desde]);
     } catch (e) { console.error('backfill game_players:', e.message); }
     // PF virou PC (set/2026): no painel a corporação da Polícia Federal foi renomeada pra Polícia Civil,
     // mas o SLUG (que é o que o jogo consulta em /api/game/player) continuou 'policia-federal', e a corp

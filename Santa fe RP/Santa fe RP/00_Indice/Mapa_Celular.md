@@ -1,16 +1,16 @@
 ---
 name: Mapa_Celular
-description: Mapa do celular alvo (Santa Fé Funcional) × construído (Studio) × gap. Auditoria de 18/09 medida no Studio. Ler pra saber o que falta pro celular ficar "Funcional".
+description: Mapa do celular alvo (Santa Fé Funcional) × construído (Studio) × gap. Auditoria de 18/09, revisada 19/09 no DEVTS. Ler pra saber o que falta pro celular ficar "Funcional".
 sources: [cowork]
 aliases: [mapa celular, gap celular, auditoria celular]
 ---
-# Mapa do Celular — Funcional × Construído (auditoria 18/09)
+# Mapa do Celular — Funcional × Construído (auditoria 18/09, revisada 19/09)
 
 Medido no Studio: `Client.GuiHandler.Celular` (módulos), `StarterGui.Main.Celular.Buttons`
 (ícones), `.Telas` (telas) e o bloco CELULAR inline do `GuiHandler` (linhas ~1982–2061).
 
 ## Resposta curta: **não, o celular não está pronto.**
-9 apps de pé, 4 do plano nem começaram, e o sistema de chat antigo continua **ligado e público**.
+10 apps de pé (medido 19/09: DropaCash, RoZap, SAMU, BM, Uber, Banco, Deepweb, Notas, Contatos, Mapa), 3 do plano nem começaram, o Mapa é só "GPS fora do ar", e o sistema de chat antigo continua **ligado e público**.
 
 ## Apps — botão × tela × código
 | App | Botão | Tela | Código | Estado |
@@ -28,10 +28,10 @@ Medido no Studio: `Client.GuiHandler.Celular` (módulos), `StarterGui.Main.Celul
 | Ajustes | — (abre pelo `Config`) | ✅ | inline no GuiHandler | ✅ funciona |
 | **Notícias** | ❌ | ❌ | ❌ | **não existe** (0 menções) |
 | **Navegador** | ❌ | ❌ | ❌ | **não existe** (0 menções) |
-| **Mapa** | ❌ | ❌ | ❌ | **não existe** |
+| Mapa | ✅ | ✅ | módulo 3.5k | 🟡 **"GPS FORA DO AR"** (decisão 18/09) — botão, tela e encaixe prontos; a navegação entra ali quando voltar |
 | **Câmera / Galeria** | ❌ | ❌ | ❌ | **não existe** (0 menções a Galeria) |
 
-## Os 9 módulos compilam
+## Os 10 módulos compilam
 Nenhum está quebrado a ponto de não carregar. Isso **não** quer dizer que cada um faz o
 que deveria — compilar e funcionar são coisas diferentes.
 
@@ -70,7 +70,7 @@ hoje deixaria o jogo **sem OLX nenhum**. Por isso o plano manda tirar `/olx /x /
 2. Mensagens salvas: validar histórico com 2 players — quase pronto.
 3. Emergência + [[Central_Corp]]: unificar SAMU/Brigada num app de chamado.
 4. Notícias (jornal): app + tabela `jornal_materias`.
-5. Câmera/[[Foto_Cena]]: rodar o spike de 1 dia antes de construir.
+5. Câmera/[[Foto_Cena]]: rodar o spike de 1 dia antes de construir (era o dia 1 do F4 no plano e nunca rodou).
 6. Chip real + Deepweb DMs.
-7. Navegador e Mapa: definir escopo com o Julio (o Mapa depende do [[Minimapa]]).
+7. Navegador e Mapa: definir escopo com o Julio (o Mapa hoje é "GPS fora do ar"; o minimapa virou holograma — ver [[Minimapa_Holografico]]).
 Depois: [[Pericia]] (F5), que consome tudo isso.

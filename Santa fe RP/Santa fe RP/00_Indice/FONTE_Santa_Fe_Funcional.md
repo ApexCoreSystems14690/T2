@@ -56,7 +56,7 @@ Hoje só lista online, nada salva, OLX/deepweb/X são comandos no chat. Troca po
 | Emergência | chamar PM/SAMU/Bombeiros/PC c/ tipo e local auto; ver status | apps BM e SAMU (rádio) |
 | Notícias | matérias do Jornal, recentes primeiro | /aviso no chat |
 | Navegador | sites decorativos (imobiliária, concessionária, Detran) + site do Jornal | — |
-| Mapa | mapa completo (mesma imagem do minimapa em alta) | — |
+| Mapa | por enquanto "GPS fora do ar" (18/09); tela pronta pra quando a navegação voltar | — |
 | Deepweb | mural anônimo + conversas anônimas; só com chip | /deepweb no chat |
 | Notas | bloco de notas que salva de verdade, no aparelho | — |
 | Câmera·Galeria | 5 fotos reais + 10 prints; enviar pra contato/deepweb | — |
@@ -87,8 +87,8 @@ Chamado só atendido se tiver alguém no computador. Cidadão: app Emergência�
 ## 8 · Uber com bots
 Chance 35%/min (espera ~2,9min). Recebe: Uber em serviço dirigindo o próprio carro, sem corrida, banco livre. ~30 pontos por tipo; destino 400–1500 studs de outro tipo. Aceitar ≤20s. Bot espera 90s. Embarque ≤12 studs carro parado. Entrega ≤30 studs parado, bot some após 10s. R$20+0,12/stud (1000=R$140), bot prefeitura paga, +20% no prazo. Cancela: fora do carro >30s, carro destruído, bot tomou tiro. Teto 20/h (~R$2.800/h). Bot R6 sorteado, controlado pelo servidor, só aparece perto do motorista, Pathfinding_curto, seat:Sit; dano=foge; não roubável. Julio: ~30 pontos (proponho lendo Ruas) + opcional anims.
 
-## 9 · Minimapa (quadrado)
-Recorte pequeno do entorno, canto inferior esquerdo; vida/colete = 2 barras finas embaixo. Raio ~150 studs a pé, ~300 dirigindo. Desfocado (blocos, sem nome, borda em degradê). Gira com a câmera, você = seta branca central. Só pontos que importam (objetivo laranja, carro, alertas p/ polícia); fora do raio = bolinha na borda. Técnico: 1 imagem ortográfica (FOV=1) borrada, ImageLabel num CanvasGroup mascarado (move+gira pela posição), sem ViewportFrame. Mapa completo do celular usa a mesma imagem em alta. Some com tela cheia/caído/algemado (anim 0,2s).
+## 9 · Minimapa (quadrado) — HOLOGRAMA (atualizado 19/09; decisão do Julio em 18/09)
+Seis versões de mapa desenhado não ficaram boas (o mapa foi construído sem nada que diga "aqui é rua"). Saída: parar de interpretar e MOSTRAR o mundo — holograma 3D do entorno; a rua aparece sozinha como o vazio entre os blocos. Quadrado, canto inferior esquerdo, feed termina acima dele; vida/colete = 2 barras finas embaixo. Raio ~110 a pé / ~190 dirigindo, câmera inclinada 55° girando com a do jogador, você = setinha branca. COR = o que é (serviço na cor do serviço, carro âmbar, resto azul); BRILHO/TRANSPARÊNCIA = altura (acima da cabeça vira vidro → vê dentro do prédio). Chão pintado pelo material; meio-fio/poste/faixa desenhados por cima fundem em "rua". Até 3 rótulos de serviço (tags Interact). Objetivo fora do raio = bolinha na borda. Some com tela cheia/caído/algemado. Teste que vale (Julio): "eu me guiaria por isso? sei o que é aquele prédio? sei o que é aquele azul mais forte?" — um "não" reprova. Técnico: GetPartBoundsInBox a cada 0,2s → caixas lisas num WorldModel/ViewportFrame (MeshPart/Union viram caixa), dicionário original→clone incremental, teto 620 caixas (280–500 na prática), luz chapada. Sem asset, sem imagem, sem chave de Game Settings; o MapaModelo assado da cartografia antiga não é usado e sai do ReplicatedStorage. Mapa do celular: por enquanto "GPS fora do ar" (botão e tela prontos). Detalhe: `02_Sistemas_Studio/Minimapa_Holografico.md`.
 
 ## 10 · Clareza (regra dos 2s)
 Ícone + número + máx 3 palavras, nunca frase. Sempre com unidade (R$, kg, km/h, m, min). Tempo conta pra baixo mm:ss. Cor com 1 significado: tema=você/ação, vermelho=perigo, verde=ganho, azul=aviso. Botão diz o que faz ("Segure F pra entregar"). Nome de gente, não de código. Uma coisa por canto (resto entra na fila).

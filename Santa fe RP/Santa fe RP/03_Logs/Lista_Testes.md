@@ -254,3 +254,31 @@ Parar a ≤110 studs de um Posto/Banco/Oficina. Tem que acender o nome na cor do
 
 ### Celular
 Abrir o app Mapa: tem que dizer **GPS FORA DO AR**, sem botão de zoom, e fechar normal no X.
+
+## ✅ 19/09 — "a arma não dá dano" (QA BindableFunction salvo no place)
+`CaidoService.QA` e `FerimentoService.QA` tinham sido salvos no place → o serviço subia como PROXY sem handler e
+`ContextoTiro` pendurava pra sempre ANTES do `TakeDamage`. Apagados no Edit. Provado: boneco 100 → 52.8 → 5.4 com AK47.
+
+### Pra ti conferir jogando
+- [ ] Atirar em alguém/boneco com qualquer arma → tira vida.
+- [ ] No Explorer, `Server.[Armas] Services.CaidoService` e `FerimentoService` **sem** filho `QA` antes de dar Ctrl+S. Se aparecer, apaga.
+
+## 🧹 19/09 — MapaModelo arquivado (depende de ti, ver [[Entrega_Julio]] item 1)
+- [ ] `ReplicatedStorage.MapaModelo` não existe mais; está em `ServerStorage.Backups.MapaModelo_v11_arquivado`.
+- [ ] Minimapa holográfico continua desenhando (280–500 caixas) — ele não depende do MapaModelo.
+
+## 🚗 Fusca nativo (16/09) — falta o teu olho
+- [ ] Spawnar `ServerStorage.PortaMalasFrota.Modelos.FuscaNativo` → porta-malas DIANTEIRO abre com a bolinha F, 4 slots funcionam, capô sólido (sem ver através).
+- [ ] Tampa do motor **não** abre (desligada de propósito).
+- [ ] Rodar por 30 s: nada solta, nada vibra (o chassis é montado em runtime pelo `Criar`).
+
+## ✅ Holograma de toda altura (19/09): medido + foto
+255 caixas, Y 5→137, zero "vidro" quando não há nada em cima da cabeça.
+### Pra ti conferir jogando
+- [ ] No Centro: os prédios aparecem inteiros no minimapa (não só a base).
+- [ ] Entrar numa loja: o telhado vira vidro e dá pra ver as paredes de dentro; sair: volta sólido.
+- [ ] Perto de prédio alto: a rua atrás dele ainda aparece (vidro leve, nunca some).
+
+## 🔴 Antes das 23h — permissões de asset
+- [ ] No Output do Studio, os avisos "A experiência não tem permissão de acesso para usar a ID do ativo …": clicar em "compartilhar o acesso" nos que forem de animação/som do jogo, OU confirmar no place público que armas/animações tocam.
+- [ ] Rodapés: nenhuma tela mostra "CAMPO BELO RP" (7 trocados pra SANTA FÉ).
