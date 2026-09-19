@@ -48,7 +48,7 @@
       <h1>SANTA FÉ — CORPORAÇÕES</h1>
     </div>
     <div class="user">
-      <% if (user.is_admin) { %><a href="/admin" style="color:#ef4444">Painel Admin</a><% } %>
+      <% if (typeof ehStaff !== 'undefined' && ehStaff) { %><a href="/admin" style="color:#ef4444">Painel Admin</a><% } %>
       <span><%= user.discord_username %></span>
       <a href="/auth/logout">Sair</a>
     </div>
@@ -66,14 +66,14 @@
     <% } %>
 
     <div class="section-title">
-      <%= user.is_admin ? 'Todas as Corporações (admin)' : 'Suas Corporações' %>
-      <% if (user.is_admin) { %>
+      <%= (typeof podeCorp !== 'undefined' && podeCorp) ? 'Todas as Corporações (staff)' : 'Suas Corporações' %>
+      <% if (typeof podeCorp !== 'undefined' && podeCorp) { %>
       <button class="create-btn" onclick="document.getElementById('createModal').classList.add('active')">+ Nova Corporação</button>
       <% } %>
     </div>
 
     <% if (corporations.length === 0) { %>
-      <div class="empty">Você ainda não gerencia nenhuma corporação. Peça a um administrador para te adicionar como dono, co-gerente ou em um dos dois cargos mais altos.</div>
+      <div class="empty">Você não faz parte de nenhuma corporação.</div>
     <% } else { %>
       <% corporations.forEach(corp => { %>
         <div class="corp-card">
@@ -87,12 +87,20 @@
             <% } %>
             <div>
               <div class="corp-name"><%= corp.name %></div>
-              <div class="corp-members"><%= corp.member_count %> membros</div>
+              <div class="corp-members">
+                <%= corp.member_count %> membros<% if (corp.sou_dono) { %> · você é o dono<% } else if (corp.meu_cargo) { %> · seu cargo: <%= corp.meu_cargo %><% } else if (corp.sou_gerente) { %> · você é co-gerente<% } %>
+              </div>
             </div>
           </div>
           <div style="display:flex;gap:0.5rem;align-items:center">
+            <% if (corp.pode_gerenciar) { %>
             <a href="/dashboard/corp/<%= corp.id %>" class="corp-btn">Gerenciar</a>
-            <% if (user.is_admin || corp.owner_id === user.id) { %>
+            <% } %>
+            <%# [19/09] Sair por conta propria. Nao aparece pro DONO: a corp ficaria orfa. %>
+            <% if ((corp.sou_membro || corp.sou_gerente) && !corp.sou_dono) { %>
+            <button class="corp-btn" style="color:#f59e0b;border-color:#f59e0b33;cursor:pointer;background:none" onclick="sairCorp(<%= corp.id %>, '<%= corp.name.replace(/'/g, "\\'") %>')">Sair</button>
+            <% } %>
+            <% if ((typeof podeCorp !== 'undefined' && podeCorp) || corp.owner_id === user.id) { %>
             <button class="corp-btn" style="color:#ef4444;border-color:#ef444433;cursor:pointer;background:none" onclick="excluirCorp(<%= corp.id %>, '<%= corp.name.replace(/'/g, "\\'") %>')">Excluir</button>
             <% } %>
           </div>
@@ -140,6 +148,21 @@
         const res = await fetch('/api/corps/' + id, { method: 'DELETE' });
         const data = await res.json();
         if (!res.ok) { alert(data.error || 'Erro ao excluir'); return; }
+        window.location.reload();
+      } catch (err) { alert('Erro de conexão'); }
+    }
+
+    // [19/09] Sair da corporação por conta própria. Só mexe em quem está logado —
+    // o servidor pega o id da sessão, não daqui.
+    async function sairCorp(id, name) {
+      if (!confirm('Sair de "' + name + '"?\n\nVocê perde o cargo e os acessos dessa corporação dentro do jogo. Pra voltar, alguém de lá precisa te adicionar de novo.')) return;
+      try {
+        const res = await fetch('/api/corps/' + id + '/sair', {
+          method: 'POST', headers: { 'Content-Type': 'application/json' }, body: '{}',
+        });
+        const data = await res.json();
+        if (!res.ok) { alert(data.error || 'Erro ao sair'); return; }
+        alert('Você saiu de ' + data.corporacao + (data.avisou_jogo ? '.\nComo você está no jogo agora, o acesso já foi retirado.' : '.'));
         window.location.reload();
       } catch (err) { alert('Erro de conexão'); }
     }

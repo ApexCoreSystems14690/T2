@@ -1,29 +1,50 @@
 const router = require('express').Router();
 const pool = require('../db/pool');
 const { requireAuth } = require('../middleware/auth');
+const perm = require('../permissoes');
 
 router.use(requireAuth);
 
 // Dashboard principal — lista corporações do usuário
 router.get('/', async (req, res) => {
   try {
+    // [19/09] Agora lista TAMBEM as corporações em que a pessoa é só membro comum.
+    // Antes o dashboard só mostrava o que ela GERENCIA, então um membro raso não via
+    // a própria corp em lugar nenhum -- e por isso não tinha como sair dela sozinho.
+    // pode_gerenciar diz se aparece o botão "Gerenciar"; sou_membro/sou_gerente
+    // dizem se aparece o "Sair".
     const corps = await pool.query(
       `SELECT c.*, (SELECT COUNT(*) FROM members WHERE corporation_id = c.id) as member_count,
-              (icon_data IS NOT NULL) as has_icon_file
+              (icon_data IS NOT NULL) as has_icon_file,
+              (c.owner_id = $1) AS sou_dono,
+              EXISTS (SELECT 1 FROM members mm WHERE mm.corporation_id = c.id AND mm.user_id = $1) AS sou_membro,
+              EXISTS (SELECT 1 FROM corp_managers cg WHERE cg.corporation_id = c.id AND cg.user_id = $1) AS sou_gerente,
+              (SELECT r.name FROM members mr LEFT JOIN ranks r ON mr.rank_id = r.id
+                WHERE mr.corporation_id = c.id AND mr.user_id = $1) AS meu_cargo,
+              ($2::boolean
+                OR c.owner_id = $1
+                OR c.id IN (SELECT corporation_id FROM corp_managers WHERE user_id = $1)
+                OR c.id IN (
+                  SELECT m.corporation_id FROM members m
+                  JOIN ranks r ON m.rank_id = r.id
+                  WHERE m.user_id = $1
+                  AND (SELECT COUNT(DISTINCT r2.level) FROM ranks r2 WHERE r2.corporation_id = m.corporation_id AND r2.level > r.level) < 2
+                )
+              ) AS pode_gerenciar
        FROM corporations c
        WHERE $2::boolean
           OR c.owner_id = $1
           OR c.id IN (SELECT corporation_id FROM corp_managers WHERE user_id = $1)
-          OR c.id IN (
-            SELECT m.corporation_id FROM members m
-            JOIN ranks r ON m.rank_id = r.id
-            WHERE m.user_id = $1
-            AND (SELECT COUNT(DISTINCT r2.level) FROM ranks r2 WHERE r2.corporation_id = m.corporation_id AND r2.level > r.level) < 2
-          )
+          OR c.id IN (SELECT corporation_id FROM members WHERE user_id = $1)
        ORDER BY c.name`,
-      [req.user.id, !!req.user.is_admin]
+      [req.user.id, perm.pode(req.user, 'corp')]
     );
-    res.render('dashboard', { user: req.user, corporations: corps.rows });
+    res.render('dashboard', {
+      user: req.user,
+      corporations: corps.rows,
+      podeCorp: perm.pode(req.user, 'corp'),
+      ehStaff: !!perm.cargoDe(req.user),
+    });
   } catch (err) {
     console.error('Dashboard error:', err.message, err.stack);
     res.render('error', { message: 'Erro ao carregar dashboard', user: req.user });
@@ -46,12 +67,12 @@ router.get('/corp/:corpId', async (req, res) => {
            AND (SELECT COUNT(DISTINCT r2.level) FROM ranks r2 WHERE r2.corporation_id = m.corporation_id AND r2.level > r.level) < 2
          )
        )`,
-      [req.params.corpId, req.user.id, !!req.user.is_admin]
+      [req.params.corpId, req.user.id, perm.pode(req.user, 'corp')]
     );
     if (corp.rows.length === 0) return res.redirect('/dashboard');
 
     const corpData = corp.rows[0];
-    const isOwner = corpData.owner_id === req.user.id || !!req.user.is_admin;
+    const isOwner = corpData.owner_id === req.user.id || perm.pode(req.user, 'corp');
 
     // Checa se é co-gerente
     let isManager = false;

@@ -2,6 +2,7 @@ const router = require('express').Router();
 const pool = require('../db/pool');
 const multer = require('multer');
 const { requireAuth, requireCorpOwner, requireAdmin } = require('../middleware/auth');
+const perm = require('../permissoes');
 
 // Upload config — armazena em memória (vai pro banco)
 const upload = multer({
@@ -35,7 +36,7 @@ router.use(requireAuth);
 // GET /api/corps — listar corporações do usuário (que ele é dono)
 router.get('/', async (req, res) => {
   try {
-    const result = req.user.is_admin
+    const result = perm.pode(req.user, 'corp')
       ? await pool.query(
           `SELECT c.*, (SELECT COUNT(*) FROM members WHERE corporation_id = c.id) as member_count
            FROM corporations c ORDER BY c.name`)
@@ -53,7 +54,7 @@ router.get('/', async (req, res) => {
 // Precisa estar logado; só quem gerencia alguma corporação (ou admin) enxerga.
 router.get('/users/list', async (req, res) => {
   try {
-    if (!req.user.is_admin) {
+    if (!perm.pode(req.user, 'corp')) {
       const gerencia = await pool.query(
         `SELECT 1 FROM corporations WHERE owner_id = $1
          UNION SELECT 1 FROM corp_managers WHERE user_id = $1
@@ -121,7 +122,7 @@ router.put('/:corpId', requireCorpOwner, async (req, res) => {
         ${extraCols}
        WHERE id = $6 AND ($8::boolean OR owner_id = $7 OR id IN (SELECT corporation_id FROM corp_managers WHERE user_id = $7)) RETURNING *`,
       [name || null, description || null, icon_url || null, color || null,
-       max_members ? parseInt(max_members) : null, req.params.corpId, req.user.id, !!req.user.is_admin]
+       max_members ? parseInt(max_members) : null, req.params.corpId, req.user.id, perm.pode(req.user, 'corp')]
     );
     if (result.rows.length === 0) return res.status(404).json({ error: 'Corporação não encontrada' });
     res.json({ corporation: result.rows[0] });
@@ -330,6 +331,72 @@ router.delete('/:corpId/members/:memberId', requireCorpOwner, async (req, res) =
   } catch (err) {
     res.status(500).json({ error: 'Erro interno' });
   }
+});
+
+// ---------------------------------------------------------------------------
+// POST /api/corps/:corpId/sair — o PRÓPRIO jogador sai da corporação.
+// Julio, 19/09: "o usuário deve poder sair da corporação opcionalmente se quiser".
+//
+// Repare que esta é a ÚNICA rota de corporação que NÃO usa requireCorpOwner: todas
+// as outras exigem ser dono, co-gerente ou top 2 cargos. Um membro comum não tinha
+// caminho nenhum pra mexer na própria situação — só podia ser removido por alguém
+// de cima. Aqui ele age só sobre si mesmo: o id vem da SESSÃO, nunca do corpo do
+// pedido, então ninguém consegue usar isto pra expulsar outra pessoa.
+//
+// O DONO não sai: a corporação ficaria órfã. Ele transfere ou exclui.
+// Sair leva junto o co-gerenciamento, senão a pessoa continuaria mandando numa
+// corp de que não é mais membro.
+// ---------------------------------------------------------------------------
+router.post('/:corpId/sair', async (req, res) => {
+  const cli = await pool.connect();
+  try {
+    if (!req.user) return res.status(401).json({ error: 'Não autenticado' });
+    const corpId = parseInt(req.params.corpId);
+    if (!corpId) return res.status(400).json({ error: 'Corporação inválida' });
+
+    const c = await cli.query('SELECT id, name, owner_id FROM corporations WHERE id = $1', [corpId]);
+    if (c.rows.length === 0) return res.status(404).json({ error: 'Corporação não encontrada' });
+    const corp = c.rows[0];
+
+    if (corp.owner_id === req.user.id) {
+      return res.status(400).json({ error: 'Você é o dono desta corporação. Passe a posse para outra pessoa ou exclua a corporação.' });
+    }
+
+    await cli.query('BEGIN');
+    const m = await cli.query('DELETE FROM members WHERE corporation_id = $1 AND user_id = $2', [corpId, req.user.id]);
+    const g = await cli.query('DELETE FROM corp_managers WHERE corporation_id = $1 AND user_id = $2', [corpId, req.user.id]);
+    if (m.rowCount === 0 && g.rowCount === 0) {
+      await cli.query('ROLLBACK');
+      return res.status(400).json({ error: 'Você não faz parte desta corporação' });
+    }
+    await cli.query('COMMIT');
+
+    // se estiver jogando agora, manda o jogo recarregar a corp dele na hora --
+    // senão ele continuaria abrindo as portas da corp até o próximo login
+    let avisouJogo = false;
+    try {
+      if (req.user.roblox_id) {
+        const servers = await pool.query(
+          `SELECT job_id, players FROM game_servers WHERE updated_at > NOW() - INTERVAL '90 seconds'`);
+        for (const sv of servers.rows) {
+          for (const pl of (sv.players || [])) {
+            if (Number(pl.userId) === Number(req.user.roblox_id)) {
+              await pool.query(
+                'INSERT INTO game_commands (tipo, target_roblox_id, target_name, payload, job_id, created_by) VALUES ($1,$2,$3,$4,$5,$6)',
+                ['corp_refresh', req.user.roblox_id, pl.name || null, '{}', sv.job_id, req.user.id]);
+              avisouJogo = true;
+            }
+          }
+        }
+      }
+    } catch (e) { console.error('sair/corp_refresh:', e.message); }
+
+    res.json({ ok: true, corporacao: corp.name, era_gerente: g.rowCount > 0, avisou_jogo: avisouJogo });
+  } catch (err) {
+    try { await cli.query('ROLLBACK'); } catch (e) {}
+    console.error('corps/sair:', err.message);
+    res.status(500).json({ error: 'Erro interno' });
+  } finally { cli.release(); }
 });
 
 // DELETE /api/corps/:corpId — excluir corporação (somente dono)

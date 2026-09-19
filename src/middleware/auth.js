@@ -27,8 +27,11 @@ async function requireCorpOwner(req, res, next) {
   const corpId = req.params.corpId || req.body.corporation_id;
 
   try {
-    // 0. Admin global tem acesso total a qualquer corporação
-    if (req.user && req.user.is_admin) {
+    // 0. Staff com o poder 'corp' (Supervisor pra cima) tem acesso a qualquer corporação.
+    // [19/09] ANTES era `req.user.is_admin`, e isso virou um buraco quando o admin
+    // deixou de ser liga/desliga: um Estagiário tem is_admin = true e passaria a
+    // mandar em TODA corporação do jogo. Agora pergunta o poder, como o resto.
+    if (req.user && require('../permissoes').pode(req.user, 'corp')) {
       const adm = await pool.query('SELECT * FROM corporations WHERE id = $1', [corpId]);
       if (adm.rows.length === 0) return res.status(404).json({ error: 'Corporação não encontrada' });
       req.corporation = adm.rows[0];

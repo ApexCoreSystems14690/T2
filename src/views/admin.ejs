@@ -556,7 +556,7 @@
               const podeDar = EU.nivel > (EU.CARGOS[c] || {}).nivel;
               return '<option value="' + c + '"' + (u.cargo === c ? ' selected' : '') + (podeDar ? '' : ' disabled') + '>' + esc((EU.CARGOS[c] || {}).nome || c) + '</option>';
             }));
-          acao = '<select class="inp sm" onchange="setCargo(' + u.id + ', this.value, this)">' + opts.join('') + '</select>';
+          acao = '<select class="inp sm" onchange="setCargoAdmin(' + u.id + ', this.value, this)">' + opts.join('') + '</select>';
         }
         return '<tr><td>' + (u.is_placeholder ? '<span class="muted">sem Discord</span>' : esc(u.discord_username)) + ' <span class="muted" style="font-size:.7rem">#' + u.id + '</span></td>' +
           '<td>' + (u.roblox_id ? esc(u.roblox_username || '') + ' <span class="muted" style="font-size:.7rem">' + u.roblox_id + '</span>' : '<span class="muted">não vinculado</span>') + '</td>' +
@@ -565,7 +565,11 @@
       }).join('');
     }
 
-    async function setCargo(id, cargo, el) {
+    // NOME PROPRIO de proposito: existe outra setCargo mais abaixo, a do cargo em
+    // CORPORACAO. Como as duas sao 'function' no mesmo escopo, a de baixo apagava
+    // esta e o seletor de cargo de admin caia na funcao errada, reclamando
+    // "Selecione um usuario". Foi o bug que o Julio pegou em 19/09.
+    async function setCargoAdmin(id, cargo, el) {
       const nome = cargo ? ((EU.CARGOS[cargo] || {}).nome || cargo) : null;
       const msg = nome
         ? ('Dar o cargo ' + nome + ' a este usuário?\n\n' + ((EU.CARGOS[cargo] || {}).desc || ''))
@@ -578,7 +582,7 @@
     }
 
     // legado: se alguma tela velha ainda chamar
-    async function setAdmin(id, value) { return setCargo(id, value ? 'moderador' : null, null); }
+    async function setAdmin(id, value) { return setCargoAdmin(id, value ? 'moderador' : null, null); }
 
     // ---------- cargos ----------
     let CORPS = { corps: [], ranks: [] }, CG_SEL = null;

@@ -23,7 +23,10 @@ CREATE TABLE IF NOT EXISTS users (
   id SERIAL PRIMARY KEY, discord_id VARCHAR(32) UNIQUE NOT NULL, discord_username VARCHAR(128),
   discord_avatar VARCHAR(256), roblox_id BIGINT UNIQUE, roblox_username VARCHAR(64), email VARCHAR(256),
   is_admin BOOLEAN DEFAULT false, created_at TIMESTAMP DEFAULT NOW(), updated_at TIMESTAMP DEFAULT NOW());
-CREATE TABLE IF NOT EXISTS corporations (id SERIAL PRIMARY KEY, name VARCHAR(128), slug VARCHAR(128) UNIQUE, is_active BOOLEAN DEFAULT true);
+CREATE TABLE IF NOT EXISTS corporations (id SERIAL PRIMARY KEY, name VARCHAR(128), slug VARCHAR(128) UNIQUE,
+  owner_id INTEGER REFERENCES users(id) ON DELETE SET NULL, is_active BOOLEAN DEFAULT true);
+CREATE TABLE IF NOT EXISTS corp_managers (id SERIAL PRIMARY KEY, corporation_id INTEGER REFERENCES corporations(id) ON DELETE CASCADE,
+  user_id INTEGER REFERENCES users(id) ON DELETE CASCADE, added_at TIMESTAMP DEFAULT NOW(), UNIQUE(corporation_id, user_id));
 CREATE TABLE IF NOT EXISTS ranks (id SERIAL PRIMARY KEY, corporation_id INTEGER REFERENCES corporations(id) ON DELETE CASCADE, name VARCHAR(64), level INTEGER DEFAULT 0);
 CREATE TABLE IF NOT EXISTS members (id SERIAL PRIMARY KEY, corporation_id INTEGER, user_id INTEGER, rank_id INTEGER, UNIQUE(corporation_id, user_id));
 CREATE TABLE IF NOT EXISTS game_servers (job_id VARCHAR(64) PRIMARY KEY, place_id BIGINT, players JSONB DEFAULT '[]', catalog JSONB, updated_at TIMESTAMP DEFAULT NOW());
@@ -104,7 +107,7 @@ async function req(metodo, caminho, corpo) {
 
 // ---------------------------------------------------------------- dados
 async function semear() {
-  await pool.query(`TRUNCATE users, corporations, ranks, members, game_players, game_item_fila, game_logs, game_commands, game_config,
+  await pool.query(`TRUNCATE users, corporations, corp_managers, ranks, members, game_players, game_item_fila, game_logs, game_commands, game_config,
     admin_audit, aparelhos, aparelho_donos, celular_contatos, celular_mensagens, deepweb_posts, game_servers RESTART IDENTITY CASCADE`);
   const u = {};
   const cria = async (nome, cargo, admin) => {
@@ -321,6 +324,98 @@ async function semear() {
     'corp_refresh','noclip','ban','unban','hora','clima','anuncio'];
   const faltando = todosComandos.filter(c => !semMapa.includes(c));
   ok(faltando.length === 0, 'todo comando do painel tem poder definido' + (faltando.length ? ' — FALTAM: ' + faltando.join(', ') : ''));
+
+  tit('9b. Sair da corporação por conta própria');
+  {
+    const express2 = require('express');
+    const app2 = express2();
+    app2.use(express2.json());
+    app2.use((rq, _rs, nx) => { rq.user = USUARIO_ATUAL; nx(); });
+    app2.use('/api/corps', require('./src/routes/corps-api'));
+    const s2 = await new Promise(r => { const x = app2.listen(0, () => r(x)); });
+    const base2 = 'http://127.0.0.1:' + s2.address().port + '/api/corps';
+    const post = async (caminho, corpo) => {
+      const r = await fetch(base2 + caminho, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(corpo || {}), redirect: 'manual' });
+      let j = null; try { j = await r.json(); } catch (e) {}
+      return { status: r.status, body: j };
+    };
+
+    // monta: corp com dono (diretor), um membro comum (moderador) e um co-gerente (supervisor)
+    await pool.query(`INSERT INTO corporations (name, slug, owner_id) VALUES ('Mecanica','mecanica',$1)`, [U['diretor'].id]);
+    const cid = (await pool.query(`SELECT id FROM corporations WHERE slug='mecanica'`)).rows[0].id;
+    await pool.query(`INSERT INTO ranks (corporation_id, name, level) VALUES ($1,'Aprendiz',1)`, [cid]);
+    const rid = (await pool.query(`SELECT id FROM ranks WHERE corporation_id=$1`, [cid])).rows[0].id;
+    await pool.query(`INSERT INTO members (corporation_id, user_id, rank_id) VALUES ($1,$2,$3)`, [cid, U['moderador'].id, rid]);
+    await pool.query(`INSERT INTO corp_managers (corporation_id, user_id) VALUES ($1,$2)`, [cid, U['supervisor'].id]);
+
+    USUARIO_ATUAL = U['moderador'];
+    const r1 = await post('/' + cid + '/sair');
+    ok(r1.status === 200, 'membro comum consegue sair (' + r1.status + ')');
+    ok((await pool.query('SELECT COUNT(*)::int n FROM members WHERE corporation_id=$1 AND user_id=$2', [cid, U['moderador'].id])).rows[0].n === 0, 'saiu mesmo do members');
+
+    const r2 = await post('/' + cid + '/sair');
+    ok(r2.status === 400, 'sair duas vezes dá erro claro, não 500 (' + r2.status + ')');
+
+    USUARIO_ATUAL = U['diretor'];
+    const r3 = await post('/' + cid + '/sair');
+    ok(r3.status === 400 && /dono/i.test(r3.body.error || ''), 'o DONO não consegue sair — a corp ficaria órfã');
+    ok((await pool.query('SELECT owner_id FROM corporations WHERE id=$1', [cid])).rows[0].owner_id === U['diretor'].id, 'e continua sendo dono');
+
+    USUARIO_ATUAL = U['supervisor'];
+    const r4 = await post('/' + cid + '/sair');
+    ok(r4.status === 200 && r4.body.era_gerente === true, 'co-gerente sai e perde o co-gerenciamento junto');
+    ok((await pool.query('SELECT COUNT(*)::int n FROM corp_managers WHERE corporation_id=$1 AND user_id=$2', [cid, U['supervisor'].id])).rows[0].n === 0, 'saiu do corp_managers');
+
+    USUARIO_ATUAL = U['estagiario'];
+    const r5 = await post('/9999/sair');
+    ok(r5.status === 404, 'corporação inexistente dá 404');
+
+    // o ponto que mais importa: ninguem usa isto pra expulsar outra pessoa
+    await pool.query(`INSERT INTO members (corporation_id, user_id, rank_id) VALUES ($1,$2,$3)`, [cid, U['moderador'].id, rid]);
+    USUARIO_ATUAL = U['estagiario'];
+    const r6 = await post('/' + cid + '/sair', { user_id: U['moderador'].id, corporation_id: cid });
+    ok(r6.status === 400, 'mandar o id de OUTRA pessoa no corpo não expulsa ela (' + r6.status + ')');
+    ok((await pool.query('SELECT COUNT(*)::int n FROM members WHERE corporation_id=$1 AND user_id=$2', [cid, U['moderador'].id])).rows[0].n === 1, 'o moderador continua na corp — o id vem da SESSÃO');
+
+    s2.close();
+  }
+
+  tit('9c. Corporação: Estagiário não manda em corp nenhuma');
+  ok(!perm.pode(U['estagiario'], 'corp'), 'estagiário NÃO tem o poder corp');
+  ok(!perm.pode(U['moderador'], 'corp') && !perm.pode(U['administrador'], 'corp'), 'moderador e administrador também não');
+  ok(perm.pode(U['supervisor'], 'corp') && perm.pode(U['julio14690'], 'corp'), 'supervisor pra cima, sim');
+
+  tit('10. O painel (admin.ejs): nada de função duplicada nem botão órfão');
+  // [19/09] Este teste nasceu de um bug REAL: eu criei uma setCargo(id, cargo, el)
+  // pro cargo de ADMIN sem ver que já existia uma setCargo(remover) pro cargo em
+  // CORPORAÇÃO. As duas são `function` no mesmo escopo, então a de baixo apagou a
+  // de cima, e o seletor de cargo da aba Usuários caía na função errada e
+  // respondia "Selecione um usuário". Sintaxe válida, tudo compilando, e quebrado.
+  {
+    const fs = require('fs');
+    const html = fs.readFileSync(__dirname + '/src/views/admin.ejs', 'utf8');
+    const js = (html.match(/<script>([\s\S]*)<\/script>/) || [])[1] || '';
+    ok(js.length > 1000, 'achei o script do painel (' + js.length + ' chars)');
+
+    let parseOk = true;
+    try { new Function(js); } catch (e) { parseOk = false; }
+    ok(parseOk, 'o JavaScript do painel faz parse');
+
+    const nomes = {};
+    const re = /^\s*(?:async\s+)?function\s+([A-Za-z_$][\w$]*)/gm;
+    let m; while ((m = re.exec(js))) { nomes[m[1]] = (nomes[m[1]] || 0) + 1; }
+    const dup = Object.keys(nomes).filter(n => nomes[n] > 1);
+    ok(dup.length === 0, 'nenhuma função declarada duas vezes' + (dup.length ? ' — DUPLICADAS: ' + dup.join(', ') : ''));
+
+    const chamadas = new Set();
+    const re2 = /on(?:click|change)=\\?["']([A-Za-z_$][\w$]*)\(/g;
+    let m2; while ((m2 = re2.exec(html))) chamadas.add(m2[1]);
+    const orfaos = [...chamadas].filter(n => !nomes[n]);
+    ok(chamadas.size > 10, 'achei os handlers dos botões (' + chamadas.size + ')');
+    ok(orfaos.length === 0, 'todo botão aponta pra uma função que existe' + (orfaos.length ? ' — ÓRFÃOS: ' + orfaos.join(', ') : ''));
+
+    ok(js.includes('setCargoAdmin'), 'o seletor de cargo de admin usa o nome próprio setCargoAdmin');
+  }
 
   srv.close(); await pool.end();
   console.log('\n' + (falhas ? '### ' + falhas + ' FALHA(S)' : '### TUDO PASSOU'));
