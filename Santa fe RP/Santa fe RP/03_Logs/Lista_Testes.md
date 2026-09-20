@@ -282,3 +282,70 @@ Abrir o app Mapa: tem que dizer **GPS FORA DO AR**, sem botão de zoom, e fechar
 ## 🔴 Antes das 23h — permissões de asset
 - [ ] No Output do Studio, os avisos "A experiência não tem permissão de acesso para usar a ID do ativo …": clicar em "compartilhar o acesso" nos que forem de animação/som do jogo, OU confirmar no place público que armas/animações tocam.
 - [ ] Rodapés: nenhuma tela mostra "CAMPO BELO RP" (7 trocados pra SANTA FÉ).
+
+## Pra ti conferir jogando (20/09)
+- [ ] **Sirene SAMU**: entrar na ambulancia, apertar **H** -> agora TOCA (o asset velho 13251270466 vinha mudo, duracao 0; troquei as 12 ambulancias pra 228905506, a mesma da PM).
+- [ ] **Inventario sem caixa preta**: abrir o inventario (G) -> o painel fica translucido (da pra ver o jogo atras), nao mais bloco preto opaco. Era ImageTransparency = 0 no MainGui.Inventory ao abrir; virou 0.35 (Design System: janela preta 0.1-0.4).
+- [ ] **Nivel aparece ao ganhar XP**: o frame Level tava fora da tela (Y negativo), trouxe pro topo; blindei o load. Ja confirmado em Play que vira "Lvl X".
+- [ ] **Loja de armas da favela**: clicar num item (Revolver/Glock/AK...) -> aparece o botao Comprar; comprar debita e entrega. Vale pras 4 lojas (AVendaArma + AVendaIlegal 1/2/3).
+
+## Pra ti conferir jogando (20/09 - parte 2)
+- [ ] **Craft**: segurar o botao Craftar ate o fim NAO cancela mais se o cursor sair de cima (so cancela ao soltar o mouse). Se faltar ingrediente, avisa qual. Tooltip do item aparece no cursor (nao mais la embaixo).
+- [ ] **Carteiro entrega**: a bolinha de entregar aparece se voce esta com a carta cujo destino e aquele ponto (nao depende mais do _G.Data.Emprego). Entrega consome a carta + paga.
+- [ ] **Carteiro multiplas**: da pra pegar varias cartas; equipa a que vai entregar.
+- [ ] **Lixeiras**: cooldown baixou de 20 -> 8 min.
+- [ ] **CHAT PROPRIO (geral)**: aperta ; digita e manda -> a mensagem aparece na JANELA (Chate.ScrollingFrame) pra TODOS, nao so balao. Testar com 2 contas se possivel. Se funcionar, o proximo passo e DESLIGAR o chat do Roblox (ChatWindowConfiguration/ChatInputBarConfiguration.Enabled=false) - reversivel.
+  - Compliance: filtra com Chat:FilterStringForBroadcast (mesmo filtro dos radios/OLX). Mantem regra da Roblox.
+- Backups: RemotesHandler_antes_chatgeral, GuiHandler_antes_chatgeral.
+
+## CRAFT - BUG REAL ACHADO (20/09)
+- [ ] **Craft agora funciona**: o timer do craft cancelava todo frame por causa de `game.Lighting.Blur.Size <= 0`, MAS abrir o inventario NAO liga o Blur (fica 0). Resultado: cancelava no 1o frame, nunca completava. Troquei o guard por `not MainGui.Inventory.Visible`. Testar: selecionar receita (ex: Bandagem = 5 Tecido), segurar Craftar ate o fim -> item entra no inventario.
+- [ ] **CHAT do Roblox DESLIGADO**: ChatWindow/ChatInputBar Enabled=false (QA_enabled_orig salvo). So o chat proprio (; -> janela Chate) funciona agora. Reverter: por Enabled=true de volta.
+- [ ] **Placas de salario**: cada ponto (11) tem placa "SALARIO / <Corp>" ate 70 studs + descricao do F com a corp. Objetos PlacaSalario (dá pra apagar).
+
+## 🔓 20/09 — lockpick abre carros, casas e porta-malas
+(reposto — a entrada anterior tinha sumido do arquivo)
+
+O lockpick virou ferramenta geral de arrombamento. **Gasta 1 Lockpick por uso.**
+- **Carro** (MassanetaCarro `Destrancado`): já existia — carro trancado + Lockpick libera. Mantido.
+- **Casa** (porta `SerDono`): NOVO. Sem ser dono/permissão, com Lockpick na mão, abre gastando 1.
+  Servidor `RemotesHandler` bloco `Porta`; cliente `InteractionHandler` bloco `SerDono` (só `v.Name=='Porta'`).
+- **Porta-malas** trancado de terceiros: NOVO. `PortaMalasService.Solicitar` arromba com Lockpick.
+Backups: `RemotesHandler_antes_lockpick`, `PortaMalasService_antes_lockpick`, `InteractionHandler_antes_lockpick`.
+
+### Pra ti conferir jogando
+- [ ] Casa de outro: sem Lockpick nada; com Lockpick na mão, F abre e **some 1 Lockpick**.
+- [ ] Casa própria/permissão: abre normal, sem gastar.
+- [ ] Cama/interruptor de casa alheia: continuam sem bolinha.
+- [ ] Carro trancado de outro: com Lockpick entra, gasta 1.
+- [ ] Porta-malas trancado de outro: com Lockpick "Você arrombou o porta-malas", gasta 1. Policial abre de graça.
+
+## 🪢 20/09 — algemar/amarrar só exige "sem arma na mão" + braços tortos
+
+**Regra (pedido do Julio):** pra algemar OU amarrar, basta o alvo **não estar com arma na mão**
+(equipada). Não precisa mais "render-se" (V) pra amarrar com a corda.
+- Novo módulo `ReplicatedStorage.Resources.ArmasNaMao` (lista central de armas + `EstaArmado(char)`).
+- Servidor (`RemotesHandler`, ToolAction Algema `A/D`): usa `ArmasNaMao.EstaArmado` — **todas** as armas
+  contam agora (antes faltavam PT 92, Boito Borracha, R700, MT40, T4, M4A1, facas). Desamarrar/desalgemar
+  nunca é bloqueado.
+- Corda (`ToolHandler.Corda`): mostra **Amarrar** e deixa apertar **X** quando o alvo está sem arma na mão
+  (antes só com "render-se"/já algemado).
+Backups: `RemotesHandler_antes_rendicao`, `Corda_antes_rendicao`.
+
+**Braços tortos (mira) — bug raro achado.** O sistema de mira escreve o C0 dos ombros todo frame
+enquanto uma arma está na mão e só restaura no `CleanUp`. Duas falhas deixavam os braços "inclinados
+pra trás", quebrando render/sentado: (1) a base de repouso do ombro era capturada uma vez e podia ser
+capturada já torta; (2) o `CleanUp` não rodava quando a arma saía pro chão (só pegava mochila/destruída),
+e a restauração era pulada se a junta tivesse trocado (ragdoll/respawn).
+Conserto (`ArmaMotor`): base guardada **na própria junta** (atributo `ArmaBaseC0`, capturada limpa),
+restauração re-acha o ombro atual e sempre volta, e o `CleanUp` roda em **qualquer** saída da mão.
+Backup: `ArmaMotor_antes_bracos`.
+
+### Pra ti conferir jogando
+- [ ] Corda: chegar perto de alguém **sem arma na mão** → aparece **Amarrar**, X amarra (sem V).
+- [ ] Corda: se a pessoa está **com arma na mão** → mostra "Renda-se" e X não amarra.
+- [ ] Algema: mesma regra — só algema quem está sem arma na mão (qualquer arma, inclusive faca/T4/MT40).
+- [ ] Desamarrar/desalgemar sempre funciona (mesmo bug improvável de arma na mão).
+- [ ] **Braços**: pegar arma, mirar olhando pra cima/baixo, largar a arma (guardar E jogar no chão),
+      depois sentar / apertar V (render) → braços **normais**, sem ficar inclinado pra trás.
+- [ ] Repetir trocando de arma várias vezes e após morrer/renascer → braços continuam normais.

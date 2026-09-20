@@ -23,6 +23,9 @@
     .card.adm { border-color: #ef444455; }
     .card.adm:hover { border-color: #ef4444; }
     .card.adm .t { color: #ef4444; }
+    .card.fac { border-color: #e0533d55; }
+    .card.fac:hover { border-color: #e0533d; }
+    .card.fac .t { color: #e0533d; }
     .card.off { opacity: .45; pointer-events: none; }
   </style>
 </head>
@@ -41,6 +44,12 @@
           <div class="ic">🏛️</div>
           <div class="t">Painel de Corporações</div>
           <div class="d">Cargos, membros e configurações das corporações que você gerencia.</div>
+        </a>
+        <%# [20/09] terceiro painel: as faccoes (corporations com tipo = 'faccao') %>
+        <a class="card fac" href="/faccoes">
+          <div class="ic">🏴</div>
+          <div class="t">Painel de Facções</div>
+          <div class="d">Cargos, membros e salários das facções. A Pavuna já está aqui.</div>
         </a>
         <% if (user.is_admin) { %>
         <a class="card adm" href="/admin">

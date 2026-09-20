@@ -39,6 +39,10 @@ CREATE TABLE IF NOT EXISTS corporations (
   updated_at TIMESTAMP DEFAULT NOW()
 );
 
+-- [20/09] Facção = corporação com tipo = 'faccao' (painel separado no site).
+ALTER TABLE corporations ADD COLUMN IF NOT EXISTS tipo VARCHAR(16) NOT NULL DEFAULT 'corp';
+CREATE INDEX IF NOT EXISTS idx_corporations_tipo ON corporations(tipo);
+
 -- Cargos dentro de cada corporação
 CREATE TABLE IF NOT EXISTS ranks (
   id SERIAL PRIMARY KEY,

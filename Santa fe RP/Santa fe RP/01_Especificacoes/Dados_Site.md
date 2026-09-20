@@ -1,6 +1,13 @@
 # Dados no Site (Postgres)
-- Feitas: aparelhos, **aparelho_donos** (histórico de posse), celular_contatos, celular_mensagens, deepweb_posts.
-- Planejadas (doc): conversas/conversa_membros, mensagens(pos/rua), notas, fotos(cena jsonb), olx_anuncios/olx_vendas, jornal_materias, chamados/central_turnos, pericia_acessos/inqueritos.
+- Feitas: aparelhos, **aparelho_donos** (histórico de posse), celular_contatos, celular_mensagens, deepweb_posts, **olx_anuncios · olx_vendas** (20/09).
+- Planejadas (doc): conversas/conversa_membros, mensagens(pos/rua), notas, fotos(cena jsonb), jornal_materias, chamados/central_turnos, pericia_acessos/inqueritos.
+
+## olx_anuncios / olx_vendas (20/09)
+`olx_anuncios`: `vendedor_id · vendedor_nome · vendedor_numero · item · qtd · preco · status · comprador_id · comprador_nome · criado_em · expira_em · fechado_em`.
+status: `ativo` → `vendido` | `cancelado` | `expirado` → `devolvido` (o item já voltou pra mão do dono).
+`olx_vendas` é o livro-caixa: `anuncio_id · vendedor_id · comprador_id · item · qtd · preco · criado_em · pago_em`.
+**`pago_em` NULL = o vendedor estava offline e ainda não recebeu.** É por aqui que o dinheiro alcança
+quem não estava online, sem precisar de GlobalUpdate (o DataHandler não implementa GlobalUpdates — medido).
 
 ## ⚠️ Onde a migração roda (17/09) — foi isto que derrubou o celular
 O Procfile é `web: node src/index.js`. A migração que **vale** é a que está DENTRO do

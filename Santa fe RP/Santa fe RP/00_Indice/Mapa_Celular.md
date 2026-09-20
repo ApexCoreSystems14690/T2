@@ -24,7 +24,7 @@ Medido no Studio: `Client.GuiHandler.Celular` (módulos), `StarterGui.Main.Celul
 | SAMU | ✅ | ✅ | módulo 1.8k | 🟡 chamado antigo |
 | Brigada | `Brigada` | `BM` | módulo `BM` | 🟡 chamado antigo |
 | DropaCash | ✅ | ✅ | módulo 2.1k | ⚠️ **não é app** — ver abaixo |
-| OLX | ✅ | ✅ | **inline no GuiHandler** | 🟡 só mural |
+| OLX | ✅ | ✅ | **módulo `Celular.OLX`** (20/09) | ✅ mercado de itens |
 | Ajustes | — (abre pelo `Config`) | ✅ | inline no GuiHandler | ✅ funciona |
 | **Notícias** | ❌ | ❌ | ❌ | **não existe** (0 menções) |
 | **Navegador** | ❌ | ❌ | ❌ | **não existe** (0 menções) |
@@ -41,32 +41,37 @@ abre uma caixinha pra **dropar dinheiro no chão** (`BCA "DropaDinheiro"`). Só 
 dentro da pasta `Celular/` por organização. O app **Banco** (saldo, sacar, depositar,
 transferir) é outra coisa. **Não são duplicados.**
 
-## Por que `/olx` ainda aparece pra todo mundo
-Dois pedaços, os dois vivos:
-1. **`ServerScriptService.ChatBridge`** registra `/olx`, `/x`, `/aviso` e `/deepweb` como
-   `TextChatCommand`.
-2. **`RemotesHandler`** (linha ~4963) trata o comando e faz:
-   ```lua
-   ServerAction:FireAllClients("OLXAnuncio", plr.Name, filteredString)
-   ```
-   **`FireAllClients`** = todo mundo na tela, que é exatamente a queixa.
+## ✅ RESOLVIDO em 20/09 — o `/olx` do chat e a pegadinha da OLX
 
-E o `GuiHandler` linha 2435 ainda **espelha no chat**:
-`AddChatLine("[OLX] nome: texto")`.
+Era assim: `ChatBridge` registrava `/olx /x /aviso /deepweb` como `TextChatCommand`, o
+`RemotesHandler` fazia `ServerAction:FireAllClients("OLXAnuncio", ...)` e o `GuiHandler`
+ainda espelhava no chat. A pegadinha anotada aqui era real: o app OLX **só** vivia desse
+broadcast, então fechar o comando (feito em 19/09) deixaria o jogo sem OLX nenhuma — foi
+exatamente o que aconteceu por um dia.
 
-### A pegadinha: não dá pra simplesmente desligar
-O app OLX **não tem anúncio próprio** — ele é um **mural que só mostra o que vem do `/olx`**
-(`GuiHandler.AddAnuncioOLX` é alimentado pelo `ServerAction 'OLXAnuncio'`). Tirar o comando
-hoje deixaria o jogo **sem OLX nenhum**. Por isso o plano manda tirar `/olx /x /aviso /deepweb`
-**só quando o `CelularV2` ligar pra todos** — e pra isso o OLX precisa virar marketplace de verdade.
+O que destravou: a OLX virou **mercado de verdade**, como manda o item 1 abaixo.
+- Tabelas `olx_anuncios` / `olx_vendas` no T2 (nos DOIS caminhos de migração — `src/index.js`
+  e `src/db/migrate.js`, senão não existe em produção).
+- Rotas `/olx/{feed,meus,anunciar,comprar,cancelar,devolver,creditos}`.
+- O bloco inline do `GuiHandler` saiu e virou o módulo `Celular.OLX` (backup
+  `ServerStorage.Backups.GuiHandler_antes_olx`). O `elseif acao == 'OLXAnuncio'` e o
+  espelho `AddChatLine("[OLX] ...")` viraram código morto de propósito.
+- Anunciar tira o item do inventário; cancelar/vencer devolve; comprar cobra o comprador,
+  entrega o item e credita o vendedor (na hora se online, no login dele se offline).
+
+Regra que ficou: **o item só sai de um lugar depois que o outro lado está garantido.**
+Perder item some com o trabalho do jogador; duplicar item quebra a economia. Errar pra menos.
 
 ## Nomes fora de padrão (funcionam, mas confundem)
 - botão `Rozap` ↔ tela e módulo `RoZap` (casing)
 - botão `Brigada` ↔ tela e módulo `BM`
 
 ## Ordem sugerida pra fechar o Funcional
-1. **OLX de verdade** (anunciar item, guardar no anúncio, compra direta) — é o que **destrava
-   tirar o `/olx` do chat**. Precisa da tabela `olx_anuncios`/`olx_vendas` no T2.
+1. ~~**OLX de verdade** (anunciar item, guardar no anúncio, compra direta)~~ — **FEITO em 20/09.**
+   Falta só a parte de item ÚNICO: hoje o anúncio guarda `nome + quantidade`, então uma arma
+   com histórico próprio (`ItensUnicos`, que ainda não existe no perfil) perderia a identidade
+   ao passar de mão. Enquanto `ItensUnicos` não existir, isso não é regressão — nada no jogo
+   tem identidade por item.
 2. Mensagens salvas: validar histórico com 2 players — quase pronto.
 3. Emergência + [[Central_Corp]]: unificar SAMU/Brigada num app de chamado.
 4. Notícias (jornal): app + tabela `jornal_materias`.

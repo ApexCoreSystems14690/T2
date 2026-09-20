@@ -1,0 +1,201 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Facções — Santa Fé</title>
+  <style>
+    * { margin: 0; padding: 0; box-sizing: border-box; }
+    body { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif; background: #0a0e17; color: #f0f4f8; min-height: 100vh; }
+    .topbar { background: #131a2b; border-bottom: 1px solid #1e2a40; padding: 0.75rem 1.5rem; display: flex; align-items: center; justify-content: space-between; }
+    .topbar h1 { font-size: 1rem; color: #e0533d; letter-spacing: 0.04em; }
+    .topbar .user { display: flex; align-items: center; gap: 0.75rem; font-size: 0.85rem; color: #7a8ba5; }
+    .topbar a { color: #7a8ba5; text-decoration: none; font-size: 0.8rem; }
+    .topbar a:hover { color: #e0533d; }
+    .main { max-width: 800px; margin: 0 auto; padding: 2rem 1.25rem; }
+    .section-title { font-size: 1.1rem; font-weight: 600; margin-bottom: 1rem; display: flex; align-items: center; justify-content: space-between; }
+    .nota { background: #1e2a40; border: 1px solid #2d3a52; border-left: 3px solid #e0533d; border-radius: 6px; padding: 0.9rem 1rem; margin-bottom: 1.5rem; font-size: 0.82rem; color: #9fb0c8; line-height: 1.5; }
+    .corp-card { background: #131a2b; border: 1px solid #1e2a40; border-radius: 8px; padding: 1rem 1.25rem; margin-bottom: 0.75rem; display: flex; align-items: center; justify-content: space-between; transition: border-color 0.15s; }
+    .corp-card:hover { border-color: #3d4a62; }
+    .corp-info { display: flex; align-items: center; gap: 0.75rem; }
+    .corp-color { width: 12px; height: 12px; border-radius: 3px; flex-shrink: 0; }
+    .corp-icon { width: 36px; height: 36px; border-radius: 6px; object-fit: cover; flex-shrink: 0; background: #0a0e17; }
+    .corp-name { font-weight: 600; font-size: 0.95rem; }
+    .corp-members { color: #7a8ba5; font-size: 0.8rem; }
+    .corp-btn { color: #e0533d; text-decoration: none; font-size: 0.8rem; font-weight: 600; padding: 0.4rem 0.8rem; border: 1px solid #e0533d33; border-radius: 4px; }
+    .corp-btn:hover { background: #e0533d11; }
+    .empty { color: #7a8ba5; font-size: 0.9rem; text-align: center; padding: 2rem; }
+    .create-btn { background: #e0533d; color: #0a0e17; border: none; padding: 0.4rem 0.8rem; border-radius: 4px; font-size: 0.8rem; font-weight: 700; cursor: pointer; text-decoration: none; }
+    .create-btn:hover { background: #c74532; }
+    .modal-overlay { display: none; position: fixed; top: 0; left: 0; width: 100%; height: 100%; background: rgba(0,0,0,0.6); z-index: 100; align-items: center; justify-content: center; }
+    .modal-overlay.active { display: flex; }
+    .modal { background: #131a2b; border: 1px solid #2d3a52; border-radius: 10px; padding: 1.5rem; width: 90%; max-width: 420px; }
+    .modal h2 { font-size: 1rem; margin-bottom: 1rem; color: #e0533d; }
+    .modal label { display: block; font-size: 0.8rem; color: #7a8ba5; margin-bottom: 0.25rem; margin-top: 0.75rem; }
+    .modal input, .modal textarea { width: 100%; background: #0a0e17; border: 1px solid #2d3a52; border-radius: 4px; padding: 0.5rem; color: #f0f4f8; font-size: 0.85rem; }
+    .modal textarea { height: 60px; resize: vertical; }
+    .modal .actions { display: flex; gap: 0.5rem; margin-top: 1rem; justify-content: flex-end; }
+    .modal .cancel-btn { background: none; border: 1px solid #2d3a52; color: #7a8ba5; padding: 0.4rem 0.8rem; border-radius: 4px; cursor: pointer; font-size: 0.8rem; }
+    .modal .cancel-btn:hover { border-color: #3d4a62; color: #f0f4f8; }
+    .modal .error-msg { color: #ff4444; font-size: 0.8rem; margin-top: 0.5rem; display: none; }
+  </style>
+</head>
+<body>
+  <div class="topbar">
+    <div style="display:flex;align-items:center;gap:1rem">
+      <a href="/" title="Voltar ao início" style="font-size:1.1rem;line-height:1">&larr; Início</a>
+      <h1>SANTA FÉ — FACÇÕES</h1>
+    </div>
+    <div class="user">
+      <a href="/dashboard">Corporações</a>
+      <% if (typeof ehStaff !== 'undefined' && ehStaff) { %><a href="/admin" style="color:#ef4444">Painel Admin</a><% } %>
+      <span><%= user.discord_username %></span>
+      <a href="/auth/logout">Sair</a>
+    </div>
+  </div>
+  <div class="main">
+    <div class="nota">
+      Facção funciona igual a uma corporação: cargos, membros e salários são os mesmos campos, e o jogo
+      lê pelo <strong>slug</strong>. A diferença é que ela não entra na lista das corporações — e não
+      recebe os alertas de ocorrência da polícia.
+    </div>
+
+    <div class="section-title">
+      <%= (typeof podeCorp !== 'undefined' && podeCorp) ? 'Todas as Facções (staff)' : 'Suas Facções' %>
+      <% if (typeof podeCorp !== 'undefined' && podeCorp) { %>
+      <button class="create-btn" onclick="document.getElementById('createModal').classList.add('active')">+ Nova Facção</button>
+      <% } %>
+    </div>
+
+    <% if (faccoes.length === 0) { %>
+      <div class="empty">Você não faz parte de nenhuma facção.</div>
+    <% } else { %>
+      <% faccoes.forEach(corp => { %>
+        <div class="corp-card">
+          <div class="corp-info">
+            <% if (corp.has_icon_file) { %>
+              <img src="/api/corps/<%= corp.id %>/icon" class="corp-icon" alt="<%= corp.name %>">
+            <% } else if (corp.icon_url) { %>
+              <img src="<%= corp.icon_url %>" class="corp-icon" alt="<%= corp.name %>">
+            <% } else { %>
+              <div class="corp-color" style="background: <%= corp.color %>"></div>
+            <% } %>
+            <div>
+              <div class="corp-name"><%= corp.name %></div>
+              <div class="corp-members">
+                <%= corp.member_count %> membros<% if (corp.sou_dono) { %> · você é o dono<% } else if (corp.meu_cargo) { %> · seu cargo: <%= corp.meu_cargo %><% } else if (corp.sou_gerente) { %> · você é co-gerente<% } %>
+              </div>
+            </div>
+          </div>
+          <div style="display:flex;gap:0.5rem;align-items:center">
+            <% if (corp.pode_gerenciar) { %>
+            <a href="/dashboard/corp/<%= corp.id %>" class="corp-btn">Gerenciar</a>
+            <% } %>
+            <% if ((corp.sou_membro || corp.sou_gerente) && !corp.sou_dono) { %>
+            <button class="corp-btn" style="color:#f59e0b;border-color:#f59e0b33;cursor:pointer;background:none" onclick="sairCorp(<%= corp.id %>, '<%= corp.name.replace(/'/g, "\\'") %>')">Sair</button>
+            <% } %>
+            <% if ((typeof podeCorp !== 'undefined' && podeCorp) || corp.owner_id === user.id) { %>
+            <button class="corp-btn" style="color:#ef4444;border-color:#ef444433;cursor:pointer;background:none" onclick="excluirCorp(<%= corp.id %>, '<%= corp.name.replace(/'/g, "\\'") %>')">Excluir</button>
+            <% } %>
+          </div>
+        </div>
+      <% }) %>
+    <% } %>
+  </div>
+
+  <!-- Modal Criar Facção -->
+  <div class="modal-overlay" id="createModal">
+    <div class="modal">
+      <h2>Criar Facção</h2>
+      <label>Nome</label>
+      <input type="text" id="corpName" placeholder="Ex: Pavuna">
+      <label>Slug (é o nome que o jogo consulta)</label>
+      <input type="text" id="corpSlug" placeholder="Ex: pavuna">
+      <label>Descrição (opcional)</label>
+      <textarea id="corpDesc" placeholder="Descrição da facção"></textarea>
+      <label>Imagem / Logo</label>
+      <input type="file" id="corpIconFile" accept="image/png,image/jpeg,image/gif,image/webp" style="margin-bottom:0.5rem">
+      <input type="text" id="corpIcon" placeholder="Ou cole uma URL de imagem" style="font-size:0.8rem">
+      <label>Cor</label>
+      <input type="color" id="corpColor" value="#8B1A1A" style="height: 36px; padding: 2px;">
+      <div class="error-msg" id="createError"></div>
+      <div class="actions">
+        <button class="cancel-btn" onclick="document.getElementById('createModal').classList.remove('active')">Cancelar</button>
+        <button class="create-btn" onclick="criarFaccao()">Criar</button>
+      </div>
+    </div>
+  </div>
+
+  <script>
+    document.getElementById('corpName').addEventListener('input', function() {
+      const slug = this.value.toLowerCase()
+        .normalize('NFD').replace(/[̀-ͯ]/g, '')
+        .replace(/\s+/g, '-').replace(/[^a-z0-9-]/g, '');
+      document.getElementById('corpSlug').value = slug;
+    });
+
+    async function excluirCorp(id, name) {
+      if (!confirm('Tem certeza que quer excluir "' + name + '"? Isso remove todos os cargos e membros!')) return;
+      if (!confirm('ÚLTIMA CHANCE! Excluir "' + name + '" permanentemente?')) return;
+      try {
+        const res = await fetch('/api/corps/' + id, { method: 'DELETE' });
+        const data = await res.json();
+        if (!res.ok) { alert(data.error || 'Erro ao excluir'); return; }
+        window.location.reload();
+      } catch (err) { alert('Erro de conexão'); }
+    }
+
+    async function sairCorp(id, name) {
+      if (!confirm('Sair de "' + name + '"?\n\nVocê perde o cargo e os acessos dessa facção dentro do jogo.')) return;
+      try {
+        const res = await fetch('/api/corps/' + id + '/sair', {
+          method: 'POST', headers: { 'Content-Type': 'application/json' }, body: '{}',
+        });
+        const data = await res.json();
+        if (!res.ok) { alert(data.error || 'Erro ao sair'); return; }
+        alert('Você saiu de ' + data.corporacao + (data.avisou_jogo ? '.\nComo você está no jogo agora, o acesso já foi retirado.' : '.'));
+        window.location.reload();
+      } catch (err) { alert('Erro de conexão'); }
+    }
+
+    async function criarFaccao() {
+      const name = document.getElementById('corpName').value.trim();
+      const slug = document.getElementById('corpSlug').value.trim();
+      const description = document.getElementById('corpDesc').value.trim();
+      const icon_url = document.getElementById('corpIcon').value.trim();
+      const color = document.getElementById('corpColor').value;
+      const iconFile = document.getElementById('corpIconFile').files[0];
+      const errorEl = document.getElementById('createError');
+
+      if (!name || !slug) {
+        errorEl.textContent = 'Nome e slug são obrigatórios';
+        errorEl.style.display = 'block';
+        return;
+      }
+      try {
+        const res = await fetch('/api/corps', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          // tipo: o servidor só aceita 'corp' ou 'faccao' — aqui é sempre facção
+          body: JSON.stringify({ name, slug, description, color, tipo: 'faccao', icon_url: iconFile ? null : icon_url })
+        });
+        const data = await res.json();
+        if (!res.ok) {
+          errorEl.textContent = data.error || 'Erro ao criar';
+          errorEl.style.display = 'block';
+          return;
+        }
+        if (iconFile && data.corporation) {
+          const form = new FormData();
+          form.append('icon', iconFile);
+          await fetch('/api/corps/' + data.corporation.id + '/icon', { method: 'POST', body: form });
+        }
+        window.location.reload();
+      } catch (err) {
+        errorEl.textContent = 'Erro de conexão';
+        errorEl.style.display = 'block';
+      }
+    }
+  </script>
+</body>
+</html>

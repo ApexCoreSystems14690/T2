@@ -463,16 +463,19 @@ router.delete('/:corpId/managers/:managerId', requireCorpOwner, async (req, res)
 // POST /api/corps — criar corporação (SOMENTE admin)
 router.post('/', requireAdmin, async (req, res) => {
   try {
-    const { name, slug, description, color, icon_url, max_members } = req.body;
+    const { name, slug, description, color, icon_url, max_members, tipo } = req.body;
     if (!name || !slug) {
       return res.status(400).json({ error: 'Nome e slug são obrigatórios' });
     }
+    // [20/09] tipo decide em qual painel ela aparece: 'corp' (padrão) ou 'faccao'.
+    // Lista fechada de propósito — o cliente manda a chave, o servidor resolve.
+    const tipoLimpo = tipo === 'faccao' ? 'faccao' : 'corp';
     // Slug deve ser lowercase e sem espaços
     const cleanSlug = slug.toLowerCase().replace(/\s+/g, '-').replace(/[^a-z0-9-]/g, '');
     const result = await pool.query(
-      `INSERT INTO corporations (name, slug, description, owner_id, color, icon_url, max_members)
-       VALUES ($1, $2, $3, $4, $5, $6, $7) RETURNING *`,
-      [name, cleanSlug, description || null, req.user.id, color || '#3B82F6', icon_url || null, max_members || 100]
+      `INSERT INTO corporations (name, slug, description, owner_id, color, icon_url, max_members, tipo)
+       VALUES ($1, $2, $3, $4, $5, $6, $7, $8) RETURNING *`,
+      [name, cleanSlug, description || null, req.user.id, color || '#3B82F6', icon_url || null, max_members || 100, tipoLimpo]
     );
     res.json({ corporation: result.rows[0] });
   } catch (err) {

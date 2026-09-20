@@ -401,6 +401,162 @@ async function start() {
         END $$;
       `);
     } catch (e) { console.error('migração Jornal:', e.message); }
+    // ===== FACÇÕES (20/09/2026, pedido do Julio) =====
+    // Facção é uma corporação com tipo = 'faccao'. Tudo que já existe (cargos,
+    // membros, ícone, API do jogo) continua valendo — muda só em qual painel ela
+    // aparece: /dashboard lista as corps, /faccoes lista as facções.
+    try {
+      await pool.query(`
+        ALTER TABLE corporations ADD COLUMN IF NOT EXISTS tipo VARCHAR(16) NOT NULL DEFAULT 'corp';
+        CREATE INDEX IF NOT EXISTS idx_corporations_tipo ON corporations(tipo);
+      `);
+    } catch (e) { console.error('migração coluna tipo:', e.message); }
+
+    // Pavuna — a facção inicial. O jogo já a conhece pelo slug 'pavuna'
+    // (CorpService traduz o grupo 35175874 pra esse slug) e paga pelo nome do cargo,
+    // então os 14 cargos abaixo são IGUAIS à tabela SalariosPavuna do RemotesHandler.
+    // Mexer num dos dois lados sem o outro faz o salário sair nil no jogo.
+    // Ícone: textura da MascaraCaveira do vestuário da Pavuna, tirada do próprio jogo.
+    try {
+      await pool.query(`
+        DO $$
+        DECLARE
+          cid INTEGER;
+          cargos TEXT[][] := ARRAY[
+            ['Dono do Morro','21000'], ['Frente','18000'], ['Gerente Geral','15000'],
+            ['Gerente de Boca','12000'], ['Contenção','9500'], ['Fiel','8000'],
+            ['Soldado','6000'], ['Endolador','4500'], ['Vapor','3500'],
+            ['Avião','2500'], ['Olheiro','2000'], ['Fogueteiro','1600'],
+            ['Radinho','1200'], ['Novato','1200']
+          ];
+          i INTEGER; n INTEGER;
+        BEGIN
+          SELECT id INTO cid FROM corporations WHERE slug = 'pavuna';
+          IF cid IS NULL THEN
+            INSERT INTO corporations (name, slug, description, color, max_members, is_active, tipo, icon_url)
+            VALUES ('Pavuna', 'pavuna',
+                    'Facção da Pavuna. Domínio do morro, boca de venda e o que vier junto.',
+                    '#8B1A1A', 100, true, 'faccao',
+                    'https://www.roblox.com/asset-thumbnail/image?assetId=12867403810&width=420&height=420&format=png')
+            RETURNING id INTO cid;
+          END IF;
+          UPDATE corporations SET tipo = 'faccao', is_active = true, updated_at = NOW()
+           WHERE id = cid AND (tipo <> 'faccao' OR is_active = false);
+          -- ícone só se ainda não tiver nenhum (não sobrescreve upload do Julio)
+          UPDATE corporations
+             SET icon_url = 'https://www.roblox.com/asset-thumbnail/image?assetId=12867403810&width=420&height=420&format=png',
+                 updated_at = NOW()
+           WHERE id = cid AND icon_url IS NULL AND icon_data IS NULL;
+          -- cargos: só semeia se a facção não tem nenhum
+          IF NOT EXISTS (SELECT 1 FROM ranks WHERE corporation_id = cid) THEN
+            n := array_length(cargos, 1);
+            FOR i IN 1..n LOOP
+              INSERT INTO ranks (corporation_id, name, level, salary)
+              VALUES (cid, cargos[i][1], n - i + 1, cargos[i][2]::INTEGER)
+              ON CONFLICT (corporation_id, name) DO NOTHING;
+            END LOOP;
+          END IF;
+        END $$;
+      `);
+    } catch (e) { console.error('migração facção Pavuna:', e.message); }
+
+    // Ícone do Jornal: o ícone do Microfone da imprensa, tirado do próprio jogo
+    // (ServerStorage.Tools.Microfone). Só entra se o Jornal ainda não tem imagem.
+    try {
+      await pool.query(`
+        UPDATE corporations
+           SET icon_url = 'https://www.roblox.com/asset-thumbnail/image?assetId=7560648021&width=420&height=420&format=png',
+               updated_at = NOW()
+         WHERE slug = 'jornal' AND icon_url IS NULL AND icon_data IS NULL;
+      `);
+    } catch (e) { console.error('migração ícone Jornal:', e.message); }
+
+    // ===== CARGOS DA POLÍCIA CIVIL — MODELO DE CARREIRA (20/09/2026) =====
+    // Reclamação do lançamento: os cargos da PC no site não eram uma carreira, eram
+    // uma lista solta herdada da antiga Polícia Federal. Aqui entra o modelo real:
+    // Direção → Delegados (1ª/2ª/3ª classe) → Inquéritos → Perícia (1ª/2ª/3ª) →
+    // Papiloscopia → Agentes de Polícia Judiciária (1ª/2ª/3ª) → Escola.
+    // Ninguém fica sem cargo: cada cargo antigo tem destino no mapa, e quem sobrar
+    // cai em Instruendo. Idempotente: só roda se '[DG] Delegado-Geral' ainda não existe.
+    try {
+      await pool.query(`
+        DO $$
+        DECLARE
+          cid INTEGER;
+          novos TEXT[][] := ARRAY[
+            ['[DG] Delegado-Geral','19000'],
+            ['[DGA] Delegado-Geral Adjunto','17500'],
+            ['[CG] Corregedor-Geral','16500'],
+            ['[DD] Diretor de Departamento','15500'],
+            ['[DP-1] Delegado de Polícia 1ª Classe','14500'],
+            ['[DP-2] Delegado de Polícia 2ª Classe','13500'],
+            ['[DP-3] Delegado de Polícia 3ª Classe','12500'],
+            ['[DINV] Diretor de Investigação','12000'],
+            ['[PER-1] Perito Criminal 1ª Classe','10500'],
+            ['[PER-2] Perito Criminal 2ª Classe','9500'],
+            ['[PER-3] Perito Criminal 3ª Classe','8500'],
+            ['[INV-1] Investigador 1ª Classe','10500'],
+            ['[INV-2] Investigador 2ª Classe','9500'],
+            ['[INV-3] Investigador 3ª Classe','8500'],
+            ['[PAP] Papiloscopista Policial','8000'],
+            ['[AUX] Auxiliar de Investigação','7000'],
+            ['[APJ-1] Agente de Polícia Judiciária 1ª Classe','7000'],
+            ['[APJ-2] Agente de Polícia Judiciária 2ª Classe','5500'],
+            ['[APJ-3] Agente de Polícia Judiciária 3ª Classe','4000'],
+            ['[ESPC] Instruendo','2210'],
+            ['Holder','2125']
+          ];
+          mapa TEXT[][] := ARRAY[
+            ['[DLG-G] Delegado Geral','[DG] Delegado-Geral'],
+            ['[DLG-ADJ] Delegado Adjunto','[DGA] Delegado-Geral Adjunto'],
+            ['[DLG-1º] Delegado de Primeira Classe','[DP-1] Delegado de Polícia 1ª Classe'],
+            ['[DLG-2º] Delegado de Segunda Classe','[DP-2] Delegado de Polícia 2ª Classe'],
+            ['[DLG-3º] Delegado de Terceira Classe','[DP-3] Delegado de Polícia 3ª Classe'],
+            ['[ESC] Escrivão','[AUX] Auxiliar de Investigação'],
+            ['[PRT-C] Perito Criminal','[PER-1] Perito Criminal 1ª Classe'],
+            ['[LEG] Legista','[PER-2] Perito Criminal 2ª Classe'],
+            ['[INV-1º] Investigador de Primeira Classe','[INV-1] Investigador 1ª Classe'],
+            ['[INV-2º] Investigador de Segunda Classe','[INV-2] Investigador 2ª Classe'],
+            ['[INV-3º] Investigador de Terceira Classe','[INV-3] Investigador 3ª Classe'],
+            ['[INV] Investigador','[INV-3] Investigador 3ª Classe'],
+            ['[AGT-1º] Agente de Primeira Classe','[APJ-1] Agente de Polícia Judiciária 1ª Classe'],
+            ['[AGT-2º] Agente de Segunda Classe','[APJ-2] Agente de Polícia Judiciária 2ª Classe'],
+            ['[AGT-3º] Agente de Terceira Classe','[APJ-3] Agente de Polícia Judiciária 3ª Classe'],
+            ['[AGT-P] Agente de Polícia','[APJ-3] Agente de Polícia Judiciária 3ª Classe'],
+            ['Aluno','[ESPC] Instruendo'],
+            ['Holder','Holder']
+          ];
+          i INTEGER; n INTEGER; velho_id INTEGER; novo_id INTEGER;
+        BEGIN
+          SELECT id INTO cid FROM corporations WHERE slug = 'policia-civil' AND is_active = true;
+          IF cid IS NULL THEN RETURN; END IF;
+          IF EXISTS (SELECT 1 FROM ranks WHERE corporation_id = cid AND name = '[DG] Delegado-Geral') THEN RETURN; END IF;
+          n := array_length(novos, 1);
+          -- 1) cria os novos em níveis temporários (100+) pra não colidir com os antigos
+          FOR i IN 1..n LOOP
+            INSERT INTO ranks (corporation_id, name, level, salary)
+            VALUES (cid, novos[i][1], 100 + (n - i + 1), novos[i][2]::INTEGER)
+            ON CONFLICT (corporation_id, name) DO UPDATE SET level = EXCLUDED.level, salary = EXCLUDED.salary;
+          END LOOP;
+          -- 2) move cada membro pro cargo equivalente
+          FOR i IN 1..array_length(mapa, 1) LOOP
+            SELECT id INTO velho_id FROM ranks WHERE corporation_id = cid AND name = mapa[i][1] AND level < 100;
+            SELECT id INTO novo_id  FROM ranks WHERE corporation_id = cid AND name = mapa[i][2] AND level >= 100;
+            IF velho_id IS NOT NULL AND novo_id IS NOT NULL THEN
+              UPDATE members SET rank_id = novo_id WHERE corporation_id = cid AND rank_id = velho_id;
+            END IF;
+          END LOOP;
+          -- 3) quem sobrou em cargo sem destino vira Instruendo (ninguém fica sem cargo)
+          SELECT id INTO novo_id FROM ranks WHERE corporation_id = cid AND name = '[ESPC] Instruendo' AND level >= 100;
+          UPDATE members SET rank_id = novo_id
+           WHERE corporation_id = cid
+             AND (rank_id IS NULL OR rank_id IN (SELECT id FROM ranks WHERE corporation_id = cid AND level < 100));
+          -- 4) apaga os antigos e renumera os novos de 21 (topo) até 1
+          DELETE FROM ranks WHERE corporation_id = cid AND level < 100;
+          UPDATE ranks SET level = level - 100 WHERE corporation_id = cid AND level >= 100;
+        END $$;
+      `);
+    } catch (e) { console.error('migração carreira PC:', e.message); }
     console.log('✅ Banco migrado');
   } catch (err) {
     console.error('❌ Migração falhou:', err.message);
@@ -456,6 +612,7 @@ async function start() {
   app.use('/api/corps', require('./routes/corps-api'));
   app.use('/api/admin', require('./routes/admin-api'));
   app.use('/admin', require('./routes/admin'));
+  app.use('/faccoes', require('./routes/faccoes'));
 
   // Home
   app.get('/', (req, res) => {

@@ -56,7 +56,7 @@ Se a ideia falhar na técnica OU não fizer sentido subjetivamente no universo d
 - App Banco: `01_Especificacoes/Banco.md`
 - App Deepweb + Chip: `01_Especificacoes/Deepweb_Chip.md`
 - Mensagens/Contatos/Grupos: `01_Especificacoes/Mensagens.md`
-- OLX: `01_Especificacoes/OLX.md`
+- **OLX (mercado de itens, 20/09): `01_Especificacoes/OLX.md`**
 - Foto de cena: `01_Especificacoes/Foto_Cena.md`
 - Perícia digital (PC): `01_Especificacoes/Pericia.md`
 - Central das corporações: `01_Especificacoes/Central_Corp.md`
@@ -88,6 +88,7 @@ Se a ideia falhar na técnica OU não fizer sentido subjetivamente no universo d
 - Banco (client): `...GuiHandler.Celular.Banco` -> `02_Sistemas_Studio/Banco_Client.md`
 - Deepweb (client): `...GuiHandler.Celular.Deepweb` -> `02_Sistemas_Studio/Deepweb_Client.md`
 - Notas (client): `...GuiHandler.Celular.Notas` -> `02_Sistemas_Studio/Notas.md`
+- **OLX (client, 20/09): `...GuiHandler.Celular.OLX` -> `01_Especificacoes/OLX.md`** — era um bloco inline no GuiHandler; virou módulo. Mercado de itens com anúncio guardado no site.
 - GuiHandler: `StarterPlayer...Client.GuiHandler` -> `02_Sistemas_Studio/GuiHandler.md`
 - Telas (pilha): `StarterPlayer...Client.Telas` -> `02_Sistemas_Studio/Telas.md`
 - **Hud (F3, núcleo puro): `StarterPlayer...Client.Hud` (+ filho `N`) -> `02_Sistemas_Studio/Hud.md`**
