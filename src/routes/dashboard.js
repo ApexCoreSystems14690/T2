@@ -116,12 +116,41 @@ router.get('/corp/:corpId', async (req, res) => {
 
 // Vincular Roblox ID
 router.get('/link-roblox', (req, res) => {
-  res.render('link-roblox', { user: req.user });
+  // [20/09] o 'error' vinha no querystring mas NUNCA era passado pra view, entao
+  // quem errava era redirecionado de volta pra uma tela muda.
+  res.render('link-roblox', { user: req.user, error: req.query.error || undefined });
 });
+
+// [20/09] Resolve o ID do Roblox a partir do NOME de usuario. Motivo: a filiacao
+// numa corp costuma ser criada pelo ID do Roblox (o jogo so conhece isso), e ela
+// fica pendurada num usuario "placeholder". O jogador entra no site pelo Discord,
+// vira OUTRA linha de usuario, e nao ve corp nenhuma ate vincular. So que a tela
+// de vincular exigia o ID NUMERICO -- que quase ninguem sabe de cor. Agora basta
+// o nome; o ID a gente busca aqui.
+async function idPeloNome(nome) {
+  try {
+    const r = await fetch('https://users.roblox.com/v1/usernames/users', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ usernames: [String(nome).trim()], excludeBannedUsers: false }),
+    });
+    if (!r.ok) return null;
+    const j = await r.json();
+    const u = j && j.data && j.data[0];
+    return u && u.id ? { id: u.id, nome: u.name } : null;
+  } catch (e) { return null; }
+}
 
 router.post('/link-roblox', async (req, res) => {
   const { roblox_id, roblox_username } = req.body;
-  const rid = parseInt(roblox_id);
+  let rid = parseInt(roblox_id);
+  let nomeRoblox = roblox_username;
+  if (!rid && roblox_username && String(roblox_username).trim()) {
+    const achado = await idPeloNome(roblox_username);
+    if (!achado) return res.redirect('/dashboard/link-roblox?error=nome_nao_achado');
+    rid = achado.id;
+    nomeRoblox = achado.nome;   // guarda com a grafia certa do Roblox
+  }
   if (!rid) return res.redirect('/dashboard/link-roblox?error=id_required');
 
   const client = await pool.connect();
@@ -155,7 +184,7 @@ router.post('/link-roblox', async (req, res) => {
 
     await client.query(
       'UPDATE users SET roblox_id = $1, roblox_username = $2, updated_at = NOW() WHERE id = $3',
-      [rid, roblox_username || null, req.user.id]
+      [rid, nomeRoblox || null, req.user.id]
     );
     await client.query('COMMIT');
     res.redirect('/dashboard');

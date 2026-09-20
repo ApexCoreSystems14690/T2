@@ -73,7 +73,20 @@
     </div>
 
     <% if (corporations.length === 0) { %>
-      <div class="empty">Você não faz parte de nenhuma corporação.</div>
+      <%# [20/09] "estou numa corp e nao vejo nada aqui": quase sempre e falta de
+          vinculo. A filiacao costuma ser criada pelo ID do Roblox e fica presa a
+          um usuario provisorio ate a pessoa vincular. Dizer so "voce nao faz parte
+          de nenhuma" era mentira pra quem esta numa corp dentro do jogo. %>
+      <% if (!user.roblox_id) { %>
+        <div class="empty">
+          Nenhuma corporação aparece aqui ainda.<br><br>
+          Se você já entrou numa corporação <strong>dentro do jogo</strong>, ela está amarrada ao seu
+          Roblox — e some do painel até você vincular.<br>
+          <a href="/dashboard/link-roblox" style="color:#00d4ff">Vincular meu Roblox agora</a>
+        </div>
+      <% } else { %>
+        <div class="empty">Você não faz parte de nenhuma corporação.</div>
+      <% } %>
     <% } else { %>
       <% corporations.forEach(corp => { %>
         <div class="corp-card">

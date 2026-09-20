@@ -289,63 +289,159 @@ Abrir o app Mapa: tem que dizer **GPS FORA DO AR**, sem botão de zoom, e fechar
 - [ ] **Nivel aparece ao ganhar XP**: o frame Level tava fora da tela (Y negativo), trouxe pro topo; blindei o load. Ja confirmado em Play que vira "Lvl X".
 - [ ] **Loja de armas da favela**: clicar num item (Revolver/Glock/AK...) -> aparece o botao Comprar; comprar debita e entrega. Vale pras 4 lojas (AVendaArma + AVendaIlegal 1/2/3).
 
-## Pra ti conferir jogando (20/09 - parte 2)
-- [ ] **Craft**: segurar o botao Craftar ate o fim NAO cancela mais se o cursor sair de cima (so cancela ao soltar o mouse). Se faltar ingrediente, avisa qual. Tooltip do item aparece no cursor (nao mais la embaixo).
-- [ ] **Carteiro entrega**: a bolinha de entregar aparece se voce esta com a carta cujo destino e aquele ponto (nao depende mais do _G.Data.Emprego). Entrega consome a carta + paga.
-- [ ] **Carteiro multiplas**: da pra pegar varias cartas; equipa a que vai entregar.
-- [ ] **Lixeiras**: cooldown baixou de 20 -> 8 min.
-- [ ] **CHAT PROPRIO (geral)**: aperta ; digita e manda -> a mensagem aparece na JANELA (Chate.ScrollingFrame) pra TODOS, nao so balao. Testar com 2 contas se possivel. Se funcionar, o proximo passo e DESLIGAR o chat do Roblox (ChatWindowConfiguration/ChatInputBarConfiguration.Enabled=false) - reversivel.
-  - Compliance: filtra com Chat:FilterStringForBroadcast (mesmo filtro dos radios/OLX). Mantem regra da Roblox.
-- Backups: RemotesHandler_antes_chatgeral, GuiHandler_antes_chatgeral.
+## 📱 20/09 — RoZap, Deepweb e OLX (medido no Edit, sem Play)
 
-## CRAFT - BUG REAL ACHADO (20/09)
-- [ ] **Craft agora funciona**: o timer do craft cancelava todo frame por causa de `game.Lighting.Blur.Size <= 0`, MAS abrir o inventario NAO liga o Blur (fica 0). Resultado: cancelava no 1o frame, nunca completava. Troquei o guard por `not MainGui.Inventory.Visible`. Testar: selecionar receita (ex: Bandagem = 5 Tecido), segurar Craftar ate o fim -> item entra no inventario.
-- [ ] **CHAT do Roblox DESLIGADO**: ChatWindow/ChatInputBar Enabled=false (QA_enabled_orig salvo). So o chat proprio (; -> janela Chate) funciona agora. Reverter: por Enabled=true de volta.
-- [ ] **Placas de salario**: cada ponto (11) tem placa "SALARIO / <Corp>" ate 70 studs + descricao do F com a corp. Objetos PlacaSalario (dá pra apagar).
+### RoZap — mensagens sumiam e o balão verde cobria o chat
+Dois defeitos de propriedade, zero de lógica. `ScrollingFrame.CanvasSize` era `{0,0},{99,0}`
+com `AutomaticCanvasSize None`: a vista rolava pro vazio depois da 1ª mensagem. E os moldes
+tinham Size em **escala** com `AutomaticSize` — medido: balão de **9166px** num quadro de
+401px, canvas 58924px. Agora cada mensagem é uma linha e o balão abraça o texto (teto 76%).
+Backups: `RoZap_antes_layout`, `RoZapTemplate_antes_layout`.
+- [ ] Abrir uma conversa com 10+ mensagens: todas aparecem, a última fica à vista.
+- [ ] Mandar 3 mensagens seguidas: as 3 aparecem, cada balão do tamanho do texto.
+- [ ] Mensagem longa (2+ linhas): quebra e para em ~3/4 da largura, não estoura pro lado.
+- [ ] Texto do outro (balão branco) está legível — era cinza claro no branco.
+
+### Deepweb — mural fora de ordem, sem hora, post duplicado
+`LayoutOrder = -(os.clock()*1000)` dentro de um laço empatava (medido: dois pares em
+-5775370 e -5775369) e o mural saía embaralhado, com o post mais novo no meio. Agora a
+ordem é explícita (feed 1..n, ao vivo 0,-1,-2...) e a hora vem do site (`idade_seg`).
+Também: o servidor mandava o post de volta pro próprio autor, que já tinha desenhado o
+dele — aparecia duas vezes. E o freio de 2 min só existia no cliente e no site (que
+recusa com 429 sem ninguém ler) — agora existe no servidor, antes de espalhar. Post passa
+por filtro de texto, que antes não existia.
+Backups: `Deepweb_antes_feed`, `CelularService_antes_deepweb`.
+- [ ] Abrir a deepweb: o post mais novo é o de cima, e cada um mostra "agora / 7 min / 3 h / 2 d".
+- [ ] Postar: aparece **uma** vez só, no topo.
+- [ ] Postar de novo em menos de 2 min: recusa com "espere 2 min entre posts" e **não** aparece no mural.
+- [ ] Com dois jogadores: o post de um aparece na tela do outro na hora.
+- [ ] Sem chip: a tela de instalar aparece certa e o segurar-F enche a barra.
+
+### OLX — voltou a ter como postar
+O `/olx` do chat foi fechado no dia 19 e a OLX é um mural que **só** vivia dele — ficaria
+viva e sem ninguém pra alimentar (a "pegadinha" do [[Mapa_Celular]]). O painel
+`MandarItem` já existia na tela, escondido e ligado em nada; agora é a porta de entrada
+(`BCA "OLXPostar"` → mesmo filtro e mesmo broadcast de antes, + freio de 60 s por jogador).
+- [ ] Abrir a OLX → botão Volta abre/fecha o "Criar Postagem".
+- [ ] Preencher Item + Valor → Confirmar: o anúncio aparece no mural de **todo mundo**.
+- [ ] Confirmar de novo em menos de 1 min: diz "Espere 1 min" e não posta.
+- [ ] Item com menos de 2 letras: diz "Escreva o item".
+- [ ] Não existe mais o card fantasma "Label / Label" no mural.
+
+## 🛒 20/09 — OLX virou mercado de verdade (item 1 do [[Mapa_Celular]])
+
+Tabelas `olx_anuncios`/`olx_vendas` no T2, rotas `/olx/*`, e o bloco inline do `GuiHandler`
+virou o módulo `Celular.OLX`. **25 testes das rotas passaram contra um Postgres de verdade**,
+incluindo 8 compradores simultâneos no mesmo anúncio (1 leva, 7 tomam "já foi vendido").
+Backups: `GuiHandler_antes_olx`, `Site_antes_olx`, `SiteCelular_antes_olx`, `TelaOLX_antes_olx`.
+
+### Pra ti conferir jogando (precisa de 2 jogadores pra metade)
+- [ ] Abrir a OLX: o mural mostra os anúncios **mesmo entrando num servidor novo** (antes sumia).
+- [ ] Botão Volta abre o "Criar Postagem". Anunciar um item que você TEM: o item **sai do teu inventário** e o anúncio aparece no mural com o teu nome e a bolinha verde.
+- [ ] Anunciar um item que você NÃO tem → "Voce nao tem esse item".
+- [ ] Anunciar 6 vezes → o sexto diz "Ja tem 5 anuncios".
+- [ ] Clicar num anúncio de outro: o card pede **clique de novo** antes de comprar (não compra no primeiro toque).
+- [ ] Comprar: sai o dinheiro, **entra o item**, o anúncio some do mural dos dois.
+- [ ] Comprar sem ter o dinheiro → "sem dinheiro", e o item NÃO some do mundo (volta pro vendedor).
+- [ ] Clicar no teu próprio anúncio (bolinha verde X) → cancela e **o item volta pro teu inventário**.
+- [ ] Com 2 jogadores: A anuncia, B compra → A recebe o dinheiro na hora, com aviso.
+- [ ] **O caso do offline:** A anuncia e SAI do jogo. B compra. A volta → recebe o dinheiro no login, com aviso.
+- [ ] Não existe mais card fantasma "Label / Label" no mural.
+- [ ] `/olx` no chat continua fechado, e agora isso não deixa a OLX morta.
+
+## 🎒 20/09 — dropar item repetido sumia com DOIS
+
+Relato do Julio: "tenho 2 A10, dropo um, um vai pro chão e o outro some". Não é do A10 —
+é de **qualquer item repetido**. Um drop apagava dois botões do inventário: o servidor
+mandava o `Remove` sem ID, o cliente apagava o **primeiro** botão com aquele nome, e logo
+depois apagava o selecionado também. Com 1 unidade os dois passos batiam no mesmo botão e
+ninguém via; com 2, sumiam os dois. Reproduzido: dropando o 1º sobrava 1 (parecia certo),
+dropando o **2º sobravam 0**. Por isso aparecia com o celular pego de outro jogador — esse
+é o 2º botão. **O save nunca esteve errado** (tirava 1 só): relogando o item voltava.
+Backups: `InventarioHandler_antes_dropduplo`, `RemotesHandler_antes_dropduplo`.
+
+### Pra ti conferir jogando
+- [ ] Com **2 A10** (um pego do chão de outro): dropar um → **sobra um no inventário**, e o do chão é o certo.
+- [ ] Dropar o **segundo** da lista (não o primeiro) → continua sobrando um. Era esse o caso quebrado.
+- [ ] Mesma coisa com 2 bandagens / 2 de qualquer item: some **uma** por drop.
+- [ ] Dropar item **equipado** (na mão) com 2 no inventário → some um só.
+- [ ] Botão **Excluir** com 2 do mesmo item → some um só.
+- [ ] Com **1** unidade: dropar continua funcionando igual a antes.
+- [ ] O celular que ficou continua funcionando (número, conversas) — o outro uid não foi tocado.
+
+## Pra ti conferir jogando (20/09 - parte 2)
+- [ ] **Craft**: segurar Craftar ate o fim NAO cancela mais se o cursor sair de cima (so ao soltar o mouse). Falta ingrediente = avisa qual. Tooltip no cursor (nao mais la embaixo).
+- [ ] **Carteiro entrega**: bolinha aparece se voce esta com a carta cujo destino e aquele ponto (nao depende do _G.Data.Emprego). Entrega consome + paga.
+- [ ] **Carteiro multiplas**: pega varias; equipa a que vai entregar.
+- [ ] **Lixeiras**: cooldown 20 -> 8 min.
+- [ ] **CHAT PROPRIO (geral)**: ; digita e manda -> aparece na JANELA (Chate.ScrollingFrame) pra TODOS. Testar com 2 contas. Se ok, proximo passo = DESLIGAR chat do Roblox (reversivel). Filtra com FilterStringForBroadcast.
+- Backups: RemotesHandler_antes_chatgeral, GuiHandler_antes_chatgeral, e os _antes_ das outras.
 
 ## 🔓 20/09 — lockpick abre carros, casas e porta-malas
-(reposto — a entrada anterior tinha sumido do arquivo)
 
-O lockpick virou ferramenta geral de arrombamento. **Gasta 1 Lockpick por uso.**
-- **Carro** (MassanetaCarro `Destrancado`): já existia — carro trancado + Lockpick libera. Mantido.
-- **Casa** (porta `SerDono`): NOVO. Sem ser dono/permissão, com Lockpick na mão, abre gastando 1.
-  Servidor `RemotesHandler` bloco `Porta`; cliente `InteractionHandler` bloco `SerDono` (só `v.Name=='Porta'`).
-- **Porta-malas** trancado de terceiros: NOVO. `PortaMalasService.Solicitar` arromba com Lockpick.
+Pedido do Julio: "faça com que o lockpick consiga abrir carros e casas (além de porta malas etc)".
+O lockpick vira uma ferramenta geral de arrombamento. **Gasta 1 Lockpick por uso** (mesma regra
+que já existia no carro), e some da mão após abrir.
+
+- **Carro** (porta do carro / MassanetaCarro Request `Destrancado`): já existia — carro trancado +
+  Lockpick na mão libera e senta. Mantido, sem mexer.
+- **Casa** (porta com Request `SerDono`): NOVO. Quem não é dono nem tem permissão, mas está com o
+  Lockpick na mão, abre a porta gastando 1 Lockpick. Servidor: `RemotesHandler` bloco `Porta`.
+  Cliente: `InteractionHandler` bloco `SerDono` passou a mostrar a bolinha F em porta de casa quando
+  se está com Lockpick (escopo só `v.Name == 'Porta'`, não pega cama/interruptor).
+- **Porta-malas** (trancado de terceiros): NOVO. `PortaMalasService.Solicitar` — se não é dono nem
+  policial em serviço, mas tem Lockpick, arromba e gasta 1. A bolinha já aparecia (Request vazio),
+  só o servidor decidia.
+
 Backups: `RemotesHandler_antes_lockpick`, `PortaMalasService_antes_lockpick`, `InteractionHandler_antes_lockpick`.
+Ficou de fora (decidir depois): alertar polícia ao arrombar casa (hoje nenhum arrombamento alerta,
+igual ao carro). Balanceamento = o custo de 1 Lockpick por porta.
 
 ### Pra ti conferir jogando
-- [ ] Casa de outro: sem Lockpick nada; com Lockpick na mão, F abre e **some 1 Lockpick**.
-- [ ] Casa própria/permissão: abre normal, sem gastar.
-- [ ] Cama/interruptor de casa alheia: continuam sem bolinha.
-- [ ] Carro trancado de outro: com Lockpick entra, gasta 1.
-- [ ] Porta-malas trancado de outro: com Lockpick "Você arrombou o porta-malas", gasta 1. Policial abre de graça.
+- [ ] **Casa de outro**: sem Lockpick, sem bolinha na porta (igual antes). Com Lockpick na mão, a
+      bolinha F aparece → abre a porta e **some 1 Lockpick** do inventário.
+- [ ] **Casa própria / com permissão**: abre normal, **sem gastar** Lockpick.
+- [ ] **Cama e interruptor** de casa de outro: continuam sem bolinha (o lockpick não abre esses).
+- [ ] **Carro trancado de outro**: com Lockpick, destranca e entra, gasta 1 (como já era).
+- [ ] **Porta-malas trancado de outro**: com Lockpick, "Você arrombou o porta-malas", abre e gasta 1.
+      Sem Lockpick, continua "Só o dono (ou policial em serviço)".
+- [ ] Policial em serviço abre porta-malas trancado **sem** gastar Lockpick (regra antiga mantida).
 
-## 🪢 20/09 — algemar/amarrar só exige "sem arma na mão" + braços tortos
+## 🪢 20/09 — algemar/amarrar só exige "sem arma na mão"
 
-**Regra (pedido do Julio):** pra algemar OU amarrar, basta o alvo **não estar com arma na mão**
-(equipada). Não precisa mais "render-se" (V) pra amarrar com a corda.
-- Novo módulo `ReplicatedStorage.Resources.ArmasNaMao` (lista central de armas + `EstaArmado(char)`).
+Pra algemar OU amarrar, basta o alvo **não estar com arma na mão** (equipada). Não precisa mais "render-se".
+- Módulo novo `ReplicatedStorage.Resources.ArmasNaMao` (lista central de armas + `EstaArmado(char)`).
 - Servidor (`RemotesHandler`, ToolAction Algema `A/D`): usa `ArmasNaMao.EstaArmado` — **todas** as armas
-  contam agora (antes faltavam PT 92, Boito Borracha, R700, MT40, T4, M4A1, facas). Desamarrar/desalgemar
-  nunca é bloqueado.
-- Corda (`ToolHandler.Corda`): mostra **Amarrar** e deixa apertar **X** quando o alvo está sem arma na mão
-  (antes só com "render-se"/já algemado).
+  contam (antes faltavam PT 92, Boito Borracha, R700, MT40, T4, M4A1, facas). Desamarrar/desalgemar nunca bloqueia.
+- Corda (`ToolHandler.Corda`): mostra **Amarrar** e deixa apertar **X** quando o alvo está sem arma na mão.
 Backups: `RemotesHandler_antes_rendicao`, `Corda_antes_rendicao`.
 
-**Braços tortos (mira) — bug raro achado.** O sistema de mira escreve o C0 dos ombros todo frame
-enquanto uma arma está na mão e só restaura no `CleanUp`. Duas falhas deixavam os braços "inclinados
-pra trás", quebrando render/sentado: (1) a base de repouso do ombro era capturada uma vez e podia ser
-capturada já torta; (2) o `CleanUp` não rodava quando a arma saía pro chão (só pegava mochila/destruída),
-e a restauração era pulada se a junta tivesse trocado (ragdoll/respawn).
-Conserto (`ArmaMotor`): base guardada **na própria junta** (atributo `ArmaBaseC0`, capturada limpa),
-restauração re-acha o ombro atual e sempre volta, e o `CleanUp` roda em **qualquer** saída da mão.
-Backup: `ArmaMotor_antes_bracos`.
+### Pra ti conferir
+- [ ] Corda: chegar perto de alguém sem arma na mão → **Amarrar**, X amarra (sem V).
+- [ ] Corda: alvo com arma na mão → "Renda-se", X não amarra.
+- [ ] Algema: só algema quem está sem arma na mão (qualquer arma, inclusive faca/T4/MT40).
+- [ ] Desamarrar/desalgemar sempre funciona.
 
-### Pra ti conferir jogando
-- [ ] Corda: chegar perto de alguém **sem arma na mão** → aparece **Amarrar**, X amarra (sem V).
-- [ ] Corda: se a pessoa está **com arma na mão** → mostra "Renda-se" e X não amarra.
-- [ ] Algema: mesma regra — só algema quem está sem arma na mão (qualquer arma, inclusive faca/T4/MT40).
-- [ ] Desamarrar/desalgemar sempre funciona (mesmo bug improvável de arma na mão).
-- [ ] **Braços**: pegar arma, mirar olhando pra cima/baixo, largar a arma (guardar E jogar no chão),
-      depois sentar / apertar V (render) → braços **normais**, sem ficar inclinado pra trás.
-- [ ] Repetir trocando de arma várias vezes e após morrer/renascer → braços continuam normais.
+## 🦾 20/09 — braços tortos / bonequinho de braços abertos (animação)
+
+**Duas causas, as duas consertadas:**
+
+1) **Mira (arma)** — o `ArmaMotor` escrevia o C0 dos ombros todo frame e só desfazia no CleanUp; a base
+   de repouso podia ser gravada torta e o CleanUp não rodava se a arma fosse pro chão. Conserto: base
+   guardada na própria junta (atributo `ArmaBaseC0`, capturada limpa), restauração re-acha o ombro e
+   sempre volta, e o CleanUp roda em **qualquer** saída da arma da mão. Backup: `ArmaMotor_antes_bracos`.
+
+2) **Respawn (o do jornal na foto)** — depois de morrer/renascer as animações ficavam **mortas**:
+   - `AnimationHandler:Start` tinha um loop `v=nil;i=nil` que **não fazia nada** → `_G.LoadedAnimations`
+     seguia apontando pro Animator morto. Nenhuma animação de ferramenta nem "Correr" tocava → o boneco
+     caía na pose crua do R6 (braços abertos). Agora recarrega de verdade (`table.clear` + reload no
+     Animator novo). Backup: `AnimationHandler_antes_respawn`.
+   - `ToolHandler` ficava preso no corpo **antigo** (variável `character` capturada 1x) e **vazava** uma
+     conexão de CharacterAdded por respawn. Agora re-liga no corpo atual a cada spawn, sem vazar, e
+     recria os handlers pra pegarem as animações recarregadas. Backup: `ToolHandler_antes_respawn`.
+
+### Pra ti conferir (precisa MORRER e renascer)
+- [ ] Morrer, renascer, pegar um item (jornal/microfone/arma) → segura **normal**, sem braços abertos.
+- [ ] Depois de renascer, **correr** volta a ter animação de corrida.
+- [ ] Pegar arma, mirar pra cima/baixo, largar (guardar E jogar no chão), sentar / apertar V → braços normais.
+- [ ] Repetir morrendo/renascendo várias vezes → continua normal (sem acumular bug a cada morte).

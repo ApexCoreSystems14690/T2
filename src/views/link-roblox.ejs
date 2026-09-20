@@ -23,23 +23,26 @@
 <body>
   <div class="card">
     <h2>Vincular Conta Roblox</h2>
-    <p class="hint">Você encontra seu User ID no perfil do Roblox (na URL).</p>
-    <% if (typeof error !== 'undefined') { %>
+    <p class="hint">É isto que liga a sua conta do site ao seu personagem no jogo. Sem vincular,
+      as corporações em que você já entrou dentro do jogo não aparecem no painel.</p>
+    <% if (typeof error !== 'undefined' && error) { %>
       <div class="error">
-        <% if (error === 'already_linked') { %>Este Roblox ID já está vinculado a outra conta.<% } %>
-        <% if (error === 'id_required') { %>Roblox ID é obrigatório.<% } %>
+        <% if (error === 'already_linked') { %>Esse Roblox já está vinculado a outra conta.<% } %>
+        <% if (error === 'id_required') { %>Escreve o seu nome de usuário do Roblox.<% } %>
+        <% if (error === 'nome_nao_achado') { %>Não achei esse nome no Roblox. Confere a escrita (é o nome de usuário, não o apelido).<% } %>
+        <% if (error === 'internal') { %>Deu erro aqui do nosso lado. Tenta de novo.<% } %>
       </div>
     <% } %>
     <form method="POST" action="/dashboard/link-roblox">
       <div class="form-group">
-        <label>Roblox User ID</label>
-        <input type="number" name="roblox_id" required placeholder="Ex: 123456789" value="<%= user.roblox_id || '' %>">
+        <label>Seu nome de usuário do Roblox</label>
+        <input type="text" name="roblox_username" placeholder="Ex: JogadorX" value="<%= user.roblox_username || '' %>" autofocus>
       </div>
       <div class="form-group">
-        <label>Username (opcional)</label>
-        <input type="text" name="roblox_username" placeholder="Ex: JogadorX" value="<%= user.roblox_username || '' %>">
+        <label>User ID (opcional — só se souber de cabeça)</label>
+        <input type="number" name="roblox_id" placeholder="Ex: 123456789" value="<%= user.roblox_id || '' %>">
       </div>
-      <button type="submit" class="btn">Salvar</button>
+      <button type="submit" class="btn">Vincular</button>
     </form>
     <a href="/dashboard" class="back">Voltar ao painel</a>
   </div>
