@@ -57,6 +57,7 @@ Se a ideia falhar na técnica OU não fizer sentido subjetivamente no universo d
 - App Deepweb + Chip: `01_Especificacoes/Deepweb_Chip.md`
 - Mensagens/Contatos/Grupos: `01_Especificacoes/Mensagens.md`
 - **OLX (mercado de itens, 20/09): `01_Especificacoes/OLX.md`**
+- **NAVEGADOR / internet in-game "Santa Fe Net" (sites, editais de governo, notebook), 20/09 — protótipo EM PLACE DE TESTE: `01_Especificacoes/Navegador.md`**
 - Foto de cena: `01_Especificacoes/Foto_Cena.md`
 - Perícia digital (PC): `01_Especificacoes/Pericia.md`
 - Central das corporações: `01_Especificacoes/Central_Corp.md`

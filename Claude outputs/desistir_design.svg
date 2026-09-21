@@ -1,0 +1,65 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="1120" height="760" viewBox="0 0 1120 760" font-family="'Source Sans 3','Source Sans Pro','Segoe UI',sans-serif">
+  <defs>
+    <linearGradient id="cena" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0" stop-color="#11151b"/>
+      <stop offset="1" stop-color="#05070a"/>
+    </linearGradient>
+    <clipPath id="trilha1"><rect x="330" y="176" width="460" height="14" rx="3"/></clipPath>
+    <clipPath id="trilha2"><rect x="330" y="410" width="460" height="14" rx="3"/></clipPath>
+    <clipPath id="trilha3"><rect x="330" y="644" width="460" height="14" rx="3"/></clipPath>
+  </defs>
+
+  <rect width="1120" height="760" fill="url(#cena)"/>
+
+  <!-- ===================== ESTADO 1: bloqueado ===================== -->
+  <text x="40" y="44" fill="#6f7c8d" font-size="15" letter-spacing="1.5">1 · PRIMEIROS 15 SEGUNDOS — TRAVADO</text>
+  <g opacity="0.55">
+    <rect x="300" y="62" width="520" height="140" rx="4" fill="#000" opacity="0.6"/>
+    <text x="330" y="100" fill="#ffaa00" font-size="21" font-weight="700" letter-spacing="0.5">DESISTIR</text>
+    <text x="330" y="128" fill="#ffffff" font-size="15">Voc&#234; para de lutar pela vida.</text>
+    <text x="330" y="150" fill="#8c98a8" font-size="14">Ainda d&#225; pra te salvarem — mas sobra s&#243; 1:30.</text>
+    <rect x="330" y="176" width="460" height="14" rx="3" fill="#000" opacity="0.45"/>
+    <text x="560" y="187" fill="#7d8a9a" font-size="12" text-anchor="middle" letter-spacing="1">DISPON&#205;VEL EM 9s</text>
+    <rect x="300" y="198" width="520" height="4" fill="#ffaa00" opacity="0.35"/>
+  </g>
+
+  <!-- ===================== ESTADO 2: pronto ===================== -->
+  <text x="40" y="278" fill="#6f7c8d" font-size="15" letter-spacing="1.5">2 · LIBERADO — SEGURE</text>
+  <rect x="300" y="296" width="520" height="140" rx="4" fill="#000" opacity="0.6"/>
+  <text x="330" y="334" fill="#ffaa00" font-size="21" font-weight="700" letter-spacing="0.5">DESISTIR</text>
+  <text x="330" y="362" fill="#ffffff" font-size="15">Voc&#234; para de lutar pela vida.</text>
+  <text x="330" y="384" fill="#8c98a8" font-size="14">Ainda d&#225; pra te salvarem — mas sobra s&#243; 1:30.</text>
+  <rect x="330" y="410" width="460" height="14" rx="3" fill="#000" opacity="0.45"/>
+  <rect x="330" y="410" width="460" height="14" rx="3" fill="none" stroke="#ffaa00" stroke-opacity="0.35" stroke-width="1"/>
+  <text x="560" y="421" fill="#c9d3df" font-size="12" text-anchor="middle" letter-spacing="1">SEGURE</text>
+  <rect x="300" y="432" width="520" height="4" fill="#ffaa00"/>
+
+  <!-- ===================== ESTADO 3: enchendo ===================== -->
+  <text x="40" y="512" fill="#6f7c8d" font-size="15" letter-spacing="1.5">3 · SEGURANDO — A BARRA ENCHE EM 1,5s</text>
+  <rect x="300" y="530" width="520" height="140" rx="4" fill="#000" opacity="0.6"/>
+  <text x="330" y="568" fill="#ffaa00" font-size="21" font-weight="700" letter-spacing="0.5">DESISTIR</text>
+  <text x="330" y="596" fill="#ffffff" font-size="15">Voc&#234; para de lutar pela vida.</text>
+  <text x="330" y="618" fill="#8c98a8" font-size="14">Ainda d&#225; pra te salvarem — mas sobra s&#243; 1:30.</text>
+  <rect x="330" y="644" width="460" height="14" rx="3" fill="#000" opacity="0.45"/>
+  <g clip-path="url(#trilha3)">
+    <rect x="330" y="644" width="290" height="14" fill="#ffaa00"/>
+  </g>
+  <rect x="330" y="644" width="460" height="14" rx="3" fill="none" stroke="#ffaa00" stroke-opacity="0.5" stroke-width="1"/>
+  <rect x="300" y="666" width="520" height="4" fill="#ffaa00"/>
+
+  <!-- legenda -->
+  <g font-size="13" fill="#6f7c8d">
+    <text x="860" y="100">painel preto 60%,</text>
+    <text x="860" y="118">canto 4 — igual ao</text>
+    <text x="860" y="136">Porte de armas</text>
+
+    <text x="860" y="344">faixa fina embaixo</text>
+    <text x="860" y="362">(asset 6698871176),</text>
+    <text x="860" y="380">na cor do tema</text>
+
+    <text x="860" y="578">barra enche da</text>
+    <text x="860" y="596">esquerda, 1,5s,</text>
+    <text x="860" y="614">soltou = zera</text>
+  </g>
+  <text x="40" y="728" fill="#4d5866" font-size="13">cor do tema do jogador (padr&#227;o 255,170,0) &#183; SourceSansBold no t&#237;tulo &#183; tudo em Scale &#183; rodap&#233; da tela de morte</text>
+</svg>

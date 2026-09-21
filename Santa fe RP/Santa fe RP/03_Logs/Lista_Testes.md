@@ -445,3 +445,59 @@ Backups: `RemotesHandler_antes_rendicao`, `Corda_antes_rendicao`.
 - [ ] Depois de renascer, **correr** volta a ter animação de corrida.
 - [ ] Pegar arma, mirar pra cima/baixo, largar (guardar E jogar no chão), sentar / apertar V → braços normais.
 - [ ] Repetir morrendo/renascendo várias vezes → continua normal (sem acumular bug a cada morte).
+
+## 🗺️ 20/09 — minimapa mostrava Posto/Oficina onde não tem
+
+**Causa:** os rótulos vêm de peças Interact cujo Description está na tabela DESC. "Encher tanque"→Posto
+e "Reparar carro"→Oficina, MAS essas duas descrições ficam no **próprio carro** (TanqueCarro e Fumaca
+no corpo do veículo — 211 e 253 delas), não em posto/oficina fixo. Resultado: o minimapa carimbava
+Posto/Oficina em cima de todo carro. O jogo não tem landmark fixo de posto/oficina (abastece/repara no
+carro com item), então esses dois POI não existem de verdade.
+Extra: o índice ainda pegava cópias tagueadas em `ServerStorage.Backups` e `Assets` (nem estão no mundo),
+criando rótulo fantasma em posição errada.
+
+**Conserto (`Minimapa`):** tirei "Encher tanque" e "Reparar carro" da DESC; e o índice agora só pega peça
+que é `IsDescendantOf(workspace)`. POIs que sobraram (todos fixos): Banco, Hospital, Correios, Base,
+Roupas, Barbearia, Mercado, Empregos. Backup: `Minimapa_antes_poicarro`.
+Obs: o `ServerStorage.AssarMapa` (mapa do celular, hoje desligado) tem a mesma tabela — se voltar o mapa
+do celular, aplicar o mesmo lá.
+
+### Pra ti conferir
+- [ ] Andar perto de carros → NÃO aparece mais "Posto"/"Oficina" no minimapa.
+- [ ] Banco, hospital, correios, loja de roupa, barbearia, mercado ainda aparecem com o nome certo.
+
+## 📮 carteiro — em diagnóstico (logs [CartaDBG] ativos)
+Coloquei logs temporários no servidor (`RemotesHandler`, ramo EntregaCarta): imprime se entrou, se o
+emprego passou, se a carta está na mão e se o endereço bateu. Falta o Julio dar Play, tentar entregar
+(segurando F os 7s) pra eu ler o console e achar onde trava. REMOVER os `[CartaDBG]` depois.
+
+## 💰 20/09 — CORTE DO GAMEPASS + reescala de preços (economia)
+
+**Gamepass cortado por completo** (a decisão de mecânica está em /areas/santa-fe-economia.md na memória).
+
+Preços de carro novos (ancorados na vida real + renda de corp):
+Fusca 9k (iniciante) · Uno 22k · Palio 26k · Kombi 48k · Prisma 52k · Gol G6 56k · Saveiro 120k ·
+Corolla 155k · Civic 210k · S10 240k · Hilux 320k · S10 Turbo 340k · Trailblazer 370k ·
+**BMW M4 850k · AMG GT R 1.800.000** (mais caro do jogo). SaveiroP fica 'Teste' (não vende).
+
+O que mudou no código:
+- `Carros`: todos os preços; AMG 'Gamepass'→1.8M; BMW 'Admin'→850k.
+- `RemotesHandler` ComprarCarro: só vende Preco numérico (guarda 'Teste'); prompt de gamepass do AMG removido.
+- **XP em dobro removido de geral** (carteiro, pizza, mecânico bateria/pneu, lixeiro, caixa) — matou os web-calls dos passes 1786436613 e 60768291.
+- **CasaCondominio** comprável por **R$150.000** (era gamepass 1785890139); placa resetada + Description nova.
+- **Cores customizadas liberadas pra todos** (server 1786224049 + client ControllerHandler color wheel 60768038).
+- `DataHandler`: migração 1x (`Migrou.CorteGamepass`) que **tira AMG e CasaCondominio de quem herdou** de sessão antiga.
+- `MarketplaceHandler`: grants de gamepass (casa/AMG) desligados (compra externa do pass não dá mais nada).
+- `GuiHandler`: aba "Gamepasses" da loja escondida (aba Dinheiro/Robux fica — é monetização separada).
+Backups: `*_antes_economia` (Carros, RemotesHandler, DataHandler, MarketplaceHandler, GuiHandler, ControllerHandler).
+
+### Pra ti conferir jogando (precisa Publish + reiniciar Play)
+- [ ] Concessionária: todos os carros com preço novo; **AMG e BMW compráveis por dinheiro** (sem "Comprar Gamepass").
+- [ ] Comprar um carro com grana suficiente → debita e entra na garagem; sem grana → "Dinheiro Insuficiente".
+- [ ] **Tua conta**: ao entrar, **AMG e CasaCondominio sumiram** da garagem/casas (herança de gamepass cortada).
+- [ ] CasaCondominio: placa mostra "Comprar casa (condomínio) - R$150.000"; compra debitando 150k.
+- [ ] Loja (shop): **sem aba "Gamepasses"**; aba Dinheiro (Robux) continua.
+- [ ] Tunagem: **roda de cores livre** pra todos (sem prompt de compra).
+- [ ] XP não dobra mais em nenhum emprego.
+
+Faltou (visual, se quiser depois): a arte do Decal da placa da CasaCondominio ainda é o anúncio antigo do gamepass — trocar por uma que mostre "R$150.000". E o endgame de verdade (empresas/negócios) é sistema novo.
