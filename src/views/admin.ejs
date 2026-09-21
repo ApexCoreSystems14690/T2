@@ -389,6 +389,7 @@
             btnSe('emprego',       '<button onclick="openCmd(\'emprego\',' + p.userId + ')">💼 Emprego</button>') +
             btnSe('tp_local',      '<button onclick="openCmd(\'tp_local\',' + p.userId + ')">📍 TP</button>') +
             btnSe('curar',         '<button onclick="quick(\'curar\',' + p.userId + ')">❤️ Curar</button>') +
+            (p.preso ? btnSe('soltar', '<button onclick="quick(\'soltar\',' + p.userId + ')">🔓 Soltar</button>') : '') +
             btnSe('noclip',        '<button onclick="openCmd(\'noclip\',' + p.userId + ')">🕊️ Noclip</button>') +
             btnSe('mensagem',      '<button onclick="openCmd(\'mensagem\',' + p.userId + ')">✉️ Msg</button>') +
             '<button onclick="openCmd(\'mais\',' + p.userId + ')">⚙️ Mais</button>' +

@@ -53,6 +53,7 @@ const PODERES = {
   banir:         { rotulo: 'Banir e desbanir',               min: 'moderador'  },
 
   noclip:        { rotulo: 'Noclip (voar / atravessar)',     min: 'administrador' },
+  prisao:        { rotulo: 'Zerar prisão de um jogador',     min: 'moderador' },
 
   economia:      { rotulo: 'Dinheiro, banco, level e slots', min: 'supervisor' },
   teleporte:     { rotulo: 'TP, trazer, curar e matar',      min: 'supervisor' },
@@ -97,6 +98,7 @@ const PODER_DO_COMANDO = {
   clima:         'servidor',
   anuncio:       'servidor',
   resetar_dados: 'reset_jogador',
+  soltar:        'prisao',
 };
 
 // ---------------------------------------------------------------- funções

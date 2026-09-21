@@ -131,6 +131,9 @@
               <form method="POST" action="/net/editais/<%= e.id %>/fechar" style="margin:0;">
                 <button class="btn ghost small" type="submit"><%= e.aberto ? 'Fechar' : 'Reabrir' %></button>
               </form>
+              <form method="POST" action="/net/editais/<%= e.id %>/excluir" style="margin:0;" onsubmit="return confirm('Excluir este edital e todas as candidaturas? Não tem volta.');">
+                <button class="btn small" style="background:var(--verm);color:#fff;" type="submit">Excluir</button>
+              </form>
             </div>
           </div>
         <% }); %>
@@ -189,7 +192,14 @@ document.addEventListener('input', function(e){
   else perguntas[i][k] = e.target.value;
 });
 const form = document.getElementById('formEdital');
-if (form) form.addEventListener('submit', function(){ document.getElementById('campos').value = JSON.stringify(perguntas); });
+let enviandoEdital = false;
+if (form) form.addEventListener('submit', function(e){
+  if (enviandoEdital) { e.preventDefault(); return; }   // trava o 2o clique -> nada de edital duplicado
+  enviandoEdital = true;
+  document.getElementById('campos').value = JSON.stringify(perguntas);
+  const btn = form.querySelector('button[type=submit]');
+  if (btn) { btn.disabled = true; btn.textContent = 'Publicando…'; }
+});
 </script>
 </body>
 </html>

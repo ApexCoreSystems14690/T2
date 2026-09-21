@@ -93,6 +93,22 @@ router.post('/editais/:id/fechar', requireAuth, async (req, res) => {
   }
 });
 
+// POST /net/editais/:id/excluir  -> apaga o edital (e as candidaturas, por ON DELETE CASCADE)
+router.post('/editais/:id/excluir', requireAuth, async (req, res) => {
+  try {
+    const eid = parseInt(req.params.id);
+    const e = await pool.query('SELECT corporation_id FROM net_editais WHERE id = $1', [eid]);
+    if (!e.rows[0] || !(await gerenciaCorp(req.user.id, e.rows[0].corporation_id))) {
+      return res.status(403).json({ error: 'Sem acesso' });
+    }
+    await pool.query('DELETE FROM net_editais WHERE id = $1', [eid]);
+    res.redirect('/net');
+  } catch (err) {
+    console.error('excluir edital:', err.message);
+    res.status(500).json({ error: 'Erro' });
+  }
+});
+
 // GET /net/editais/:id/resultados  -> ve as candidaturas (respostas), como o Google Forms
 router.get('/editais/:id/resultados', requireAuth, async (req, res) => {
   try {

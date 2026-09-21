@@ -42,6 +42,7 @@ const COMANDOS = {
   carro_add:      { alvo: true,  valida: p => ({ carro: str(p.carro) }) },
   carro_remove:   { alvo: true,  valida: p => ({ carro: str(p.carro) }) },
   resetar_dados:  { alvo: true,  valida: () => ({}) },
+  soltar:         { alvo: true,  valida: () => ({}) }, // zera a prisão (Preso=0) de quem está online
   corp_refresh:   { alvo: true,  valida: () => ({}) },
   noclip:         { alvo: true,  valida: p => ({ ativar: !!p.ativar, velocidade: num(p.velocidade, 16, 800) || 80 }) }, // voar / atravessar paredes
   // alvo por roblox_id, pode estar offline
