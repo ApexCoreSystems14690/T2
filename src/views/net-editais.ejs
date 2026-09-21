@@ -1,0 +1,171 @@
+<!DOCTYPE html>
+<html lang="pt-br">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Editais — Santa Fé Net</title>
+  <style>
+    :root{ --bg:#0f1115; --card:#181b22; --card2:#20242e; --line:#2b303b; --txt:#eceef2; --fraco:#9aa1ad; --laranja:#ffaa00; --verde:#2aa564; --verm:#e94a3c; }
+    *{ box-sizing:border-box; }
+    body{ margin:0; background:var(--bg); color:var(--txt); font-family:'Segoe UI',system-ui,Arial,sans-serif; }
+    .wrap{ max-width:900px; margin:0 auto; padding:24px 16px 80px; }
+    h1{ font-size:26px; margin:0 0 4px; }
+    .sub{ color:var(--fraco); margin:0 0 24px; }
+    .card{ background:var(--card); border:1px solid var(--line); border-radius:12px; padding:18px; margin-bottom:16px; }
+    label{ display:block; font-size:13px; color:var(--fraco); margin:10px 0 4px; }
+    input[type=text], textarea, select{ width:100%; background:var(--card2); border:1px solid var(--line); border-radius:8px; color:var(--txt); padding:10px; font-size:14px; font-family:inherit; }
+    textarea{ min-height:60px; resize:vertical; }
+    .btn{ display:inline-block; border:0; border-radius:8px; padding:10px 16px; font-weight:600; font-size:14px; cursor:pointer; color:#111; background:var(--laranja); }
+    .btn.ok{ background:var(--verde); color:#fff; }
+    .btn.ghost{ background:var(--card2); color:var(--txt); border:1px solid var(--line); }
+    .btn.small{ padding:6px 12px; font-size:13px; }
+    .row{ display:flex; gap:8px; align-items:center; flex-wrap:wrap; }
+    .q{ background:var(--card2); border:1px solid var(--line); border-radius:8px; padding:12px; margin:8px 0; }
+    .q .row{ margin-top:6px; }
+    .tag{ font-size:11px; padding:3px 8px; border-radius:20px; background:var(--card2); color:var(--fraco); }
+    .tag.aberto{ background:rgba(42,165,100,.2); color:#57d08c; }
+    .tag.fechado{ background:rgba(233,74,60,.2); color:#f08a80; }
+    table{ width:100%; border-collapse:collapse; margin-top:12px; }
+    th,td{ text-align:left; padding:8px 10px; border-bottom:1px solid var(--line); font-size:13px; vertical-align:top; }
+    th{ color:var(--fraco); font-weight:600; }
+    a{ color:var(--laranja); text-decoration:none; }
+    .lista-item{ display:flex; justify-content:space-between; align-items:center; padding:12px 0; border-bottom:1px solid var(--line); gap:10px; }
+    .muted{ color:var(--fraco); font-size:13px; }
+  </style>
+</head>
+<body>
+<div class="wrap">
+
+<% if (edital && resultados) { %>
+  <!-- ===== VISÃO DE RESULTADOS (Google Forms → Respostas) ===== -->
+  <a href="/net">&larr; voltar aos editais</a>
+  <h1 style="margin-top:10px;"><%= edital.titulo %></h1>
+  <p class="sub"><%= edital.corp_nome %> · <%= resultados.length %> candidatura(s)<%= edital.vaga ? ' · vaga: ' + edital.vaga : '' %></p>
+
+  <% if (resultados.length === 0) { %>
+    <div class="card muted">Ninguém se candidatou ainda.</div>
+  <% } else { %>
+    <div class="card" style="overflow-x:auto;">
+      <table>
+        <thead><tr>
+          <th>Jogador</th>
+          <% (edital.campos || []).forEach(function(c){ %><th><%= c.label %></th><% }); %>
+          <th>Quando</th>
+        </tr></thead>
+        <tbody>
+        <% resultados.forEach(function(r){ %>
+          <tr>
+            <td><%= r.roblox_nome || r.roblox_id %><div class="muted">id <%= r.roblox_id %></div></td>
+            <% (edital.campos || []).forEach(function(c, i){ %>
+              <td><%= (r.respostas && r.respostas['q'+i] != null) ? r.respostas['q'+i] : '—' %></td>
+            <% }); %>
+            <td class="muted"><%= new Date(r.criado_em).toLocaleString('pt-BR') %></td>
+          </tr>
+        <% }); %>
+        </tbody>
+      </table>
+    </div>
+  <% } %>
+
+<% } else { %>
+  <!-- ===== PAINEL DO GESTOR ===== -->
+  <h1>Editais da corporação</h1>
+  <p class="sub">Crie um edital de recrutamento (estilo formulário) e veja quem se candidatou. Cada jogador só pode se candidatar uma vez.</p>
+
+  <% if (!corps || corps.length === 0) { %>
+    <div class="card">Você não é dono nem gerente de nenhuma corporação, então não pode lançar editais.</div>
+  <% } else { %>
+
+    <!-- Construtor de edital -->
+    <div class="card">
+      <h2 style="margin:0 0 8px; font-size:18px;">Novo edital</h2>
+      <form method="POST" action="/net/editais" id="formEdital">
+        <label>Corporação</label>
+        <select name="corporation_id" required>
+          <% corps.forEach(function(c){ %><option value="<%= c.id %>"><%= c.name %></option><% }); %>
+        </select>
+        <label>Título</label>
+        <input type="text" name="titulo" placeholder="Ex: Concurso Polícia Militar 2026" required maxlength="120">
+        <label>Descrição (opcional)</label>
+        <textarea name="descricao" maxlength="2000" placeholder="Requisitos, salário, o que a vaga oferece..."></textarea>
+        <label>Vaga (opcional)</label>
+        <input type="text" name="vaga" placeholder="Ex: Soldado" maxlength="80">
+
+        <label>Perguntas do formulário</label>
+        <div id="perguntas"></div>
+        <div class="row" style="margin-top:8px;">
+          <button type="button" class="btn ghost small" onclick="addPergunta('texto')">+ Resposta curta</button>
+          <button type="button" class="btn ghost small" onclick="addPergunta('paragrafo')">+ Parágrafo</button>
+          <button type="button" class="btn ghost small" onclick="addPergunta('opcoes')">+ Múltipla escolha</button>
+        </div>
+
+        <input type="hidden" name="campos" id="campos">
+        <div style="margin-top:16px;"><button type="submit" class="btn ok">Publicar edital</button></div>
+      </form>
+    </div>
+
+    <!-- Lista de editais -->
+    <div class="card">
+      <h2 style="margin:0 0 4px; font-size:18px;">Meus editais</h2>
+      <% if (!editais || editais.length === 0) { %>
+        <p class="muted">Nenhum edital ainda.</p>
+      <% } else { %>
+        <% editais.forEach(function(e){ %>
+          <div class="lista-item">
+            <div>
+              <strong><%= e.titulo %></strong>
+              <span class="tag <%= e.aberto ? 'aberto' : 'fechado' %>"><%= e.aberto ? 'aberto' : 'fechado' %></span>
+              <div class="muted"><%= e.corp_nome %><%= e.vaga ? ' · ' + e.vaga : '' %> · <%= e.respostas %> candidatura(s)</div>
+            </div>
+            <div class="row">
+              <a class="btn ghost small" href="/net/editais/<%= e.id %>/resultados">Ver resultados</a>
+              <form method="POST" action="/net/editais/<%= e.id %>/fechar" style="margin:0;">
+                <button class="btn ghost small" type="submit"><%= e.aberto ? 'Fechar' : 'Reabrir' %></button>
+              </form>
+            </div>
+          </div>
+        <% }); %>
+      <% } %>
+    </div>
+
+  <% } %>
+<% } %>
+
+</div>
+
+<script>
+// Construtor de perguntas (Google Forms lite)
+let perguntas = [];
+function render() {
+  const c = document.getElementById('perguntas');
+  c.innerHTML = '';
+  perguntas.forEach((p, i) => {
+    const div = document.createElement('div');
+    div.className = 'q';
+    let opcoesHtml = '';
+    if (p.tipo === 'opcoes') {
+      opcoesHtml = '<label>Opções (uma por linha)</label><textarea data-i="'+i+'" data-k="opcoes" placeholder="Sim\nNão">'+(p.opcoes||[]).join('\n')+'</textarea>';
+    }
+    div.innerHTML =
+      '<div class="row"><input type="text" data-i="'+i+'" data-k="label" placeholder="Pergunta" value="'+(p.label||'').replace(/"/g,'&quot;')+'" style="flex:1;">'+
+      '<span class="tag">'+({texto:'curta',paragrafo:'parágrafo',opcoes:'escolha'})[p.tipo]+'</span>'+
+      '<button type="button" class="btn ghost small" onclick="rmPergunta('+i+')">remover</button></div>'+
+      opcoesHtml+
+      '<label class="row" style="margin-top:8px;color:var(--fraco);"><input type="checkbox" data-i="'+i+'" data-k="obrigatorio" '+(p.obrigatorio?'checked':'')+' style="width:auto;"> obrigatória</label>';
+    c.appendChild(div);
+  });
+}
+function addPergunta(tipo){ perguntas.push({ label:'', tipo:tipo, opcoes:[], obrigatorio:false }); render(); }
+function rmPergunta(i){ perguntas.splice(i,1); render(); }
+document.addEventListener('input', function(e){
+  const i = e.target.getAttribute('data-i'), k = e.target.getAttribute('data-k');
+  if (i == null) return;
+  if (k === 'opcoes') perguntas[i].opcoes = e.target.value.split('\n').map(s=>s.trim()).filter(Boolean);
+  else if (k === 'obrigatorio') perguntas[i].obrigatorio = e.target.checked;
+  else perguntas[i][k] = e.target.value;
+});
+const form = document.getElementById('formEdital');
+if (form) form.addEventListener('submit', function(){ document.getElementById('campos').value = JSON.stringify(perguntas); });
+</script>
+</body>
+</html>

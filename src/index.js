@@ -251,6 +251,34 @@ async function start() {
       );
       CREATE INDEX IF NOT EXISTS idx_deepweb_id ON deepweb_posts(id DESC);
       CREATE INDEX IF NOT EXISTS idx_deepweb_autor ON deepweb_posts(autor_numero);
+
+      -- ===== NAVEGADOR (Santa Fe Net) — editais estilo formulario + candidaturas =====
+      -- Editais de recrutamento das corporacoes (o "Portal do Governo" in-game). campos = perguntas.
+      CREATE TABLE IF NOT EXISTS net_editais (
+        id SERIAL PRIMARY KEY,
+        corporation_id INTEGER REFERENCES corporations(id) ON DELETE CASCADE,
+        titulo VARCHAR(120) NOT NULL,
+        descricao TEXT,
+        vaga VARCHAR(80),
+        campos JSONB NOT NULL DEFAULT '[]',
+        aberto BOOLEAN DEFAULT true,
+        criado_por INTEGER REFERENCES users(id) ON DELETE SET NULL,
+        criado_em TIMESTAMP DEFAULT NOW()
+      );
+      CREATE INDEX IF NOT EXISTS idx_net_editais_corp ON net_editais(corporation_id);
+      CREATE INDEX IF NOT EXISTS idx_net_editais_aberto ON net_editais(aberto) WHERE aberto = true;
+      -- Candidaturas. O UNIQUE(edital_id, roblox_id) e a TRAVA DE ENVIO DUPLO: ninguem
+      -- se candidata duas vezes ao mesmo edital, mesmo burlando o cliente.
+      CREATE TABLE IF NOT EXISTS net_candidaturas (
+        id SERIAL PRIMARY KEY,
+        edital_id INTEGER REFERENCES net_editais(id) ON DELETE CASCADE,
+        roblox_id BIGINT NOT NULL,
+        roblox_nome VARCHAR(64),
+        respostas JSONB NOT NULL DEFAULT '{}',
+        criado_em TIMESTAMP DEFAULT NOW(),
+        UNIQUE(edital_id, roblox_id)
+      );
+      CREATE INDEX IF NOT EXISTS idx_net_cand_edital ON net_candidaturas(edital_id, id);
     `);
     // Backfill: popula game_players a partir dos logs de "entrou" que já existem,
     // pra aba Registro já nascer com histórico. Roda toda vez, mas é idempotente.
@@ -608,7 +636,9 @@ async function start() {
   // Rotas
   app.use('/auth', require('./routes/auth'));
   app.use('/api/game', require('./routes/game-api'));
+  app.use('/api/game/net', require('./routes/net-api'));
   app.use('/dashboard', require('./routes/dashboard'));
+  app.use('/net', require('./routes/net'));
   app.use('/api/corps', require('./routes/corps-api'));
   app.use('/api/admin', require('./routes/admin-api'));
   app.use('/admin', require('./routes/admin'));

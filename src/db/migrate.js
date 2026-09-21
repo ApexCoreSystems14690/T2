@@ -159,6 +159,31 @@ CREATE TABLE IF NOT EXISTS deepweb_posts (
 );
 CREATE INDEX IF NOT EXISTS idx_deepweb_id ON deepweb_posts(id DESC);
 CREATE INDEX IF NOT EXISTS idx_deepweb_autor ON deepweb_posts(autor_numero);
+
+-- ===== NAVEGADOR (Santa Fe Net) — editais + candidaturas (mantido em sync com src/index.js) =====
+CREATE TABLE IF NOT EXISTS net_editais (
+  id SERIAL PRIMARY KEY,
+  corporation_id INTEGER REFERENCES corporations(id) ON DELETE CASCADE,
+  titulo VARCHAR(120) NOT NULL,
+  descricao TEXT,
+  vaga VARCHAR(80),
+  campos JSONB NOT NULL DEFAULT '[]',
+  aberto BOOLEAN DEFAULT true,
+  criado_por INTEGER REFERENCES users(id) ON DELETE SET NULL,
+  criado_em TIMESTAMP DEFAULT NOW()
+);
+CREATE INDEX IF NOT EXISTS idx_net_editais_corp ON net_editais(corporation_id);
+CREATE INDEX IF NOT EXISTS idx_net_editais_aberto ON net_editais(aberto) WHERE aberto = true;
+CREATE TABLE IF NOT EXISTS net_candidaturas (
+  id SERIAL PRIMARY KEY,
+  edital_id INTEGER REFERENCES net_editais(id) ON DELETE CASCADE,
+  roblox_id BIGINT NOT NULL,
+  roblox_nome VARCHAR(64),
+  respostas JSONB NOT NULL DEFAULT '{}',
+  criado_em TIMESTAMP DEFAULT NOW(),
+  UNIQUE(edital_id, roblox_id)
+);
+CREATE INDEX IF NOT EXISTS idx_net_cand_edital ON net_candidaturas(edital_id, id);
 `;
 
 async function run() {

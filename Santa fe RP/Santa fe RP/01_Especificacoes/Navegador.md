@@ -62,9 +62,27 @@ Figurinhas = chave → decal aprovado (ids AINDA vazios = placeholder com o nome
 - Publicar de verdade é **web-side** (T2), foto também. `NetService.publicar` existe pro futuro.
 - Texto: trocar o filtro stub por `TextService:FilterStringAsync` por campo.
 
-## Em aberto (decisão do Julio)
-- `dono_userid` hoje = publicador. A visão pede **escolher quem recebe** (Roblox id / selecionar usuário).
-  Como publicar é web-side, isso vira campo no painel do T2 — habilitar quando for.
+## Evolução "até o resultado" (decisões próprias, autorizado)
+- **Payee (quem recebe) — FEITO.** `publicar` aceita `payee_userid` (Roblox id de quem ganha o paywall),
+  validado, default = publicador. `dono_userid` = payee. Atende a visão "a pessoa põe o id / seleciona quem ganha".
+- **Criar site DENTRO do jogo — FEITO.** `NavegadorClient.Compose`: form no navegador (template, domínio,
+  título, preço, payee, blocos +texto/+notícia/+edital) → Publicar. Botão "+ Criar meu site" no início.
+  O loop publicar→diretório→abrir fecha in-game, sem depender do site. (O caminho web-side do T2 continua sendo
+  o principal pra fotos e edição rica; este é o atalho in-game.)
+- **Animação de digitar:** mantido o **sentar padrão** (já entrega "só usa sentado"). Toolbox não tem anim
+  R6 de digitar limpa; deixei gancho no `Boot` (`ANIM_DIGITAR`) pra colar um id depois (ou fazer no o-olho).
+- **Figurinhas:** placeholders com nome DE PROPÓSITO — pra Julio pôr os brasões oficiais dele (decais
+  aprovados). `Figurinhas.LISTA[chave].id = ""` → só preencher.
+
+## Ajustes 21/09 (feedback do Julio, testado e aprovado)
+- **Start vazio:** `seed()` põe SÓ o **governo** (portal oficial fixo, onde ficam os editais). Jornal, loja
+  e páginas pessoais nascem zerados — o pessoal cria. `seedExemplos()` separado só pra QA/bancada.
+- **Notebook é um Tool** (não mais a estação com mesa): fica na StarterPack; equipar na mão SÓ abre o
+  navegador se estiver **sentado num banco** (`Humanoid.Sit`); senão avisa (toast) e desequipa. Levantar
+  ou desequipar fecha. Banco de teste em `workspace.BancoTeste`. Estação/EstacaoServer antigos removidos.
+- **Visual nativo:** `Estilo` alinhado ao `UI_Design_System.md` — Oswald (títulos), SourceSans (corpo),
+  Gotham (números; **GothamSSm saiu do enum**), acento **laranja do tema** 255,170,0, card 22,24,30.
+  Na place de teste já é nativo; a integração real (montar na `Telas.Navegador`, clonar RoZap/OLX) é o passo de plugar.
 
 ## Testes (rodam SEM Play, por loadstring)
 - `Modelo._teste()` → 20/20. `Figurinhas._teste()` → 4/4.
