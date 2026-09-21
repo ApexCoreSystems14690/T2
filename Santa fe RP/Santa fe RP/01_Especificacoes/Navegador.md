@@ -84,6 +84,35 @@ Figurinhas = chave → decal aprovado (ids AINDA vazios = placeholder com o nome
   Gotham (números; **GothamSSm saiu do enum**), acento **laranja do tema** 255,170,0, card 22,24,30.
   Na place de teste já é nativo; a integração real (montar na `Telas.Navegador`, clonar RoZap/OLX) é o passo de plugar.
 
+## IMPLEMENTAÇÃO NO JOGO REAL (21/09) — aditivo, com backup
+Decisão do Julio: sair da place de teste e implementar no Santa Fé RP de verdade. Arquitetura: o
+jogo é CONSUMIDOR; o T2 guarda tudo (editais, candidaturas) com a trava de envio duplo.
+
+**T2 (D:\T2) — commitado, falta `git push`:**
+- `net_editais` + `net_candidaturas` (UNIQUE(edital_id, roblox_id) = sem envio duplo). Migração no boot
+  (`src/index.js`) E no `src/db/migrate.js`.
+- `src/routes/net-api.js` (game, x-api-key, `/api/game/net/*`): editais, edital/:id, candidatar (409 se
+  repetir), minhas, gerencia. `src/routes/net.js` (gestor, sessão, `/net`): criar edital + resultados.
+- `src/views/net-editais.ejs`: painel do gestor estilo Google Forms (construtor de perguntas + resultados).
+- Só dono/gerente da corp (owner_id ou corp_managers) vê a sua.
+
+**Jogo (© Santa Fé - Roleplay) — aditivo:**
+- `ReplicatedStorage.Navegador.Remotes.Net` (RemoteFunction).
+- `ServerScriptService.Server.Services.NavegadorServer`: proxy pro T2 via `Site.get`/`Site.postar`
+  (`/net/*`, API_BASE já é `.../api/game`) + compra do notebook via DataHandler (IncrementDinheiro/
+  UnincrementDinheiro, AddInventario). PRECO_NOTEBOOK=5000.
+- `StarterPlayer...Client.NavegadorClient`: `Estilo` (nativo), `EditaisApp` (lista de editais -> formulário
+  com perguntas -> Enviar com DUPLA CONFIRMAÇÃO; marca os já enviados), `Boot` (Tool Notebook + toast).
+- `ServerStorage.Tools.Notebook` (Tool com o laptop). Equipar SÓ sentado abre o app; em pé avisa e desequipa.
+- `workspace.NotebookLoja`: balcão de compra (ProximityPrompt R$5000) + banco de teste. PLACEHOLDER:
+  mover o balcão pra do lado do A10 no shop real.
+- Provado por foto na bancada (removida depois). 5 scripts compilam.
+
+**Falta (próximos incrementos, aditivos):** desktop do notebook com apps gerais (Notas/Calc/Relógio, navegador
+principal); app do editais no cll (GuiHandler.Celular.Navegador + Telas.Navegador); animação R6 de usar
+sentado; rebrand visual do cll (mexe em tela viva — fazer com backup total, depois de validar o núcleo);
+browser de sites gerais (jornal/pessoal) com `net_sites`.
+
 ## Testes (rodam SEM Play, por loadstring)
 - `Modelo._teste()` → 20/20. `Figurinhas._teste()` → 4/4.
 - Cenário servidor (NetService com Player falso): 13/13 (diretório, paywall cobrando+repassando, candidatura,

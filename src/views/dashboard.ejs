@@ -48,6 +48,7 @@
       <h1>SANTA FÉ — CORPORAÇÕES</h1>
     </div>
     <div class="user">
+      <a href="/net" style="color:#00d4ff;font-weight:600">Editais</a>
       <% if (typeof ehStaff !== 'undefined' && ehStaff) { %><a href="/admin" style="color:#ef4444">Painel Admin</a><% } %>
       <span><%= user.discord_username %></span>
       <a href="/auth/logout">Sair</a>
@@ -108,6 +109,7 @@
           <div style="display:flex;gap:0.5rem;align-items:center">
             <% if (corp.pode_gerenciar) { %>
             <a href="/dashboard/corp/<%= corp.id %>" class="corp-btn">Gerenciar</a>
+            <a href="/net" class="corp-btn">Editais</a>
             <% } %>
             <%# [19/09] Sair por conta propria. Nao aparece pro DONO: a corp ficaria orfa. %>
             <% if ((corp.sou_membro || corp.sou_gerente) && !corp.sou_dono) { %>

@@ -34,6 +34,13 @@
   </style>
 </head>
 <body>
+<div style="background:#131a2b;border-bottom:1px solid var(--line);padding:.75rem 1.5rem;display:flex;align-items:center;justify-content:space-between;">
+  <div style="display:flex;align-items:center;gap:1rem;">
+    <a href="/dashboard" style="color:var(--fraco);text-decoration:none;">&larr; Painel</a>
+    <strong style="color:var(--laranja);letter-spacing:.04em;">SANTA FÉ NET — EDITAIS</strong>
+  </div>
+  <a href="/" style="color:var(--fraco);text-decoration:none;font-size:.85rem;">Início</a>
+</div>
 <div class="wrap">
 
 <% if (edital && resultados) { %>
@@ -97,7 +104,9 @@
           <button type="button" class="btn ghost small" onclick="addPergunta('texto')">+ Resposta curta</button>
           <button type="button" class="btn ghost small" onclick="addPergunta('paragrafo')">+ Parágrafo</button>
           <button type="button" class="btn ghost small" onclick="addPergunta('opcoes')">+ Múltipla escolha</button>
+          <button type="button" class="btn small" style="background:var(--laranja);" onclick="novaPagina()">+ Nova página</button>
         </div>
+        <p class="muted" style="margin-top:6px;">As perguntas obrigatórias (*) travam o avanço: o jogador só passa de página respondendo.</p>
 
         <input type="hidden" name="campos" id="campos">
         <div style="margin-top:16px;"><button type="submit" class="btn ok">Publicar edital</button></div>
@@ -136,10 +145,20 @@
 <script>
 // Construtor de perguntas (Google Forms lite)
 let perguntas = [];
+let paginaCorrente = 1;
 function render() {
   const c = document.getElementById('perguntas');
   c.innerHTML = '';
+  let ultimaPagina = 0;
   perguntas.forEach((p, i) => {
+    const pg = p.pagina || 1;
+    if (pg !== ultimaPagina) {
+      ultimaPagina = pg;
+      const h = document.createElement('div');
+      h.style.cssText = 'margin:14px 0 4px;color:var(--laranja);font-weight:700;font-size:13px;';
+      h.textContent = 'Página ' + pg;
+      c.appendChild(h);
+    }
     const div = document.createElement('div');
     div.className = 'q';
     let opcoesHtml = '';
@@ -155,7 +174,12 @@ function render() {
     c.appendChild(div);
   });
 }
-function addPergunta(tipo){ perguntas.push({ label:'', tipo:tipo, opcoes:[], obrigatorio:false }); render(); }
+function addPergunta(tipo){ perguntas.push({ label:'', tipo:tipo, opcoes:[], obrigatorio:false, pagina: paginaCorrente }); render(); }
+function novaPagina(){
+  if (!perguntas.some(p => (p.pagina||1) === paginaCorrente)) return; // so cria se a atual tem pergunta
+  paginaCorrente++;
+  render();
+}
 function rmPergunta(i){ perguntas.splice(i,1); render(); }
 document.addEventListener('input', function(e){
   const i = e.target.getAttribute('data-i'), k = e.target.getAttribute('data-k');
