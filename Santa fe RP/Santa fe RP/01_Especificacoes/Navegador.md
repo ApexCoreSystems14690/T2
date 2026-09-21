@@ -108,6 +108,20 @@ jogo é CONSUMIDOR; o T2 guarda tudo (editais, candidaturas) com a trava de envi
   mover o balcão pra do lado do A10 no shop real.
 - Provado por foto na bancada (removida depois). 5 scripts compilam.
 
+**Navegação no T2 (21/09):** link "Editais" na topbar do `/dashboard` + botão "Editais" em cada corp que a
+pessoa gerencia + topbar no `/net` (voltar pro Painel/Início).
+**Formulário em PÁGINAS (21/09):** cada pergunta tem `pagina` (1..10). Construtor no T2 tem "+ Nova página";
+o app in-game mostra "Página X de Y", e a obrigatória (*) TRAVA o avanço (só passa respondendo). Envio final
+revalida todas as páginas e pula pra pergunta faltando. Provado por foto.
+
+**App no cll (21/09):** `GuiHandler.Celular.Navegador` (módulo do hub) + `StarterGui.Main.Celular.Buttons.Navegador`
+(ícone azul + globo, id imagem 121658694000474) + `StarterGui.Main.Celular.Telas.Navegador`. Abre o EditaisApp
+(Portal do Governo) na tela do celular; o "<" na home fecha o app. Grid redimensionado (CellSize.Y 0.2255→0.172)
+pra caber 5 linhas (13 ícones). Backups: `ServerStorage.Backups.Celular_antes_navegador` + `GuiHandlerCelular_antes_navegador`.
+**Notebook no catálogo do site:** o AdminBridge lista `ServerStorage.Tools:GetChildren()`, e o Tool `Notebook` já
+está lá — então aparece sozinho no "Dar item" do painel assim que o jogo for PUBLICADO (servidor ao vivo lê no heartbeat).
+Nome do item = `Notebook`.
+
 **Falta (próximos incrementos, aditivos):** desktop do notebook com apps gerais (Notas/Calc/Relógio, navegador
 principal); app do editais no cll (GuiHandler.Celular.Navegador + Telas.Navegador); animação R6 de usar
 sentado; rebrand visual do cll (mexe em tela viva — fazer com backup total, depois de validar o núcleo);
