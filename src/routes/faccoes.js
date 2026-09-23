@@ -7,6 +7,7 @@ const router = require('express').Router();
 const pool = require('../db/pool');
 const { requireAuth } = require('../middleware/auth');
 const perm = require('../permissoes');
+const CP = require('../corp-poderes');   // [23/09] poderes dentro da corp
 
 router.use(requireAuth);
 

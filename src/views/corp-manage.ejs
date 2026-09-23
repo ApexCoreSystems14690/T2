@@ -538,10 +538,16 @@
       loadManagers();
     }
 
-    // Carrega co-gerentes ao abrir a aba config
-    document.querySelector('[data-tab="config"]').addEventListener('click', loadManagers);
-    // Carrega também se config já estiver ativa
-    if (document.querySelector('[data-tab="config"]').classList.contains('active')) loadManagers();
+    // Carrega co-gerentes ao abrir a aba config.
+    // [23/09] COM GUARDA: quem nao tem o poder nao recebe a aba, e sem o if o
+    // querySelector devolvia null aqui e MATAVA o script inteiro da pagina --
+    // trocar cargo, remover membro, as abas, tudo parava de funcionar em
+    // silencio. Um indice nil num script derruba todo o resto junto.
+    var abaConfig = document.querySelector('[data-tab="config"]');
+    if (abaConfig) {
+      abaConfig.addEventListener('click', loadManagers);
+      if (abaConfig.classList.contains('active')) loadManagers();
+    }
   </script>
 </body>
 </html>
