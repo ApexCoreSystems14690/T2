@@ -28,6 +28,16 @@
 // A conta do Discord que é Dono. Fixa no código de propósito — ver o cabeçalho.
 const DONO_DISCORD = ['julio14690'];
 
+// [FIX 23/09 seguranca] O DONO era identificado pelo NOME de usuario do Discord.
+// Nome de usuario do Discord SE TROCA; o id numerico nao. Quem pusesse
+// 'julio14690' no proprio nome virava Dono no login seguinte -- poder absoluto,
+// inclusive wipe.
+// Agora: se DONO_DISCORD_ID estiver no ambiente, ELE manda e o nome nao vale
+// mais nada. Enquanto a variavel nao existir, o comportamento e o de antes
+// (ninguem perde acesso no deploy), mas o site avisa no boot.
+const DONO_DISCORD_ID = String(process.env.DONO_DISCORD_ID || '')
+  .split(',').map(s => s.trim()).filter(Boolean);
+
 // Escada. O 'nivel' é o que decide quem manda em quem.
 const CARGOS = {
   dono:          { nome: 'Dono',          nivel: 100, cor: '#F59E0B', desc: 'Poder absoluto, inclusive o wipe. Conta fixa no código; não se concede nem se tira pelo painel.' },
@@ -111,6 +121,10 @@ function nivelDoCargo(cargo) {
 // É a conta Dono? Compara o usuário do Discord, sem caixa e sem espaço.
 function ehDono(user) {
   if (!user) return false;
+  // [FIX 23/09] id numerico manda. So cai no nome se ninguem configurou id.
+  if (DONO_DISCORD_ID.length > 0) {
+    return DONO_DISCORD_ID.includes(String(user.discord_id || '').trim());
+  }
   const u = String(user.discord_username || '').trim().toLowerCase();
   return u.length > 0 && DONO_DISCORD.includes(u);
 }
@@ -182,6 +196,6 @@ function matriz() {
 }
 
 module.exports = {
-  CARGOS, ORDEM, CARGOS_ATRIBUIVEIS, PODERES, PODER_DO_COMANDO, DONO_DISCORD,
+  CARGOS, ORDEM, CARGOS_ATRIBUIVEIS, PODERES, PODER_DO_COMANDO, DONO_DISCORD, DONO_DISCORD_ID,
   ehDono, cargoDe, pode, poderesDe, podeMexerEm, podeDarCargo, nivelDoCargo, matriz,
 };

@@ -9,15 +9,25 @@ function requireApiKey(req, res, next) {
   // Ignora espaços/quebras de linha dos dois lados: um paste com quebra a cada
   // 30 caracteres no Railway (já aconteceu) não pode derrubar o jogo inteiro.
   const clean = v => String(v || '').replace(/\s+/g, '');
-  const key = clean(req.headers['x-api-key'] || req.query.apikey);
+  // [FIX 23/09 seguranca] SO HEADER. Antes aceitava tambem ?apikey= na URL, e
+  // URL vaza em log do Railway, log de proxy e historico -- essa chave e a UNICA
+  // barreira da API do jogo inteira (RoZap, deepweb, posse de celular, temporada).
+  const key = clean(req.headers['x-api-key']);
   const expected = clean(process.env.ROBLOX_API_KEY);
   if (!expected) {
     console.error('[game-api] ROBLOX_API_KEY não configurada no ambiente');
     return res.status(500).json({ error: 'API key não configurada no servidor' });
   }
-  if (!key || key !== expected) {
-    return res.status(401).json({ error: 'API key inválida' });
+  if (req.query && req.query.apikey) {
+    console.warn('[seguranca] chamada com ?apikey= na URL, recusada. Use o header x-api-key.');
   }
+  // comparacao de tempo constante: com == o tempo de resposta entrega o prefixo
+  // certo caractere a caractere.
+  const crypto = require('crypto');
+  const a = Buffer.from(key || '', 'utf8');
+  const b = Buffer.from(expected, 'utf8');
+  const ok = a.length === b.length && crypto.timingSafeEqual(a, b);
+  if (!ok) return res.status(401).json({ error: 'API key inválida' });
   next();
 }
 

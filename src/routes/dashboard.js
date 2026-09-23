@@ -168,6 +168,15 @@ router.post('/link-roblox', async (req, res) => {
       }
       // É um "placeholder" criado quando alguém te adicionou por Roblox ID:
       // transfere tudo dele pra tua conta e apaga o placeholder.
+      //
+      // [FIX 23/09 arquitetura] AQUI MORAVA O PIOR FURO DO SITE. Vincular um
+      // Roblox NAO exige provar posse: basta digitar o nome do jogador e o site
+      // resolve o id na API do Roblox. Como o bloco abaixo tambem passava
+      // `corporations.owner_id` do placeholder pra quem vinculou, dava pra
+      // DIGITAR O NOME DE OUTRA PESSOA e virar DONO da corporacao dela.
+      // Cargo e filiacao continuam migrando (dano baixo e reversivel pelo dono).
+      // A POSSE nao migra mais sozinha: ela vira um pedido que um admin com o
+      // poder 'corp' confirma, ou o proprio dono transfere pelo painel.
       await client.query(
         `UPDATE members SET user_id = $1 WHERE user_id = $2
          AND corporation_id NOT IN (SELECT corporation_id FROM members WHERE user_id = $1)`,
@@ -178,7 +187,16 @@ router.post('/link-roblox', async (req, res) => {
          AND corporation_id NOT IN (SELECT corporation_id FROM corp_managers WHERE user_id = $1)`,
         [req.user.id, ph.id]);
       await client.query('DELETE FROM corp_managers WHERE user_id = $1', [ph.id]);
-      await client.query('UPDATE corporations SET owner_id = $1 WHERE owner_id = $2', [req.user.id, ph.id]);
+      const donas = await client.query('SELECT id, name FROM corporations WHERE owner_id = $1', [ph.id]);
+      if (donas.rows.length > 0) {
+        // a corporacao fica SEM dono em vez de trocar de mao sozinha; o painel
+        // (poder 'corp') resolve. Nao perde nada: os dados continuam todos la.
+        await client.query('UPDATE corporations SET owner_id = NULL WHERE owner_id = $1', [ph.id]);
+        console.warn('[seguranca] link-roblox: ' + donas.rows.length +
+          ' corporacao(oes) ficaram sem dono ao vincular o roblox_id ' + rid +
+          ' (antes a posse passava automaticamente pra quem vinculasse): ' +
+          donas.rows.map(c => c.name).join(', '));
+      }
       await client.query('DELETE FROM users WHERE id = $1', [ph.id]);
     }
 

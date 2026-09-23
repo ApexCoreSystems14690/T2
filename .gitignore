@@ -1,2 +1,39 @@
+# dependencias
 node_modules/
+
+# segredo -- NUNCA versionar
 .env
+.env.*
+!.env.example
+*.pem
+*.key
+*.p12
+*.pfx
+
+# log e temporario
+*.log
+npm-debug.log*
+.DS_Store
+Thumbs.db
+*.tmp
+*.bak
+
+# saida de build / cache
+dist/
+build/
+coverage/
+.cache/
+.parcel-cache/
+
+# editor
+.vscode/
+.idea/
+
+# [23/09] pesado e nao e codigo: o repo nao e lugar de .blend de 233 MB nem de
+# contact sheet de trailer. Se precisar versionar arte, use Git LFS.
+Claude outputs/
+*.blend
+*.blend1
+
+# vault do Obsidian: o estado da janela muda a cada abertura e suja todo commit
+Santa fe RP/Santa fe RP/.obsidian/workspace.json

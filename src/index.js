@@ -102,14 +102,26 @@ async function start() {
     // boot e e idempotente: depois da primeira vez nao sobra ninguem pra rebaixar.
     try {
       const perm = require('./permissoes');
+      // [FIX 23/09 seguranca] Nome de usuario do Discord SE TROCA; id numerico nao.
+      // Com DONO_DISCORD_ID no ambiente a migracao passa a casar por ID.
+      const donosId = perm.DONO_DISCORD_ID;
       const donos = perm.DONO_DISCORD;
-      await pool.query(
-        `UPDATE users SET is_admin = true, updated_at = NOW()
-         WHERE LOWER(TRIM(COALESCE(discord_username, ''))) = ANY($1::text[])`, [donos]);
-      const r = await pool.query(
-        `UPDATE users SET is_admin = false, admin_cargo = NULL, updated_at = NOW()
-         WHERE is_admin = true AND admin_cargo IS NULL
-           AND LOWER(TRIM(COALESCE(discord_username, ''))) <> ALL($1::text[])`, [donos]);
+      const porId = donosId.length > 0;
+      if (!porId) {
+        console.warn('[seguranca] DONO_DISCORD_ID nao configurada: o Dono ainda e reconhecido pelo NOME do Discord, que qualquer um pode copiar. Defina DONO_DISCORD_ID com o id numerico.');
+      }
+      await pool.query(porId
+        ? `UPDATE users SET is_admin = true, updated_at = NOW() WHERE discord_id = ANY($1::text[])`
+        : `UPDATE users SET is_admin = true, updated_at = NOW()
+           WHERE LOWER(TRIM(COALESCE(discord_username, ''))) = ANY($1::text[])`,
+        [porId ? donosId : donos]);
+      const r = await pool.query(porId
+        ? `UPDATE users SET is_admin = false, admin_cargo = NULL, updated_at = NOW()
+           WHERE is_admin = true AND admin_cargo IS NULL AND discord_id <> ALL($1::text[])`
+        : `UPDATE users SET is_admin = false, admin_cargo = NULL, updated_at = NOW()
+           WHERE is_admin = true AND admin_cargo IS NULL
+             AND LOWER(TRIM(COALESCE(discord_username, ''))) <> ALL($1::text[])`,
+        [porId ? donosId : donos]);
       if (r.rowCount > 0) console.log('[migracao] ' + r.rowCount + ' "dono por banco" perderam o admin (so ' + donos.join(', ') + ' e Dono)');
     } catch (e) { console.error('migracao dono fixo:', e.message); }
     // Painel admin: fila de comandos, logs do jogo, servidores online, auditoria
@@ -599,15 +611,65 @@ async function start() {
 
   // Middleware
   app.use(helmet({ contentSecurityPolicy: false }));
-  app.use(cors());
-  app.use(express.json());
-  app.use(express.urlencoded({ extended: true }));
+
+  // [FIX 23/09 seguranca] CORS era cors() cru = qualquer origem podia chamar a
+  // API. O jogo fala por HttpService (servidor, sem Origin, CORS nao se aplica) e
+  // o painel e mesma origem -- entao restringir nao quebra nada e fecha o resto.
+  const origensOk = [process.env.BASE_URL, 'http://localhost:3000', 'http://127.0.0.1:3000'].filter(Boolean);
+  app.use(cors({
+    origin: (origin, cb) => cb(null, !origin || origensOk.includes(origin)),
+    credentials: true,
+  }));
+
+  // [FIX 23/09 seguranca] corpo grande e DoS barato: 100 KB cobre tudo que o site
+  // manda (o upload de icone passa pelo multer, que tem limite proprio de 2 MB).
+  app.use(express.json({ limit: '100kb' }));
+  app.use(express.urlencoded({ extended: true, limit: '100kb' }));
+
+  // [FIX 23/09 seguranca] LIMITADOR. Nao havia nenhum: a API do jogo inteira e
+  // protegida por UMA chave, e dava pra tentar chave a vontade. Balde de fichas em
+  // memoria, sem dependencia nova (mexer no package.json e arriscar o deploy).
+  const baldes = new Map();
+  function limitar(nome, cap, janelaSeg) {
+    return function (req, res, next) {
+      const ip = req.ip || (req.connection && req.connection.remoteAddress) || '?';
+      const chave = nome + '|' + ip;
+      const agora = Date.now() / 1000;
+      let b = baldes.get(chave);
+      if (!b) { b = { fichas: cap, t: agora }; baldes.set(chave, b); }
+      b.fichas = Math.min(cap, b.fichas + (agora - b.t) * (cap / janelaSeg));
+      b.t = agora;
+      if (b.fichas < 1) {
+        res.set('Retry-After', String(Math.ceil(janelaSeg / cap)));
+        return res.status(429).json({ error: 'Devagar.' });
+      }
+      b.fichas -= 1;
+      next();
+    };
+  }
+  // limpeza: balde parado ha mais de 10 min sai da memoria
+  setInterval(() => {
+    const corte = Date.now() / 1000 - 600;
+    for (const [k, b] of baldes) if (b.t < corte) baldes.delete(k);
+  }, 300000).unref();
+  app.locals.limitar = limitar;
   app.use(express.static(path.join(__dirname, 'public')));
 
   // Sessão com PostgreSQL
   app.use(session({
     store: new PgSession({ pool, tableName: 'session' }),
-    secret: process.env.SESSION_SECRET || 'dev-secret',
+    // [FIX 23/09 seguranca] antes era `|| 'dev-secret'`: faltando a variavel no
+    // Railway o site subia EM SILENCIO assinando sessao com uma constante publica,
+    // e dava pra forjar cookie de qualquer conta, admin inclusive. Agora nao sobe.
+    secret: (function () {
+      const s = process.env.SESSION_SECRET;
+      if (s && s.length >= 16) return s;
+      if (process.env.NODE_ENV === 'production') {
+        throw new Error('SESSION_SECRET ausente ou curta demais. O site NAO sobe assim: sessao assinada com segredo publico e conta de admin forjavel.');
+      }
+      console.warn('[seguranca] SESSION_SECRET ausente -- usando segredo de desenvolvimento. NUNCA em producao.');
+      return 'dev-secret-apenas-local';
+    })(),
     resave: false,
     saveUninitialized: false,
     cookie: {
@@ -634,9 +696,14 @@ async function start() {
   app.set('views', path.join(__dirname, 'views'));
 
   // Rotas
-  app.use('/auth', require('./routes/auth'));
-  app.use('/api/game', require('./routes/game-api'));
-  app.use('/api/game/net', require('./routes/net-api'));
+  // [FIX 23/09 seguranca] o limitador entra AQUI, no ponto de montagem, pra
+  // nenhuma rota nova nascer sem ele. Numeros folgados de proposito: o jogo manda
+  // heartbeat de varios servidores e nao pode apanhar.
+  app.use('/auth', limitar('auth', 20, 60), require('./routes/auth'));
+  app.use('/api/game', limitar('game', 300, 60), require('./routes/game-api'));
+  app.use('/api/game/net', limitar('game', 300, 60), require('./routes/net-api'));
+  // vincular Roblox e a rota de tomada de conta: aperta de verdade.
+  app.use('/dashboard/link-roblox', limitar('link', 10, 300));
   app.use('/dashboard', require('./routes/dashboard'));
   app.use('/net', require('./routes/net'));
   app.use('/api/corps', require('./routes/corps-api'));

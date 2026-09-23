@@ -1,18 +1,38 @@
 const router = require('express').Router();
 const pool = require('../db/pool');
 const multer = require('multer');
-const { requireAuth, requireCorpOwner, requireAdmin } = require('../middleware/auth');
+const { requireAuth, requireCorpOwner, requireAdmin, requirePoder } = require('../middleware/auth');
 const perm = require('../permissoes');
 
 // Upload config — armazena em memória (vai pro banco)
 const upload = multer({
   storage: multer.memoryStorage(),
-  limits: { fileSize: 2 * 1024 * 1024 }, // 2MB
+  limits: { fileSize: 2 * 1024 * 1024, files: 1 }, // 2MB
   fileFilter: (req, file, cb) => {
     const allowed = ['image/png', 'image/jpeg', 'image/gif', 'image/webp'];
     cb(null, allowed.includes(file.mimetype));
   }
 });
+
+// [FIX 23/09 seguranca] O fileFilter acima confia no mimetype que o CLIENTE
+// manda, e o GET /:corpId/icon devolve esse mesmo mime como Content-Type. Aqui a
+// gente olha os BYTES: o que for servido de volta e o que o arquivo realmente e.
+const ASSINATURAS = [
+  { mime: 'image/png',  bytes: [0x89, 0x50, 0x4E, 0x47, 0x0D, 0x0A, 0x1A, 0x0A] },
+  { mime: 'image/jpeg', bytes: [0xFF, 0xD8, 0xFF] },
+  { mime: 'image/gif',  bytes: [0x47, 0x49, 0x46, 0x38] },
+];
+function mimeReal(buf) {
+  if (!buf || buf.length < 12) return null;
+  for (const a of ASSINATURAS) {
+    if (a.bytes.every((b, i) => buf[i] === b)) return a.mime;
+  }
+  // webp = "RIFF" .... "WEBP"
+  if (buf.slice(0, 4).toString('ascii') === 'RIFF' && buf.slice(8, 12).toString('ascii') === 'WEBP') {
+    return 'image/webp';
+  }
+  return null;
+}
 
 // GET /api/corps/:corpId/icon — servir imagem da corp (público)
 router.get('/:corpId/icon', async (req, res) => {
@@ -22,7 +42,14 @@ router.get('/:corpId/icon', async (req, res) => {
       [req.params.corpId]
     );
     if (result.rows.length === 0) return res.status(404).send('Sem imagem');
-    res.set('Content-Type', result.rows[0].icon_mime);
+    // [FIX 23/09 seguranca] mime da lista branca + nosniff + sem download inline
+    // de coisa que nao seja imagem. Icone antigo, gravado antes da conferencia de
+    // bytes, cai no octet-stream em vez de ser servido como o cliente pediu.
+    const permitidos = ['image/png', 'image/jpeg', 'image/gif', 'image/webp'];
+    const m = permitidos.includes(result.rows[0].icon_mime) ? result.rows[0].icon_mime : 'application/octet-stream';
+    res.set('Content-Type', m);
+    res.set('X-Content-Type-Options', 'nosniff');
+    res.set('Content-Disposition', 'inline');
     res.set('Cache-Control', 'public, max-age=3600');
     res.send(result.rows[0].icon_data);
   } catch (err) {
@@ -135,9 +162,13 @@ router.put('/:corpId', requireCorpOwner, async (req, res) => {
 router.post('/:corpId/icon', requireCorpOwner, upload.single('icon'), async (req, res) => {
   try {
     if (!req.file) return res.status(400).json({ error: 'Envie uma imagem (PNG, JPG, GIF ou WebP, máx 2MB)' });
+    // [FIX 23/09 seguranca] o mime gravado e o dos BYTES, nunca o que o cliente
+    // declarou -- e o GET /icon devolve esse mesmo valor como Content-Type.
+    const mimeOk = mimeReal(req.file.buffer);
+    if (!mimeOk) return res.status(400).json({ error: 'Arquivo não é uma imagem PNG, JPG, GIF ou WebP de verdade' });
     const result = await pool.query(
       'UPDATE corporations SET icon_data = $1, icon_mime = $2, icon_url = NULL, updated_at = NOW() WHERE id = $3 RETURNING id',
-      [req.file.buffer, req.file.mimetype, req.params.corpId]
+      [req.file.buffer, mimeOk, req.params.corpId]
     );
     if (result.rows.length === 0) return res.status(404).json({ error: 'Corporação não encontrada' });
     res.json({ ok: true, icon_url: '/api/corps/' + req.params.corpId + '/icon' });
@@ -461,7 +492,11 @@ router.delete('/:corpId/managers/:managerId', requireCorpOwner, async (req, res)
 });
 
 // POST /api/corps — criar corporação (SOMENTE admin)
-router.post('/', requireAdmin, async (req, res) => {
+// [FIX 23/09 arquitetura] Criar corporacao exigia so `requireAdmin`, que e
+// "qualquer staff" -- um ESTAGIARIO criava corporacao a vontade. Mexer em
+// corporacao e poder de Supervisor pra cima, igual a todo o resto que mexe em
+// corp (PODERES.corp). O front esconde botao; quem barra e isto aqui.
+router.post('/', requirePoder('corp'), async (req, res) => {
   try {
     const { name, slug, description, color, icon_url, max_members, tipo } = req.body;
     if (!name || !slug) {
