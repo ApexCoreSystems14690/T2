@@ -83,7 +83,10 @@
             <div>
               <div class="corp-name"><%= corp.name %></div>
               <div class="corp-members">
-                <%= corp.member_count %> membros<% if (corp.sou_dono) { %> · você é o dono<% } else if (corp.meu_cargo) { %> · seu cargo: <%= corp.meu_cargo %><% } else if (corp.sou_gerente) { %> · você é co-gerente<% } %>
+                <%= corp.member_count %> membros<% if (corp.sou_dono) { %> · você é o dono<% } else if (corp.meu_cargo) { %> · seu cargo: <%= corp.meu_cargo %><%
+                   /* [23/09, pedido do Julio] o membro comum ve o proprio salario aqui */
+                   if (corp.meu_salario) { %> · salário: R$ <%= Number(corp.meu_salario).toLocaleString('pt-BR') %><% }
+                 } else if (corp.sou_gerente) { %> · você é co-gerente<% } %>
               </div>
             </div>
           </div>

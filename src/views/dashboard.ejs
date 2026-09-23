@@ -48,7 +48,6 @@
       <h1>SANTA FÉ — CORPORAÇÕES</h1>
     </div>
     <div class="user">
-      <a href="/net" style="color:#00d4ff;font-weight:600">Editais</a>
       <% if (typeof ehStaff !== 'undefined' && ehStaff) { %><a href="/admin" style="color:#ef4444">Painel Admin</a><% } %>
       <span><%= user.discord_username %></span>
       <a href="/auth/logout">Sair</a>
@@ -74,20 +73,7 @@
     </div>
 
     <% if (corporations.length === 0) { %>
-      <%# [20/09] "estou numa corp e nao vejo nada aqui": quase sempre e falta de
-          vinculo. A filiacao costuma ser criada pelo ID do Roblox e fica presa a
-          um usuario provisorio ate a pessoa vincular. Dizer so "voce nao faz parte
-          de nenhuma" era mentira pra quem esta numa corp dentro do jogo. %>
-      <% if (!user.roblox_id) { %>
-        <div class="empty">
-          Nenhuma corporação aparece aqui ainda.<br><br>
-          Se você já entrou numa corporação <strong>dentro do jogo</strong>, ela está amarrada ao seu
-          Roblox — e some do painel até você vincular.<br>
-          <a href="/dashboard/link-roblox" style="color:#00d4ff">Vincular meu Roblox agora</a>
-        </div>
-      <% } else { %>
-        <div class="empty">Você não faz parte de nenhuma corporação.</div>
-      <% } %>
+      <div class="empty">Você não faz parte de nenhuma corporação.</div>
     <% } else { %>
       <% corporations.forEach(corp => { %>
         <div class="corp-card">
@@ -102,14 +88,16 @@
             <div>
               <div class="corp-name"><%= corp.name %></div>
               <div class="corp-members">
-                <%= corp.member_count %> membros<% if (corp.sou_dono) { %> · você é o dono<% } else if (corp.meu_cargo) { %> · seu cargo: <%= corp.meu_cargo %><% } else if (corp.sou_gerente) { %> · você é co-gerente<% } %>
+                <%= corp.member_count %> membros<% if (corp.sou_dono) { %> · você é o dono<% } else if (corp.meu_cargo) { %> · seu cargo: <%= corp.meu_cargo %><%
+                   /* [23/09, pedido do Julio] o membro comum ve o proprio salario aqui */
+                   if (corp.meu_salario) { %> · salário: R$ <%= Number(corp.meu_salario).toLocaleString('pt-BR') %><% }
+                 } else if (corp.sou_gerente) { %> · você é co-gerente<% } %>
               </div>
             </div>
           </div>
           <div style="display:flex;gap:0.5rem;align-items:center">
             <% if (corp.pode_gerenciar) { %>
             <a href="/dashboard/corp/<%= corp.id %>" class="corp-btn">Gerenciar</a>
-            <a href="/net" class="corp-btn">Editais</a>
             <% } %>
             <%# [19/09] Sair por conta propria. Nao aparece pro DONO: a corp ficaria orfa. %>
             <% if ((corp.sou_membro || corp.sou_gerente) && !corp.sou_dono) { %>

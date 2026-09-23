@@ -31,82 +31,92 @@ function requireApiKey(req, res, next) {
   next();
 }
 
-// Verifica se o usuário é dono, co-gerente ou top 2 cargos da corporação
-async function requireCorpOwner(req, res, next) {
+// ---------------------------------------------------------------------------
+// CONTEXTO DA CORPORAÇÃO (23/09/2026 — reescrito)
+//
+// ANTES: "dono, co-gerente ou TOP 2 CARGOS". A regra dos top 2 era estrutural e
+// invisível: ninguém escolhia quem mandava, a posição na lista de cargos é que
+// decidia. Medido: o Jornal Nacional tem 3 cargos, então JORNALISTA mandava na
+// redação inteira; uma corp nova entregava gerência aos 2 primeiros cargos
+// criados; e como o `isHighRank` só era conferido nas rotas de MEMBRO, o 2º
+// cargo editava o PRÓPRIO nível e passava o comandante.
+//
+// AGORA: quem resolve é `corp-poderes.js`, por PAPEL (staff / dono / gerente /
+// chefe / membro). Uma consulta só monta o contexto e todo mundo pergunta pra
+// ele. `isOwner`, `isHighRank` e `userRankLevel` continuam sendo preenchidos
+// pra não quebrar o código antigo, mas cada rota agora tem a sua guarda.
+// ---------------------------------------------------------------------------
+const CP = require('../corp-poderes');
+
+async function ctxDaCorp(corpId, user) {
   const pool = require('../db/pool');
-  const corpId = req.params.corpId || req.body.corporation_id;
+  const id = parseInt(corpId);
+  if (!id || !user) return null;
+  const r = await pool.query(
+    `SELECT c.*, (c.icon_data IS NOT NULL) AS has_icon_file,
+            (c.owner_id = $2) AS eh_dono,
+            EXISTS (SELECT 1 FROM corp_managers cm
+                     WHERE cm.corporation_id = c.id AND cm.user_id = $2) AS eh_gerente,
+            EXISTS (SELECT 1 FROM members mm
+                     WHERE mm.corporation_id = c.id AND mm.user_id = $2) AS sou_membro,
+            (SELECT rr.level FROM members mm LEFT JOIN ranks rr ON rr.id = mm.rank_id
+              WHERE mm.corporation_id = c.id AND mm.user_id = $2) AS meu_nivel,
+            (SELECT rr.permissions FROM members mm LEFT JOIN ranks rr ON rr.id = mm.rank_id
+              WHERE mm.corporation_id = c.id AND mm.user_id = $2) AS minhas_permissoes,
+            (SELECT MAX(level) FROM ranks WHERE corporation_id = c.id) AS nivel_max,
+            (SELECT COUNT(DISTINCT level)::int FROM ranks WHERE corporation_id = c.id) AS qtd_niveis
+       FROM corporations c WHERE c.id = $1`,
+    [id, user.id]
+  );
+  if (r.rows.length === 0) return null;
+  const row = r.rows[0];
+  const ctx = {
+    ehStaffCorp: require('../permissoes').pode(user, 'corp'),
+    ehDono:      !!row.eh_dono,
+    ehGerente:   !!row.eh_gerente,
+    souMembro:   !!row.sou_membro,
+    meuNivel:    row.meu_nivel === null || row.meu_nivel === undefined ? null : Number(row.meu_nivel),
+    nivelMax:    row.nivel_max === null || row.nivel_max === undefined ? null : Number(row.nivel_max),
+    qtdNiveis:   Number(row.qtd_niveis || 0),
+    permissoes:  row.minhas_permissoes || {},
+  };
+  return { corp: row, ctx, papel: CP.papelDe(ctx), poderes: CP.poderesDe(ctx) };
+}
 
+// Portão de entrada do painel da corporação. Só entra quem tem `ver_painel`.
+async function requireCorpOwner(req, res, next) {
   try {
-    // 0. Staff com o poder 'corp' (Supervisor pra cima) tem acesso a qualquer corporação.
-    // [19/09] ANTES era `req.user.is_admin`, e isso virou um buraco quando o admin
-    // deixou de ser liga/desliga: um Estagiário tem is_admin = true e passaria a
-    // mandar em TODA corporação do jogo. Agora pergunta o poder, como o resto.
-    if (req.user && require('../permissoes').pode(req.user, 'corp')) {
-      const adm = await pool.query('SELECT * FROM corporations WHERE id = $1', [corpId]);
-      if (adm.rows.length === 0) return res.status(404).json({ error: 'Corporação não encontrada' });
-      req.corporation = adm.rows[0];
-      req.isOwner = true;
-      req.isHighRank = false;
-      req.userRankLevel = Infinity;
-      return next();
+    const corpId = req.params.corpId || req.body.corporation_id;
+    const info = await ctxDaCorp(corpId, req.user);
+    if (!info) return res.status(404).json({ error: 'Corporação não encontrada' });
+    if (!CP.pode(info.ctx, 'ver_painel')) {
+      return res.status(403).json({ error: 'Você não gerencia esta corporação' });
     }
-
-    // 1. Tenta como dono
-    let result = await pool.query(
-      'SELECT * FROM corporations WHERE id = $1 AND owner_id = $2',
-      [corpId, req.user.id]
-    );
-    if (result.rows.length > 0) {
-      req.corporation = result.rows[0];
-      req.isOwner = true;
-      req.isHighRank = false;
-      req.userRankLevel = Infinity;
-      return next();
-    }
-
-    // 2. Tenta como co-gerente
-    const mgr = await pool.query(
-      'SELECT c.* FROM corporations c JOIN corp_managers cm ON cm.corporation_id = c.id WHERE c.id = $1 AND cm.user_id = $2',
-      [corpId, req.user.id]
-    );
-    if (mgr.rows.length > 0) {
-      req.corporation = mgr.rows[0];
-      req.isOwner = false;
-      req.isHighRank = false;
-      req.userRankLevel = Infinity;
-      return next();
-    }
-
-    // 3. Tenta como membro com top 2 cargos
-    // Busca os 2 maiores níveis de cargo da corp
-    const topRanks = await pool.query(
-      'SELECT level FROM ranks WHERE corporation_id = $1 ORDER BY level DESC LIMIT 2',
-      [corpId]
-    );
-    if (topRanks.rows.length > 0) {
-      const topLevels = topRanks.rows.map(r => r.level);
-      // Verifica se o usuário é membro com um desses cargos
-      const memberCheck = await pool.query(
-        `SELECT m.*, r.level as rank_level, c.*
-         FROM members m
-         JOIN ranks r ON m.rank_id = r.id
-         JOIN corporations c ON m.corporation_id = c.id
-         WHERE m.corporation_id = $1 AND m.user_id = $2 AND r.level = ANY($3)`,
-        [corpId, req.user.id, topLevels]
-      );
-      if (memberCheck.rows.length > 0) {
-        req.corporation = memberCheck.rows[0];
-        req.isOwner = false;
-        req.isHighRank = true;
-        req.userRankLevel = memberCheck.rows[0].rank_level;
-        return next();
-      }
-    }
-
-    return res.status(403).json({ error: 'Você não tem acesso a esta corporação' });
+    req.corporation = info.corp;
+    req.corpCtx     = info.ctx;
+    req.papelCorp   = info.papel;
+    req.corpPoderes = info.poderes;
+    // compatibilidade com o código antigo
+    req.isOwner       = info.papel === 'dono' || info.papel === 'staff';
+    req.isHighRank    = info.papel === 'chefe';
+    req.userRankLevel = CP.semTeto(info.ctx) ? Infinity : info.ctx.meuNivel;
+    return next();
   } catch (err) {
-    res.status(500).json({ error: 'Erro interno' });
+    console.error('ctxDaCorp:', err.message);
+    return res.status(500).json({ error: 'Erro interno' });
   }
+}
+
+// Guarda por poder dentro da corp. Usar SEMPRE depois de requireCorpOwner.
+function requireCorpPoder(poder) {
+  return function (req, res, next) {
+    if (!req.corpCtx) return res.status(403).json({ error: 'Acesso negado' });
+    if (CP.pode(req.corpCtx, poder)) return next();
+    return res.status(403).json({
+      error: 'Seu cargo nesta corporação não permite: ' + (CP.ROTULO[poder] || poder),
+      seu_papel: req.papelCorp || null,
+    });
+  };
 }
 
 // Verifica se é staff (qualquer cargo). O que ele PODE fazer dentro do painel é
@@ -138,4 +148,4 @@ function requirePoder(poder) {
   };
 }
 
-module.exports = { requireAuth, requireApiKey, requireCorpOwner, requireAdmin, requirePoder };
+module.exports = { requireAuth, requireApiKey, requireCorpOwner, requireCorpPoder, ctxDaCorp, requireAdmin, requirePoder };

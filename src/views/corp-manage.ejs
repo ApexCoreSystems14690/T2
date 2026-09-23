@@ -87,16 +87,29 @@
   </div>
 
   <div class="main">
+    <%# [23/09] a view agora esconde pelo PODER, nao pelo isOwner. Quem barra
+        continua sendo o back (requireCorpPoder); isto aqui e conforto. %>
+    <% var P = (typeof poderes !== 'undefined' && poderes) ? poderes : {gerir_cargos:true, editar_corp:true, gerir_membros:true, gerir_gerentes:isOwner, excluir_corp:isOwner};
+       var MEU_NIVEL = (typeof meuNivel !== 'undefined') ? meuNivel : null;
+       var MEU_PAPEL = (typeof papel !== 'undefined') ? papel : (isOwner ? 'dono' : 'gerente'); %>
     <div id="alert-container"></div>
+
+    <div style="margin-bottom:1rem;color:#7a8ba5;font-size:0.8rem">
+      Você entra aqui como <strong style="color:#00d4ff"><%= MEU_PAPEL %></strong><% if (MEU_NIVEL !== null) { %> · seu nível de cargo: <%= MEU_NIVEL %><% } %>
+    </div>
 
     <div class="tabs">
       <div class="tab active" data-tab="cargos">Cargos (<%= ranks.length %>)</div>
       <div class="tab" data-tab="membros">Membros (<%= members.length %>)</div>
-      <div class="tab" data-tab="config">Configurações</div>
+      <% if (P.editar_corp || P.gerir_gerentes) { %><div class="tab" data-tab="config">Configurações</div><% } %>
     </div>
 
     <!-- CARGOS -->
     <div class="panel active" id="panel-cargos">
+      <% if (!P.gerir_cargos) { %>
+        <div class="empty" style="margin-bottom:1rem">Só o dono e os co-gerentes mexem em cargo e salário. Aqui você só vê a lista.</div>
+      <% } %>
+      <% if (P.gerir_cargos) { %>
       <div class="form-row">
         <div class="form-group">
           <label>Nome do Cargo</label>
@@ -114,6 +127,7 @@
           <button class="btn" onclick="addRank()">Adicionar</button>
         </div>
       </div>
+      <% } %>
 
       <div class="rank-list" id="rank-list">
         <% if (ranks.length === 0) { %>
@@ -127,7 +141,7 @@
                 <span class="rank-salary">R$<%= rank.salary %></span>
               </div>
               <div class="rank-actions">
-                <button class="btn-sm danger" onclick="deleteRank(<%= rank.id %>)">Remover</button>
+                <% if (P.gerir_cargos) { %><button class="btn-sm danger" onclick="deleteRank(<%= rank.id %>)">Remover</button><% } %>
               </div>
             </div>
           <% }) %>
@@ -190,12 +204,15 @@
               <tr><td colspan="6" class="empty">Nenhum membro ainda.</td></tr>
             <% } else { %>
               <% members.forEach(m => { %>
+                <% var travado = !P.gerir_membros
+                     || m.eh_dono_da_corp || m.sou_eu
+                     || (MEU_NIVEL !== null && m.rank_level !== null && m.rank_level !== undefined && Number(m.rank_level) >= Number(MEU_NIVEL)); %>
                 <tr>
                   <td><%= m.roblox_id || '-' %></td>
                   <td><%= m.roblox_username || '-' %></td>
                   <td><%= (m.discord_username && !String(m.discord_username).startsWith('roblox_')) ? m.discord_username : '—' %></td>
                   <td>
-                    <select class="rank-select" onchange="changeRank(<%= m.id %>, this.value, this)">
+                    <select class="rank-select" <%= travado ? 'disabled' : '' %> onchange="changeRank(<%= m.id %>, this.value, this)">
                       <option value="" <%= !m.rank_id ? 'selected' : '' %>>Sem cargo</option>
                       <% ranks.forEach(rank => { %>
                         <option value="<%= rank.id %>" <%= m.rank_id === rank.id ? 'selected' : '' %>><%= rank.name %> (Nv.<%= rank.level %>)</option>
@@ -204,7 +221,10 @@
                   </td>
                   <td><%= new Date(m.joined_at).toLocaleDateString('pt-BR') %></td>
                   <td>
-                    <button class="btn-sm danger" onclick="deleteMember(<%= m.id %>)">Remover</button>
+                    <% if (!travado) { %><button class="btn-sm danger" onclick="deleteMember(<%= m.id %>)">Remover</button>
+                    <% } else if (m.eh_dono_da_corp) { %><span style="color:#7a8ba5;font-size:0.75rem">dono</span>
+                    <% } else if (m.sou_eu) { %><span style="color:#7a8ba5;font-size:0.75rem">você</span>
+                    <% } %>
                   </td>
                 </tr>
               <% }) %>
@@ -216,6 +236,7 @@
 
     <!-- CONFIGURAÇÕES -->
     <div class="panel" id="panel-config">
+      <% if (P.editar_corp) { %>
       <div class="form-row">
         <div class="form-group">
           <label>Nome</label>
@@ -261,8 +282,9 @@
         </div>
       </div>
       <button class="btn" onclick="saveConfig()">Salvar</button>
+      <% } %>
 
-      <% if (isOwner) { %>
+      <% if (P.gerir_gerentes) { %>
       <div style="margin-top:2rem;padding-top:1.5rem;border-top:1px solid #1e2a40">
         <h3 style="font-size:0.9rem;margin-bottom:1rem;color:#00d4ff">Co-Gerentes</h3>
         <div class="form-row">

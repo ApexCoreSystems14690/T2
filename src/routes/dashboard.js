@@ -1,6 +1,6 @@
 const router = require('express').Router();
 const pool = require('../db/pool');
-const { requireAuth } = require('../middleware/auth');
+const { requireAuth, ctxDaCorp } = require('../middleware/auth');
 const perm = require('../permissoes');
 
 router.use(requireAuth);
@@ -21,14 +21,21 @@ router.get('/', async (req, res) => {
               EXISTS (SELECT 1 FROM corp_managers cg WHERE cg.corporation_id = c.id AND cg.user_id = $1) AS sou_gerente,
               (SELECT r.name FROM members mr LEFT JOIN ranks r ON mr.rank_id = r.id
                 WHERE mr.corporation_id = c.id AND mr.user_id = $1) AS meu_cargo,
+              -- [23/09, pedido do Julio] o membro comum ve o proprio salario no cartao
+              (SELECT r.salary FROM members mr LEFT JOIN ranks r ON mr.rank_id = r.id
+                WHERE mr.corporation_id = c.id AND mr.user_id = $1) AS meu_salario,
               ($2::boolean
                 OR c.owner_id = $1
                 OR c.id IN (SELECT corporation_id FROM corp_managers WHERE user_id = $1)
                 OR c.id IN (
+                  -- [23/09] ANTES: "os 2 cargos do topo". Virava gerencia sem ninguem
+                  -- escolher -- no Jornal (3 cargos) o JORNALISTA mandava na redacao.
+                  -- AGORA: so o cargo de MAIOR nivel, e so se a corp tiver 2+ niveis;
+                  -- ou o cargo que declarar permissions.gerir_membros. Mesma regra
+                  -- que o corp-poderes.js aplica no back (CP.SQL_CHEFE).
                   SELECT m.corporation_id FROM members m
                   JOIN ranks r ON m.rank_id = r.id
-                  WHERE m.user_id = $1
-                  AND (SELECT COUNT(DISTINCT r2.level) FROM ranks r2 WHERE r2.corporation_id = m.corporation_id AND r2.level > r.level) < 2
+                  WHERE m.user_id = $1 AND ${CP.SQL_CHEFE}
                 )
               ) AS pode_gerenciar
        FROM corporations c
@@ -53,60 +60,39 @@ router.get('/', async (req, res) => {
 });
 
 // Gerenciar corporação específica
+// [23/09] Antes esta rota repetia na mão a regra de quem entra (e repetia a
+// versao ANTIGA, dos top 2). Agora pergunta pro mesmo ctxDaCorp que o back usa:
+// uma fonte da verdade so, e a view recebe os poderes pra esconder botao.
 router.get('/corp/:corpId', async (req, res) => {
   try {
-    const corp = await pool.query(
-      `SELECT *, (icon_data IS NOT NULL) as has_icon_file FROM corporations WHERE id = $1
-       AND (
-         $3::boolean
-         OR owner_id = $2
-         OR id IN (SELECT corporation_id FROM corp_managers WHERE user_id = $2)
-         OR id IN (
-           SELECT m.corporation_id FROM members m
-           JOIN ranks r ON m.rank_id = r.id
-           WHERE m.user_id = $2
-           AND (SELECT COUNT(DISTINCT r2.level) FROM ranks r2 WHERE r2.corporation_id = m.corporation_id AND r2.level > r.level) < 2
-         )
-       )`,
-      [req.params.corpId, req.user.id, perm.pode(req.user, 'corp')]
-    );
-    if (corp.rows.length === 0) return res.redirect('/dashboard');
-
-    const corpData = corp.rows[0];
-    const isOwner = corpData.owner_id === req.user.id || perm.pode(req.user, 'corp');
-
-    // Checa se é co-gerente
-    let isManager = false;
-    if (!isOwner) {
-      const mgrCheck = await pool.query(
-        'SELECT 1 FROM corp_managers WHERE corporation_id = $1 AND user_id = $2',
-        [req.params.corpId, req.user.id]
-      );
-      isManager = mgrCheck.rows.length > 0;
-    }
-
-    const isHighRank = !isOwner && !isManager; // se chegou aqui e não é dono nem co-gerente, é highRank
+    const info = await ctxDaCorp(req.params.corpId, req.user);
+    if (!info || !CP.pode(info.ctx, 'ver_painel')) return res.redirect('/dashboard');
 
     const ranks = await pool.query(
       'SELECT * FROM ranks WHERE corporation_id = $1 ORDER BY level DESC',
       [req.params.corpId]
     );
     const members = await pool.query(`
-      SELECT m.*, u.discord_username, u.roblox_id, u.roblox_username, r.name as rank_name, r.level as rank_level
+      SELECT m.*, u.discord_username, u.roblox_id, u.roblox_username, r.name as rank_name, r.level as rank_level,
+             (m.user_id = $2) AS sou_eu,
+             (m.user_id = (SELECT owner_id FROM corporations WHERE id = $1)) AS eh_dono_da_corp
       FROM members m
       JOIN users u ON m.user_id = u.id
       LEFT JOIN ranks r ON m.rank_id = r.id
       WHERE m.corporation_id = $1
       ORDER BY r.level DESC NULLS LAST, m.joined_at ASC
-    `, [req.params.corpId]);
+    `, [req.params.corpId, req.user.id]);
 
     res.render('corp-manage', {
       user: req.user,
-      corporation: corpData,
+      corporation: info.corp,
       ranks: ranks.rows,
       members: members.rows,
-      isOwner,
-      isHighRank,
+      isOwner: info.papel === 'dono' || info.papel === 'staff',
+      isHighRank: info.papel === 'chefe',
+      papel: info.papel,
+      poderes: info.poderes,
+      meuNivel: CP.semTeto(info.ctx) ? null : info.ctx.meuNivel,
     });
   } catch (err) {
     console.error('Corp manage error:', err.message, err.stack);

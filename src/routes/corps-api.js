@@ -1,7 +1,9 @@
 const router = require('express').Router();
 const pool = require('../db/pool');
 const multer = require('multer');
-const { requireAuth, requireCorpOwner, requireAdmin, requirePoder } = require('../middleware/auth');
+const { requireAuth, requireCorpOwner, requireCorpPoder, requireAdmin, requirePoder } = require('../middleware/auth');
+// [23/09] poderes DENTRO da corp (papel: staff/dono/gerente/chefe/membro).
+const CP = require('../corp-poderes');
 const perm = require('../permissoes');
 
 // Upload config — armazena em memória (vai pro banco)
@@ -81,13 +83,14 @@ router.get('/', async (req, res) => {
 // Precisa estar logado; só quem gerencia alguma corporação (ou admin) enxerga.
 router.get('/users/list', async (req, res) => {
   try {
+    // [23/09] Esta rota entrega a base INTEIRA de usuários (discord_id,
+    // roblox_id, is_admin). Antes qualquer membro dos 2 cargos do topo de
+    // qualquer corp a lia -- dava pra mapear quem é admin do site. Agora é
+    // poder de DONO / co-gerente / staff ('ver_usuarios'), e mais ninguém.
     if (!perm.pode(req.user, 'corp')) {
       const gerencia = await pool.query(
         `SELECT 1 FROM corporations WHERE owner_id = $1
          UNION SELECT 1 FROM corp_managers WHERE user_id = $1
-         UNION SELECT 1 FROM members m JOIN ranks r ON m.rank_id = r.id
-           WHERE m.user_id = $1
-           AND (SELECT COUNT(DISTINCT r2.level) FROM ranks r2 WHERE r2.corporation_id = m.corporation_id AND r2.level > r.level) < 2
          LIMIT 1`,
         [req.user.id]
       );
@@ -107,7 +110,7 @@ router.get('/users/list', async (req, res) => {
 });
 
 // GET /api/corps/:corpId — detalhes de uma corporação
-router.get('/:corpId', requireCorpOwner, async (req, res) => {
+router.get('/:corpId', requireCorpOwner, requireCorpPoder('ver_membros'), async (req, res) => {
   try {
     const ranks = await pool.query(
       'SELECT * FROM ranks WHERE corporation_id = $1 ORDER BY level DESC',
@@ -133,7 +136,7 @@ router.get('/:corpId', requireCorpOwner, async (req, res) => {
 });
 
 // PUT /api/corps/:corpId — editar configurações da corporação
-router.put('/:corpId', requireCorpOwner, async (req, res) => {
+router.put('/:corpId', requireCorpOwner, requireCorpPoder('editar_corp'), async (req, res) => {
   try {
     const { name, description, icon_url, color, max_members } = req.body;
     // Se mandou uma URL, limpa a imagem do banco
@@ -159,7 +162,7 @@ router.put('/:corpId', requireCorpOwner, async (req, res) => {
 });
 
 // POST /api/corps/:corpId/icon — upload de imagem da corp
-router.post('/:corpId/icon', requireCorpOwner, upload.single('icon'), async (req, res) => {
+router.post('/:corpId/icon', requireCorpOwner, requireCorpPoder('editar_corp'), upload.single('icon'), async (req, res) => {
   try {
     if (!req.file) return res.status(400).json({ error: 'Envie uma imagem (PNG, JPG, GIF ou WebP, máx 2MB)' });
     // [FIX 23/09 seguranca] o mime gravado e o dos BYTES, nunca o que o cliente
@@ -178,7 +181,7 @@ router.post('/:corpId/icon', requireCorpOwner, upload.single('icon'), async (req
 });
 
 // DELETE /api/corps/:corpId/icon — remover imagem da corp
-router.delete('/:corpId/icon', requireCorpOwner, async (req, res) => {
+router.delete('/:corpId/icon', requireCorpOwner, requireCorpPoder('editar_corp'), async (req, res) => {
   try {
     await pool.query(
       'UPDATE corporations SET icon_data = NULL, icon_mime = NULL, icon_url = NULL, updated_at = NOW() WHERE id = $1',
@@ -191,7 +194,7 @@ router.delete('/:corpId/icon', requireCorpOwner, async (req, res) => {
 });
 
 // POST /api/corps/:corpId/ranks — criar cargo
-router.post('/:corpId/ranks', requireCorpOwner, async (req, res) => {
+router.post('/:corpId/ranks', requireCorpOwner, requireCorpPoder('gerir_cargos'), async (req, res) => {
   try {
     const { name, level, salary } = req.body;
     if (!name || level === undefined) {
@@ -211,7 +214,7 @@ router.post('/:corpId/ranks', requireCorpOwner, async (req, res) => {
 });
 
 // PUT /api/corps/:corpId/ranks/:rankId — editar cargo
-router.put('/:corpId/ranks/:rankId', requireCorpOwner, async (req, res) => {
+router.put('/:corpId/ranks/:rankId', requireCorpOwner, requireCorpPoder('gerir_cargos'), async (req, res) => {
   try {
     const { name, level, salary } = req.body;
     const result = await pool.query(
@@ -228,7 +231,7 @@ router.put('/:corpId/ranks/:rankId', requireCorpOwner, async (req, res) => {
 });
 
 // DELETE /api/corps/:corpId/ranks/:rankId — remover cargo
-router.delete('/:corpId/ranks/:rankId', requireCorpOwner, async (req, res) => {
+router.delete('/:corpId/ranks/:rankId', requireCorpOwner, requireCorpPoder('gerir_cargos'), async (req, res) => {
   try {
     await pool.query(
       'DELETE FROM ranks WHERE id = $1 AND corporation_id = $2',
@@ -252,7 +255,7 @@ async function fetchRobloxUsername(robloxId) {
 
 // POST /api/corps/:corpId/members — adicionar membro
 // Aceita { user_id } (usuário registrado, escolhido no seletor) OU { roblox_id, roblox_username } (fallback)
-router.post('/:corpId/members', requireCorpOwner, async (req, res) => {
+router.post('/:corpId/members', requireCorpOwner, requireCorpPoder('gerir_membros'), async (req, res) => {
   try {
     const { user_id, roblox_id, roblox_username, rank_id } = req.body;
 
@@ -278,10 +281,12 @@ router.post('/:corpId/members', requireCorpOwner, async (req, res) => {
       return res.status(400).json({ error: 'Selecione um usuário' });
     }
 
-    // Quem é apenas alto cargo não pode adicionar alguém com cargo >= ao seu
-    if (req.isHighRank && rank_id) {
+    // [23/09] Teto de hierarquia. Vale pra QUALQUER papel com teto (hoje o
+    // chefe); dono, co-gerente e staff passam. Antes só olhava `isHighRank`.
+    if (rank_id) {
       const newRank = await pool.query('SELECT level FROM ranks WHERE id = $1 AND corporation_id = $2', [rank_id, req.params.corpId]);
-      if (newRank.rows.length > 0 && newRank.rows[0].level >= req.userRankLevel) {
+      const nivelNovo = newRank.rows.length > 0 ? newRank.rows[0].level : null;
+      if (!CP.podeDarCargo(req.corpCtx, nivelNovo)) {
         return res.status(403).json({ error: 'Você não pode atribuir um cargo igual ou superior ao seu' });
       }
     }
@@ -308,25 +313,32 @@ router.post('/:corpId/members', requireCorpOwner, async (req, res) => {
 });
 
 // PUT /api/corps/:corpId/members/:memberId — alterar cargo de um membro
-router.put('/:corpId/members/:memberId', requireCorpOwner, async (req, res) => {
+router.put('/:corpId/members/:memberId', requireCorpOwner, requireCorpPoder('gerir_membros'), async (req, res) => {
   try {
     const { rank_id } = req.body;
-    // Se é highRank, não pode editar membro com cargo >= ao seu
-    if (req.isHighRank) {
-      const target = await pool.query(
-        `SELECT r.level FROM members m LEFT JOIN ranks r ON m.rank_id = r.id
-         WHERE m.id = $1 AND m.corporation_id = $2`,
-        [req.params.memberId, req.params.corpId]
-      );
-      if (target.rows.length > 0 && target.rows[0].level >= req.userRankLevel) {
-        return res.status(403).json({ error: 'Você não pode alterar o cargo de alguém com cargo igual ou superior ao seu' });
-      }
-      // Também não pode dar um cargo >= ao seu
-      if (rank_id) {
-        const newRank = await pool.query('SELECT level FROM ranks WHERE id = $1 AND corporation_id = $2', [rank_id, req.params.corpId]);
-        if (newRank.rows.length > 0 && newRank.rows[0].level >= req.userRankLevel) {
-          return res.status(403).json({ error: 'Você não pode atribuir um cargo igual ou superior ao seu' });
-        }
+    // [23/09] A guarda vale pra todo papel com teto, e agora também protege o
+    // DONO da corp e o próprio sujeito — antes um chefe podia rebaixar o dono
+    // se o dono também fosse membro com cargo baixo.
+    const alvo = await pool.query(
+      `SELECT r.level AS nivel, m.user_id, (m.user_id = c.owner_id) AS eh_dono_da_corp
+         FROM members m
+         JOIN corporations c ON c.id = m.corporation_id
+         LEFT JOIN ranks r ON m.rank_id = r.id
+        WHERE m.id = $1 AND m.corporation_id = $2`,
+      [req.params.memberId, req.params.corpId]
+    );
+    if (alvo.rows.length === 0) return res.status(404).json({ error: 'Membro não encontrado' });
+    const a = alvo.rows[0];
+    if (!CP.podeMexerEmMembro(req.corpCtx, {
+      nivel: a.nivel, ehDonoDaCorp: !!a.eh_dono_da_corp, ehEuMesmo: a.user_id === req.user.id,
+    })) {
+      return res.status(403).json({ error: 'Você não pode alterar o cargo desta pessoa' });
+    }
+    if (rank_id) {
+      const newRank = await pool.query('SELECT level FROM ranks WHERE id = $1 AND corporation_id = $2', [rank_id, req.params.corpId]);
+      const nivelNovo = newRank.rows.length > 0 ? newRank.rows[0].level : null;
+      if (!CP.podeDarCargo(req.corpCtx, nivelNovo)) {
+        return res.status(403).json({ error: 'Você não pode atribuir um cargo igual ou superior ao seu' });
       }
     }
     const result = await pool.query(
@@ -341,18 +353,24 @@ router.put('/:corpId/members/:memberId', requireCorpOwner, async (req, res) => {
 });
 
 // DELETE /api/corps/:corpId/members/:memberId — remover membro
-router.delete('/:corpId/members/:memberId', requireCorpOwner, async (req, res) => {
+router.delete('/:corpId/members/:memberId', requireCorpOwner, requireCorpPoder('gerir_membros'), async (req, res) => {
   try {
-    // Se é highRank, não pode remover membro com cargo >= ao seu
-    if (req.isHighRank) {
-      const target = await pool.query(
-        `SELECT r.level FROM members m LEFT JOIN ranks r ON m.rank_id = r.id
-         WHERE m.id = $1 AND m.corporation_id = $2`,
-        [req.params.memberId, req.params.corpId]
-      );
-      if (target.rows.length > 0 && target.rows[0].level >= req.userRankLevel) {
-        return res.status(403).json({ error: 'Você não pode remover alguém com cargo igual ou superior ao seu' });
-      }
+    // [23/09] mesma guarda do PUT: teto de nível + o dono da corp é intocável
+    // por aqui + ninguém se remove pelo painel (pra isso existe o botão Sair).
+    const alvo = await pool.query(
+      `SELECT r.level AS nivel, m.user_id, (m.user_id = c.owner_id) AS eh_dono_da_corp
+         FROM members m
+         JOIN corporations c ON c.id = m.corporation_id
+         LEFT JOIN ranks r ON m.rank_id = r.id
+        WHERE m.id = $1 AND m.corporation_id = $2`,
+      [req.params.memberId, req.params.corpId]
+    );
+    if (alvo.rows.length === 0) return res.json({ ok: true });
+    const a = alvo.rows[0];
+    if (!CP.podeMexerEmMembro(req.corpCtx, {
+      nivel: a.nivel, ehDonoDaCorp: !!a.eh_dono_da_corp, ehEuMesmo: a.user_id === req.user.id,
+    })) {
+      return res.status(403).json({ error: 'Você não pode remover esta pessoa' });
     }
     await pool.query(
       'DELETE FROM members WHERE id = $1 AND corporation_id = $2',
@@ -431,7 +449,7 @@ router.post('/:corpId/sair', async (req, res) => {
 });
 
 // DELETE /api/corps/:corpId — excluir corporação (somente dono)
-router.delete('/:corpId', requireCorpOwner, async (req, res) => {
+router.delete('/:corpId', requireCorpOwner, requireCorpPoder('excluir_corp'), async (req, res) => {
   try {
     if (!req.isOwner) {
       return res.status(403).json({ error: 'Apenas o dono pode excluir a corporação' });
@@ -444,7 +462,7 @@ router.delete('/:corpId', requireCorpOwner, async (req, res) => {
 });
 
 // GET /api/corps/:corpId/managers — listar co-gerentes
-router.get('/:corpId/managers', requireCorpOwner, async (req, res) => {
+router.get('/:corpId/managers', requireCorpOwner, requireCorpPoder('gerir_gerentes'), async (req, res) => {
   try {
     const result = await pool.query(
       `SELECT cm.id, cm.added_at, u.id as user_id, u.discord_username, u.roblox_username, u.roblox_id
@@ -459,7 +477,7 @@ router.get('/:corpId/managers', requireCorpOwner, async (req, res) => {
 });
 
 // POST /api/corps/:corpId/managers — adicionar co-gerente (só dono)
-router.post('/:corpId/managers', requireCorpOwner, async (req, res) => {
+router.post('/:corpId/managers', requireCorpOwner, requireCorpPoder('gerir_gerentes'), async (req, res) => {
   try {
     if (!req.isOwner) return res.status(403).json({ error: 'Apenas o dono pode gerenciar co-gerentes' });
     const { user_id } = req.body;
@@ -478,7 +496,7 @@ router.post('/:corpId/managers', requireCorpOwner, async (req, res) => {
 });
 
 // DELETE /api/corps/:corpId/managers/:managerId — remover co-gerente (só dono)
-router.delete('/:corpId/managers/:managerId', requireCorpOwner, async (req, res) => {
+router.delete('/:corpId/managers/:managerId', requireCorpOwner, requireCorpPoder('gerir_gerentes'), async (req, res) => {
   try {
     if (!req.isOwner) return res.status(403).json({ error: 'Apenas o dono pode gerenciar co-gerentes' });
     await pool.query(
