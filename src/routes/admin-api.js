@@ -5,6 +5,7 @@ const router = require('express').Router();
 const pool = require('../db/pool');
 const { requireAuth, requireAdmin, requirePoder } = require('../middleware/auth');
 const perm = require('../permissoes');
+const SSU = require('../ssu');   // [25/09] espelho do Regras.SSU do jogo
 
 router.use(requireAuth);
 router.use(requireAdmin);
@@ -625,6 +626,80 @@ router.post('/registro/dar-todos', requirePoder('item_todos'), async (req, res) 
     await audit(req, 'dar-todos:' + tipo, { payload, online, fila });
     res.json({ ok: true, online, fila });
   } catch (err) { console.error('registro/dar-todos:', err.message); res.status(500).json({ error: 'Erro interno' }); }
+});
+
+// ============================================================
+// [25/09] SSU — as TRES acoes prontas. Nao existe rota que edite a grade.
+//
+// Pedido do Julio: "Tudo pre feito ja sem poder mexer livremente, isso so para
+// diretores gerais poder mexer, senao roda sozinho". Entao:
+//   - a grade e codigo, nos dois lados; nenhuma rota escreve nela;
+//   - as acoes sao encerrar / reabrir / estender, e so;
+//   - cada acao vale pra UMA sessao (a de hoje), identificada pela data local.
+//     Encerrar hoje nao encerra a sexta que vem -- tem teste provando;
+//   - estender so no dia que tem teto na grade (quarta, ate 23:00), e nunca
+//     alem do teto. Quem confere e o `SSU.acoesPossiveis`, o mesmo modulo que
+//     o painel usa pra desenhar o botao: nao aparece botao que o back recusa.
+// ============================================================
+async function lerAjustes() {
+  const r = await pool.query(`SELECT value FROM game_config WHERE key = 'ssu'`);
+  return (r.rows[0] && r.rows[0].value) || {};
+}
+
+router.get('/ssu', requirePoder('ssu'), async (req, res) => {
+  try {
+    const agora = Math.floor(Date.now() / 1000);
+    const ajustes = await lerAjustes();
+    res.json({
+      ok: true, agora,
+      grade: SSU.gradeTexto(),
+      estado: SSU.estado(agora, ajustes),
+      acoes: SSU.acoesPossiveis(agora, ajustes),
+      ajustes,
+    });
+  } catch (err) { console.error('ssu/get:', err.message); res.status(500).json({ error: 'Erro interno' }); }
+});
+
+router.post('/ssu', requirePoder('ssu'), async (req, res) => {
+  try {
+    const acao = String((req.body && req.body.acao) || '');
+    const agora = Math.floor(Date.now() / 1000);
+    const ajustes = await lerAjustes();
+    const podem = SSU.acoesPossiveis(agora, ajustes);
+    const sessao = SSU.sessaoVigente(agora, ajustes);
+    if (!sessao) return res.status(400).json({ error: 'Nao ha SSU acontecendo agora' });
+    if (!podem[acao]) return res.status(400).json({ error: 'Essa acao nao cabe agora' });
+
+    const novo = { sessao: sessao.chave, por: req.user.discord_username || ('user#' + req.user.id), em: agora };
+    if (acao === 'encerrar') {
+      novo.encerrada = true;
+      if (ajustes.sessao === sessao.chave && ajustes.estendidaAte) novo.estendidaAte = ajustes.estendidaAte;
+    } else if (acao === 'reabrir') {
+      novo.encerrada = false;
+      if (ajustes.sessao === sessao.chave && ajustes.estendidaAte) novo.estendidaAte = ajustes.estendidaAte;
+    } else if (acao === 'estender') {
+      novo.encerrada = false;
+      novo.estendidaAte = podem.estenderAte;
+    }
+
+    await pool.query(
+      `INSERT INTO game_config (key, value, updated_at) VALUES ('ssu', $1, NOW())
+       ON CONFLICT (key) DO UPDATE SET value = EXCLUDED.value, updated_at = NOW()`,
+      [JSON.stringify(novo)]);
+    await audit(req, 'ssu:' + acao, { sessao: sessao.chave, ajustes: novo });
+
+    // avisa quem esta online AGORA: o jogo nao precisa esperar o heartbeat
+    const servers = await pool.query(
+      `SELECT job_id FROM game_servers WHERE updated_at > NOW() - INTERVAL '90 seconds'`);
+    for (const sv of servers.rows) {
+      await pool.query(
+        'INSERT INTO game_commands (tipo, payload, job_id, created_by) VALUES ($1,$2,$3,$4)',
+        ['ssu_refresh', JSON.stringify(novo), sv.job_id, req.user.id]);
+    }
+
+    res.json({ ok: true, acao, servidores: servers.rows.length,
+      estado: SSU.estado(agora, novo), acoes: SSU.acoesPossiveis(agora, novo) });
+  } catch (err) { console.error('ssu/post:', err.message); res.status(500).json({ error: 'Erro interno' }); }
 });
 
 module.exports = router;

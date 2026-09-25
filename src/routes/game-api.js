@@ -31,6 +31,39 @@ router.get('/temporada', async (req, res) => {
   }
 });
 
+// ------------------------------------------------------------------
+// [25/09] SSU — o jogo pergunta SO os AJUSTES, nunca a grade.
+// A grade (qua/sex/sab/dom) mora em ReplicatedStorage.Shared.Regras.SSU, no
+// JOGO. E de proposito: com o site fora do ar o servidor continua abrindo e
+// fechando na hora certa sozinho, que foi o pedido ("roda sozinho").
+// Aqui so vem { sessao, encerrada, estendidaAte } -- o que a direcao mexeu
+// NAQUELA noite. Se este endpoint cair, o jogo usa o ultimo ajuste conhecido.
+// (Isto tambem ja viaja no /heartbeat dentro de `config.ssu`; esta rota existe
+// pro BOOT do servidor, que precisa da resposta antes do primeiro heartbeat.)
+// ------------------------------------------------------------------
+router.get('/ssu', async (req, res) => {
+  try {
+    const r = await pool.query(`SELECT value FROM game_config WHERE key = 'ssu'`);
+    // A LISTA DE STAFF VEM JUNTO. Motivo: "o jogo nunca decide quem e admin" --
+    // quem decide e o site. Mas o jogo precisa saber na hora do JOIN, e uma
+    // chamada HTTP por entrada seria lenta e frageis. Entao o jogo guarda esta
+    // lista e refaz de tempos em tempos. Lista velha por alguns minutos custa,
+    // no pior caso, um admin recem-promovido esperando -- nunca um jogador
+    // comum entrando fora do horario.
+    const st = await pool.query(
+      `SELECT roblox_id FROM users WHERE roblox_id IS NOT NULL AND is_admin = true LIMIT 200`);
+    res.json({
+      ok: true,
+      ajustes: (r.rows[0] && r.rows[0].value) || {},
+      staff: st.rows.map(x => Number(x.roblox_id)),
+      agora: Math.floor(Date.now() / 1000),
+    });
+  } catch (err) {
+    console.error('ssu:', err.message);
+    res.status(500).json({ error: 'Erro interno' });
+  }
+});
+
 // GET /api/game/player/:robloxId
 // Retorna todas as corporações que o jogador pertence, com cargo e salário
 // Usado pelo servidor Roblox ao invés de plr:IsInGroup()

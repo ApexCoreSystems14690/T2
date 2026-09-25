@@ -76,6 +76,11 @@ const PODERES = {
   reset_jogador: { rotulo: 'Resetar o save de um jogador',   min: 'diretor'    },
   admins:        { rotulo: 'Gerir admins e seus cargos',     min: 'diretor'    },
 
+  // [25/09] SSU. Decisao do Julio: a grade roda SOZINHA e ninguem mexe nela
+  // livremente -- so o Diretor Geral pra cima usa as tres acoes prontas
+  // (encerrar agora, reabrir, estender). Nao existe rota que edite a grade.
+  ssu:           { rotulo: 'SSU: encerrar, reabrir e estender', min: 'diretor'    },
+
   wipe:          { rotulo: 'WIPE GERAL (reset da temporada)', min: 'dono'      },
 };
 

@@ -193,6 +193,21 @@
         </div>
         <div class="muted" style="font-size:.78rem;margin-top:.5rem">Atual: <b id="clima-atual">–</b> · fica salvo (servidor novo já abre assim). <b>Automático</b> = chove sozinho de vez em quando, mais à noite; os outros fixam o clima.</div>
       </div>
+      <div class="card" data-poder="ssu">
+        <h3>SSU — o servidor abre e fecha sozinho</h3>
+        <div id="ssu-estado" style="font-size:1.05rem;font-weight:600;margin:.35rem 0 .15rem">–</div>
+        <div id="ssu-quando" class="muted" style="font-size:.82rem">–</div>
+        <div class="clock" style="margin-top:.7rem">
+          <button class="btn danger" id="ssu-encerrar" onclick="ssuAcao('encerrar')">⏹️ Encerrar agora</button>
+          <button class="btn" id="ssu-reabrir" onclick="ssuAcao('reabrir')">▶️ Reabrir</button>
+          <button class="btn sec" id="ssu-estender" onclick="ssuAcao('estender')">⏱️ Estender</button>
+        </div>
+        <div class="muted" style="font-size:.78rem;margin-top:.7rem;line-height:1.5">
+          <b>A grade é fixa e roda sozinha</b> — não dá pra editar por aqui, de propósito.
+          <div id="ssu-grade" style="margin-top:.3rem"></div>
+        </div>
+        <div id="ssu-msg" class="muted" style="font-size:.78rem;margin-top:.5rem"></div>
+      </div>
       <div class="card">
         <h3>Servidores</h3>
         <div id="srv-list" class="muted" style="font-size:.82rem">–</div>
@@ -343,7 +358,63 @@
       document.querySelectorAll('[data-poder]').forEach(el => {
         if (!podeP(el.dataset.poder)) el.style.display = 'none';
       });
+      // [25/09] o cartao do SSU so existe pro Diretor Geral pra cima; a primeira
+      // leitura vem depois de saber o cargo, senao a chamada tomaria 403.
+      if (podeP('ssu')) ssuCarrega();
     }
+
+    // ---------------------------------------------------------------- SSU
+    // O painel NAO decide nada: pergunta ao site o estado e quais acoes cabem
+    // agora, e desenha so essas. Assim nunca aparece botao que o back recusa.
+    async function ssuCarrega() {
+      const card = document.querySelector('[data-poder="ssu"]');
+      if (!card || card.style.display === 'none') return;
+      try {
+        const r = await fetch('/api/admin/ssu');
+        if (!r.ok) return;
+        const d = await r.json();
+        const e = d.estado || {};
+        const cor = e.aberto ? '#3ddc84' : '#ff8a80';
+        $('ssu-estado').innerHTML = '<span style="color:' + cor + '">'
+          + (e.aberto ? '● ABERTO' : '● FECHADO') + '</span>'
+          + (e.estendida ? ' <span class="muted" style="font-size:.8rem">(estendido)</span>' : '');
+        let quando = '';
+        if (e.aberto && e.sessao) {
+          quando = 'SSU de ' + e.sessao.dia + ' · fecha às '
+            + (e.sessao.fechaHora >= 24 ? '00:00' : String(e.sessao.fechaHora).padStart(2, '0') + ':00');
+        } else if (e.motivo === 'encerrada') {
+          quando = 'Encerrado pela direção.';
+          if (e.proxima) quando += ' Volta ' + e.proxima.dia + ' às ' + String(e.proxima.abreHora).padStart(2, '0') + ':00.';
+        } else if (e.proxima) {
+          quando = 'Abre ' + e.proxima.dia + ' às ' + String(e.proxima.abreHora).padStart(2, '0') + ':00.';
+        }
+        $('ssu-quando').textContent = quando;
+        $('ssu-grade').innerHTML = (d.grade || []).map(l => '• ' + l).join('<br>');
+        const a = d.acoes || {};
+        $('ssu-encerrar').style.display = a.encerrar ? '' : 'none';
+        $('ssu-reabrir').style.display  = a.reabrir  ? '' : 'none';
+        $('ssu-estender').style.display = a.estender ? '' : 'none';
+        if (a.estender) $('ssu-estender').textContent = '⏱️ Estender até '
+          + String(a.estenderAte).padStart(2, '0') + ':00';
+      } catch (err) {}
+    }
+    async function ssuAcao(acao) {
+      const nomes = { encerrar: 'ENCERRAR o SSU agora', reabrir: 'REABRIR o SSU', estender: 'ESTENDER o SSU' };
+      if (!confirm(nomes[acao] + '?\n\nIsso vale só pra sessão de hoje. A grade não muda.')) return;
+      $('ssu-msg').textContent = 'mandando…';
+      try {
+        const r = await fetch('/api/admin/ssu', {
+          method: 'POST', headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ acao }),
+        });
+        const d = await r.json();
+        $('ssu-msg').textContent = r.ok
+          ? ('Feito. ' + (d.servidores || 0) + ' servidor(es) avisado(s) na hora.')
+          : ('Não deu: ' + (d.error || 'erro'));
+      } catch (err) { $('ssu-msg').textContent = 'Não deu: sem resposta do site.'; }
+      ssuCarrega();
+    }
+    setInterval(ssuCarrega, 30000);
 
     document.querySelectorAll('.tab').forEach(tab => tab.addEventListener('click', () => {
       document.querySelectorAll('.tab').forEach(t => t.classList.remove('active'));
