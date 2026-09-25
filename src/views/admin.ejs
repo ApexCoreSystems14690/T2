@@ -66,6 +66,7 @@
     .picker-item .m { color: #7a8ba5; font-size: .72rem; }
     pre.det { font-size: .72rem; color: #7a8ba5; white-space: pre-wrap; word-break: break-all; margin: 0; }
   </style>
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/Chart.js/4.4.1/chart.umd.min.js"></script>
 </head>
 <body>
   <div class="topbar">
@@ -99,6 +100,7 @@
       <div class="tab" data-tab="cargos">Cargos</div>
       <div class="tab" data-tab="usuarios">Usuários</div>
       <div class="tab" data-tab="historico">Histórico</div>
+      <div class="tab" data-tab="analise">Análise</div>
     </div>
 
     <!-- JOGADORES -->
@@ -284,6 +286,39 @@
       </div>
       <button class="btn sec" onclick="loadHist()">Atualizar</button>
     </div>
+
+    <!-- ANÁLISE -->
+    <div class="panel" id="panel-analise">
+      <div class="row" style="margin-bottom:.5rem">
+        <span class="muted" style="font-size:.8rem;flex:1">Média de jogadores, pico, mínimo e crescimento por noite (SSU). Coletado a cada ~2 min enquanto o servidor está de pé.</span>
+        <button class="btn sec" onclick="loadAnalise()">Atualizar</button>
+      </div>
+      <div id="an-vazio" class="empty" style="display:none">Ainda sem dados — a análise começa a encher na próxima sessão (SSU).</div>
+      <div id="an-conteudo">
+        <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(150px,1fr));gap:.8rem;margin-bottom:1rem">
+          <div class="card" style="margin:0"><div class="muted" style="font-size:.68rem;text-transform:uppercase;letter-spacing:.05em">Online agora</div><div id="an-online" style="font-size:1.7rem;font-weight:800;color:#00d4ff">–</div><div class="muted" id="an-online-sub" style="font-size:.72rem"></div></div>
+          <div class="card" style="margin:0"><div class="muted" style="font-size:.68rem;text-transform:uppercase;letter-spacing:.05em">Média por noite</div><div id="an-media7" style="font-size:1.7rem;font-weight:800;color:#10b981">–</div><div class="muted" id="an-media7-sub" style="font-size:.72rem"></div></div>
+          <div class="card" style="margin:0"><div class="muted" style="font-size:.68rem;text-transform:uppercase;letter-spacing:.05em">Pico histórico</div><div id="an-pico" style="font-size:1.7rem;font-weight:800;color:#f59e0b">–</div><div class="muted" style="font-size:.72rem">máximo simultâneo</div></div>
+          <div class="card" style="margin:0"><div class="muted" style="font-size:.68rem;text-transform:uppercase;letter-spacing:.05em">Melhor noite</div><div id="an-melhor" style="font-size:1.7rem;font-weight:800;color:#8b5cf6">–</div><div class="muted" id="an-melhor-sub" style="font-size:.72rem"></div></div>
+          <div class="card" style="margin:0"><div class="muted" style="font-size:.68rem;text-transform:uppercase;letter-spacing:.05em">Crescimento</div><div id="an-cresc" style="font-size:1.7rem;font-weight:800;color:#7a8ba5">–</div><div class="muted" id="an-cresc-sub" style="font-size:.72rem"></div></div>
+        </div>
+        <div class="grid2">
+          <div class="card">
+            <h3>Jogadores nas últimas 24h</h3>
+            <div style="height:190px"><canvas id="an-chart-serie"></canvas></div>
+            <div class="muted" id="an-serie-vazio" style="font-size:.78rem;display:none;margin-top:.4rem">Sem sessão nas últimas 24h.</div>
+          </div>
+          <div class="card">
+            <h3>Média de jogadores por noite</h3>
+            <div style="height:190px"><canvas id="an-chart-noites"></canvas></div>
+          </div>
+        </div>
+        <div class="card">
+          <h3>Noites</h3>
+          <div style="overflow-x:auto"><table><thead><tr><th>Noite</th><th>Média</th><th>Pico</th><th>Mínimo</th><th>Amostras</th></tr></thead><tbody id="an-tbody"></tbody></table></div>
+        </div>
+      </div>
+    </div>
   </div>
 
   <!-- MODAL DE COMANDO -->
@@ -338,7 +373,7 @@
     const btnSe = (tipo, html) => podeCmd(tipo) ? html : '';
 
     // Painéis e abas por poder. Aba sem nenhum poder some do topo.
-    const PODER_DA_ABA = { jogadores: null, registro: 'ver_registro', servidor: 'servidor', logs: 'ver_registro', cargos: 'corp', usuarios: 'admins', historico: 'admins' };
+    const PODER_DA_ABA = { jogadores: null, registro: 'ver_registro', servidor: 'servidor', logs: 'ver_registro', cargos: 'corp', usuarios: 'admins', historico: 'admins', analise: 'ver_registro' };
 
     async function carregarEu() {
       EU = await api('GET', '/eu');
@@ -416,6 +451,87 @@
     }
     setInterval(ssuCarrega, 30000);
 
+    // ---------------------------------------------------------------- ANÁLISE
+    // Aba pura de dados: média de players, pico, mínimo e crescimento por noite (SSU).
+    let anCh1 = null, anCh2 = null;
+    const nomeDiaCurto = ['dom', 'seg', 'ter', 'qua', 'qui', 'sex', 'sáb'];
+    function fmtNoite(dstr) {
+      const d = new Date(String(dstr).slice(0, 10) + 'T12:00:00');
+      if (isNaN(d)) return String(dstr);
+      return nomeDiaCurto[d.getDay()] + ' ' + String(d.getDate()).padStart(2, '0') + '/' + String(d.getMonth() + 1).padStart(2, '0');
+    }
+    function desenhaChart(inst, canvasId, tipo, labels, data, rotulo, cor) {
+      if (inst) inst.destroy();
+      if (typeof Chart === 'undefined') return null;
+      return new Chart($(canvasId).getContext('2d'), {
+        type: tipo,
+        data: { labels, datasets: [{ label: rotulo, data, borderColor: cor,
+          backgroundColor: tipo === 'bar' ? cor + 'bb' : cor + '22', fill: tipo === 'line',
+          tension: .3, pointRadius: 0, borderWidth: 2, borderRadius: tipo === 'bar' ? 4 : 0 }] },
+        options: {
+          responsive: true, maintainAspectRatio: false, animation: false,
+          plugins: { legend: { display: false }, tooltip: { intersect: false, mode: 'index' } },
+          scales: {
+            x: { ticks: { color: '#7a8ba5', maxRotation: 0, autoSkip: true, maxTicksLimit: 8, font: { size: 10 } }, grid: { color: '#1e2a4055' } },
+            y: { beginAtZero: true, ticks: { color: '#7a8ba5', precision: 0, font: { size: 10 } }, grid: { color: '#1e2a4055' } },
+          },
+        },
+      });
+    }
+    async function loadAnalise() {
+      let d;
+      try { d = await api('GET', '/analise'); } catch (e) { showAlert(e.message, 'error'); return; }
+      const noitesDesc = d.noites || [];
+      const temDado = (d.resumo && d.resumo.amostras_total > 0) || noitesDesc.length > 0;
+      // online agora aparece sempre
+      $('an-online').textContent = fmtN(d.online.jogadores);
+      $('an-online-sub').textContent = fmtN(d.online.servidores) + ' servidor(es)';
+      $('an-vazio').style.display = temDado ? 'none' : 'block';
+      $('an-conteudo').style.display = 'block';
+      if (!temDado) {
+        ['an-media7', 'an-pico', 'an-melhor', 'an-cresc'].forEach(id => $(id).textContent = '–');
+        return;
+      }
+      $('an-pico').textContent = fmtN(d.resumo.pico_hist);
+      const medias = noitesDesc.map(n => n.media);
+      const ult7 = medias.slice(0, 7);
+      const media7 = ult7.length ? Math.round(ult7.reduce((a, b) => a + b, 0) / ult7.length) : 0;
+      $('an-media7').textContent = fmtN(media7);
+      $('an-media7-sub').textContent = 'últimas ' + ult7.length + ' noite(s)';
+      let melhor = noitesDesc[0] || { media: 0, dia: null };
+      for (const n of noitesDesc) if (n.media > melhor.media) melhor = n;
+      $('an-melhor').textContent = fmtN(melhor.media);
+      $('an-melhor-sub').textContent = melhor.dia ? fmtNoite(melhor.dia) : '';
+      // crescimento: média das 3 últimas noites vs 3 anteriores
+      const a3 = medias.slice(0, 3), b3 = medias.slice(3, 6);
+      const mA = a3.length ? a3.reduce((x, y) => x + y, 0) / a3.length : 0;
+      const mB = b3.length ? b3.reduce((x, y) => x + y, 0) / b3.length : 0;
+      if (b3.length >= 1 && mB > 0) {
+        const pct = Math.round((mA / mB - 1) * 100);
+        $('an-cresc').textContent = (pct >= 0 ? '+' : '') + pct + '%';
+        $('an-cresc').style.color = pct >= 0 ? '#10b981' : '#ef4444';
+        $('an-cresc-sub').textContent = 'últimas 3 vs 3 anteriores';
+      } else {
+        $('an-cresc').textContent = '—'; $('an-cresc').style.color = '#7a8ba5';
+        $('an-cresc-sub').textContent = 'precisa de mais noites';
+      }
+      // curva 24h
+      const serie = d.serie || [];
+      $('an-serie-vazio').style.display = serie.length ? 'none' : 'block';
+      anCh1 = desenhaChart(anCh1, 'an-chart-serie', 'line',
+        serie.map(p => new Date(p.t).toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit' })),
+        serie.map(p => p.jogadores), 'Jogadores', '#00d4ff');
+      // média por noite (asc, últimas 14)
+      const nn = noitesDesc.slice(0, 14).reverse();
+      anCh2 = desenhaChart(anCh2, 'an-chart-noites', 'bar',
+        nn.map(n => fmtNoite(n.dia)), nn.map(n => n.media), 'Média/noite', '#10b981');
+      // tabela
+      $('an-tbody').innerHTML = noitesDesc.map(n =>
+        '<tr><td>' + fmtNoite(n.dia) + '</td><td><b>' + fmtN(n.media) + '</b></td><td>' + fmtN(n.pico) +
+        '</td><td>' + fmtN(n.minimo) + '</td><td class="muted">' + fmtN(n.amostras) + '</td></tr>').join('')
+        || '<tr><td colspan="5" class="empty">—</td></tr>';
+    }
+
     document.querySelectorAll('.tab').forEach(tab => tab.addEventListener('click', () => {
       document.querySelectorAll('.tab').forEach(t => t.classList.remove('active'));
       document.querySelectorAll('.panel').forEach(p => p.classList.remove('active'));
@@ -425,6 +541,7 @@
       if (tab.dataset.tab === 'usuarios') loadUsers();
       if (tab.dataset.tab === 'historico') loadHist();
       if (tab.dataset.tab === 'cargos') loadCargos();
+      if (tab.dataset.tab === 'analise') loadAnalise();
     }));
 
     // ---------- estado ao vivo ----------

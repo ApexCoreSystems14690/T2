@@ -173,6 +173,16 @@ async function start() {
         detalhe JSONB DEFAULT '{}',
         created_at TIMESTAMP DEFAULT NOW()
       );
+      -- [25/09] Snapshots de jogadores online ao longo do tempo, pra aba ANÁLISE
+      -- (média, pico, mínimo e crescimento por noite/SSU). Uma linha a cada ~2min
+      -- durante as sessões; gravada no /heartbeat.
+      CREATE TABLE IF NOT EXISTS player_snapshots (
+        id SERIAL PRIMARY KEY,
+        criado_em TIMESTAMP DEFAULT NOW(),
+        jogadores INTEGER NOT NULL DEFAULT 0,
+        servidores INTEGER NOT NULL DEFAULT 0
+      );
+      CREATE INDEX IF NOT EXISTS idx_player_snapshots_ts ON player_snapshots(criado_em);
     `);
     // Registro de jogadores (todo mundo que já entrou, online ou não) + fila de itens pra offline
     await pool.query(`

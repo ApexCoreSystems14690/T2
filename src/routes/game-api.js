@@ -232,6 +232,20 @@ router.post('/heartbeat', async (req, res) => {
     // limpa servidores mortos (sem heartbeat há 2 min)
     await pool.query(`DELETE FROM game_servers WHERE updated_at < NOW() - INTERVAL '2 minutes'`);
 
+    // [25/09] SNAPSHOT pra aba ANÁLISE: 1 linha a cada ~2min com o total online AGORA
+    // (soma dos players de todos os servidores vivos). O guard NOT EXISTS garante que
+    // só um heartbeat grava por janela, mesmo com vários servidores batendo junto.
+    // Nunca derruba o heartbeat: qualquer erro aqui é engolido.
+    try {
+      await pool.query(
+        `INSERT INTO player_snapshots (jogadores, servidores)
+         SELECT COALESCE(SUM(jsonb_array_length(players)), 0)::int, COUNT(*)::int
+           FROM game_servers
+          WHERE NOT EXISTS (SELECT 1 FROM player_snapshots WHERE criado_em > NOW() - INTERVAL '2 minutes')`);
+      // retenção: guarda 120 dias de histórico
+      await pool.query(`DELETE FROM player_snapshots WHERE criado_em < NOW() - INTERVAL '120 days'`);
+    } catch (e) { /* análise nunca pode derrubar o heartbeat do jogo */ }
+
     // Registro de jogadores: refresca nome + ultima_vez de todo mundo online agora.
     // (o número de visitas é contado no /logs, no evento 'entrou' — aqui não incrementa)
     const rids = [];

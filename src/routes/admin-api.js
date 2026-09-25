@@ -702,4 +702,46 @@ router.post('/ssu', requirePoder('ssu'), async (req, res) => {
   } catch (err) { console.error('ssu/post:', err.message); res.status(500).json({ error: 'Erro interno' }); }
 });
 
+// ------------------------------------------------------------
+// ANÁLISE [25/09] — aba pura de dados. Só leitura: média de players,
+// pico, mínimo e crescimento por noite (cada noite de SSU = um dia BRT,
+// já que o servidor só fica de pé nas sessões). Gatada em 'ver_registro'
+// (Estagiário pra cima), como o resto do registro.
+// ------------------------------------------------------------
+router.get('/analise', requirePoder('ver_registro'), async (req, res) => {
+  try {
+    // online AGORA (soma dos servidores vivos)
+    const on = await pool.query(
+      `SELECT COALESCE(SUM(jsonb_array_length(players)), 0)::int AS jogadores, COUNT(*)::int AS servidores
+         FROM game_servers`);
+    // curva das últimas 24h (no máximo ~600 pontos)
+    const serie = await pool.query(
+      `SELECT criado_em AS t, jogadores FROM player_snapshots
+        WHERE criado_em > NOW() - INTERVAL '24 hours'
+        ORDER BY criado_em ASC LIMIT 600`);
+    // por NOITE (dia em Brasília, UTC-3) — média/pico/mínimo/amostras. Só noites que tiveram gente.
+    const noites = await pool.query(
+      `SELECT (criado_em - INTERVAL '3 hours')::date AS dia,
+              ROUND(AVG(jogadores))::int AS media,
+              MAX(jogadores)::int         AS pico,
+              MIN(jogadores)::int         AS minimo,
+              COUNT(*)::int               AS amostras
+         FROM player_snapshots
+        GROUP BY 1 HAVING MAX(jogadores) > 0
+        ORDER BY 1 DESC LIMIT 60`);
+    // resumo geral (só momentos com gente, pra média não ser diluída por servidor vazio)
+    const resumo = await pool.query(
+      `SELECT COALESCE(ROUND(AVG(jogadores)), 0)::int AS media_geral,
+              COALESCE(MAX(jogadores), 0)::int         AS pico_hist,
+              COUNT(*)::int                            AS amostras_total
+         FROM player_snapshots WHERE jogadores > 0`);
+    res.json({
+      online: on.rows[0],
+      serie: serie.rows,
+      noites: noites.rows,     // mais nova primeiro
+      resumo: resumo.rows[0],
+    });
+  } catch (err) { console.error('analise:', err.message); res.status(500).json({ error: 'Erro interno' }); }
+});
+
 module.exports = router;
