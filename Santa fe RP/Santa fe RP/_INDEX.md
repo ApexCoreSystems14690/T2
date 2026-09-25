@@ -116,6 +116,15 @@ Se a ideia falhar na técnica OU não fizer sentido subjetivamente no universo d
 - Skill é da conta do Julio, não é arquivo daqui: para mudar, pedir no chat (card de revisão). Editar arquivo de skill no disco não vale.
 - **Antes de pedir screenshot de qualquer coisa: usar `02_Sistemas_Studio/QA_Veredito.md`** — o jogo se leva até o estado e pergunta ao Julio; a resposta volta pelo output.
 
+### 🎬 Trailer (novo, 21/09)
+- **Pesquisa de público medida (71 trailers BR, 718 comentários): `04_Trailer/PESQUISA_PUBLICO.md`** — ler ANTES de qualquer decisão de trailer. Descoberta principal: 0 menções a Roblox em 431 comentários da comunidade BR de GTA RP — não é desprezo, é ponto cego.
+- **Roteiro plano a plano (32 planos, 100s, coordenadas reais): `04_Trailer/ROTEIRO_TRAILER.md`** — render em Blender, geometria da place real (só leitura). Regra dura: nenhum plano mostra mecânica que não existe.
+- **Trilha e som (curva de tensão, som diegético com asset id real): `04_Trailer/TRILHA.md`**
+- **Assets a recortar/vestir/dirigir: `04_Trailer/ASSETS_TRAILER.md`** — 12 regiões do mapa com coordenadas medidas, 10 personagens, 7 veículos, quarentena de toolbox.
+- **PONTE Studio -> Blender (como recortar região): `04_Trailer/PIPELINE_BLENDER.md`** — receptor em `D:\T2\Claude outputs\trailer\ponte_studio.py` (rodar no Blender a cada reabertura, porta 8767). Regra de eixo, chave de luz e o FILTRO das lajes >150 studs que custou 3 voltas.
+- Cena do Blender: `D:\T2\Claude outputs\trailer\trailer_santafe.blend`
+- Decisão do Julio (21/09): trailer é **cinema renderizado no Blender**, mostrando **só mecânica que existe**. Eixos: vida de cidade + crime com peso + a cidade em si.
+
 ### 📥 Esperando o Julio
 - **O que só ele destrava, com a decisão já tomada: `00_Indice/Entrega_Julio.md`** — LER ANTES DE COMEÇAR O DIA.
 
