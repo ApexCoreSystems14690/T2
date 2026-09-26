@@ -232,16 +232,25 @@ router.post('/heartbeat', async (req, res) => {
     // limpa servidores mortos (sem heartbeat há 2 min)
     await pool.query(`DELETE FROM game_servers WHERE updated_at < NOW() - INTERVAL '2 minutes'`);
 
-    // [25/09] SNAPSHOT pra aba ANÁLISE: 1 linha a cada ~2min com o total online AGORA
-    // (soma dos players de todos os servidores vivos). O guard NOT EXISTS garante que
-    // só um heartbeat grava por janela, mesmo com vários servidores batendo junto.
+    // [25/09; corrigido 26/09] SNAPSHOT pra aba ANÁLISE: 1 linha a cada ~1min com o
+    // total online AGORA (soma dos players de todos os servidores vivos).
+    //
+    // BUG QUE ISSO CORRIGE: antes o `NOT EXISTS` ficava no WHERE de um SELECT
+    // AGREGADO (SUM/COUNT sem GROUP BY). Quando já havia snapshot recente, o WHERE
+    // filtrava as LINHAS de game_servers, mas o agregado sobre conjunto vazio ainda
+    // devolve UMA linha (SUM=NULL->0, COUNT=0) -> gravava um ZERO a cada heartbeat.
+    // Resultado: milhares de amostras-lixo e a média afogada em zeros.
+    // AGORA o agregado vira uma subquery (1 linha só) e o NOT EXISTS gateia ESSA
+    // linha: throttle falhou = nenhuma linha = nada gravado; passou = grava o real.
     // Nunca derruba o heartbeat: qualquer erro aqui é engolido.
     try {
       await pool.query(
         `INSERT INTO player_snapshots (jogadores, servidores)
-         SELECT COALESCE(SUM(jsonb_array_length(players)), 0)::int, COUNT(*)::int
-           FROM game_servers
-          WHERE NOT EXISTS (SELECT 1 FROM player_snapshots WHERE criado_em > NOW() - INTERVAL '2 minutes')`);
+         SELECT j, s FROM (
+           SELECT COALESCE(SUM(jsonb_array_length(players)), 0)::int AS j, COUNT(*)::int AS s
+             FROM game_servers
+         ) x
+          WHERE NOT EXISTS (SELECT 1 FROM player_snapshots WHERE criado_em > NOW() - INTERVAL '1 minute')`);
       // retenção: guarda 120 dias de histórico
       await pool.query(`DELETE FROM player_snapshots WHERE criado_em < NOW() - INTERVAL '120 days'`);
     } catch (e) { /* análise nunca pode derrubar o heartbeat do jogo */ }

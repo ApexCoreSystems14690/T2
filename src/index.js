@@ -343,6 +343,27 @@ async function start() {
           visitas = GREATEST(game_players.visitas, EXCLUDED.visitas);
       `, [desde]);
     } catch (e) { console.error('backfill game_players:', e.message); }
+    // [limpeza 26/09] O throttle do snapshot estava quebrado (NOT EXISTS no WHERE de
+    // um agregado gravava um ZERO a cada heartbeat), então player_snapshots encheu de
+    // amostras-lixo e a média da aba Análise dava 0. Aqui, UMA vez, colapsamos a
+    // tabela pra 1 linha por MINUTO (a de maior contagem daquele minuto = a leitura
+    // real), matando a enxurrada de zeros sem perder o sinal de verdade. Guardado por
+    // flag em game_config pra não rodar de novo em todo boot.
+    try {
+      const jaLimpou = await pool.query(`SELECT 1 FROM game_config WHERE key = 'analise_limpeza'`);
+      if (!jaLimpou.rows.length) {
+        const r = await pool.query(`
+          DELETE FROM player_snapshots ps WHERE ps.id NOT IN (
+            SELECT DISTINCT ON (date_trunc('minute', criado_em)) id
+              FROM player_snapshots
+             ORDER BY date_trunc('minute', criado_em), jogadores DESC, id ASC
+          )`);
+        await pool.query(
+          `INSERT INTO game_config (key, value, updated_at)
+           VALUES ('analise_limpeza', '{"v":1}'::jsonb, NOW()) ON CONFLICT (key) DO NOTHING`);
+        console.log('[limpeza analise] snapshots-lixo removidos:', r.rowCount);
+      }
+    } catch (e) { console.error('limpeza analise:', e.message); }
     // PF virou PC (set/2026): no painel a corporação da Polícia Federal foi renomeada pra Polícia Civil,
     // mas o SLUG (que é o que o jogo consulta em /api/game/player) continuou 'policia-federal', e a corp
     // 'policia-civil' original ficou vazia. Aqui: aposenta a 'policia-civil' vazia e passa o slug da antiga

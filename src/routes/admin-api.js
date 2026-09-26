@@ -720,6 +720,9 @@ router.get('/analise', requirePoder('ver_registro'), async (req, res) => {
         WHERE criado_em > NOW() - INTERVAL '24 hours'
         ORDER BY criado_em ASC LIMIT 600`);
     // por NOITE (dia em Brasília, UTC-3) — média/pico/mínimo/amostras. Só noites que tiveram gente.
+    // [fix 26/09] média/mínimo/amostras contam SÓ os momentos com jogador (jogadores>0):
+    // o servidor fica de pé vazio por horas (SSU) e contar esses zeros zerava a média.
+    // Pico continua sendo o MAX real (zero nunca é o pico), igual o `resumo` já fazia.
     const noites = await pool.query(
       `SELECT (criado_em - INTERVAL '3 hours')::date AS dia,
               ROUND(AVG(jogadores))::int AS media,
@@ -727,7 +730,8 @@ router.get('/analise', requirePoder('ver_registro'), async (req, res) => {
               MIN(jogadores)::int         AS minimo,
               COUNT(*)::int               AS amostras
          FROM player_snapshots
-        GROUP BY 1 HAVING MAX(jogadores) > 0
+        WHERE jogadores > 0
+        GROUP BY 1
         ORDER BY 1 DESC LIMIT 60`);
     // resumo geral (só momentos com gente, pra média não ser diluída por servidor vazio)
     const resumo = await pool.query(
