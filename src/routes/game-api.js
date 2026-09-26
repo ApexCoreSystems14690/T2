@@ -377,6 +377,18 @@ router.post('/logs', async (req, res) => {
              ultima_vez = NOW(),
              visitas = game_players.visitas + 1`,
           [rid, e.jogador != null ? String(e.jogador).slice(0, 64) : null]);
+        // [26/09 PROCURADOS] "EM AGUARDO DE DADOS" -> ATIVO.
+        // A polícia pode marcar alguém por NOME antes de o cara ter entrado alguma
+        // vez; aí o mandado fica sem roblox_id, esperando. Não vence nunca (o Julio:
+        // "o aguardando data ta praticamente infinito"). É aqui, no primeiro
+        // 'entrou' dele, que o nome vira id e o mandado passa a valer.
+        try {
+          await pool.query(
+            `UPDATE procurados
+                SET roblox_id = $1, estado = 'ativo', atualizado_em = NOW()
+              WHERE estado = 'aguardo' AND roblox_id IS NULL AND LOWER(nome) = LOWER($2)`,
+            [rid, e.jogador != null ? String(e.jogador).slice(0, 64) : '']);
+        } catch (e3) { /* idem: nunca derruba o log */ }
       } catch (e2) { /* não derruba o log por causa do registro */ }
     }
     res.json({ ok: true, n: values.length });
@@ -645,6 +657,124 @@ router.get('/celular/deepweb/pericia', async (req, res) => {
     const r = await pool.query(`SELECT id, chip_nome, corpo, pos_x, pos_y, pos_z, rua, criado_em FROM deepweb_posts WHERE autor_numero = $1 ORDER BY id DESC LIMIT 200`, [numero]);
     res.json({ posts: r.rows });
   } catch (err) { console.error('deepweb/pericia:', err.message); res.status(500).json({ error: 'Erro interno' }); }
+});
+
+// ===========================================================================
+// PROCURADOS + CADASTRO DE CIDADÃOS  [26/09]
+//
+// O cadastro de cidadãos NÃO ganhou tabela: `game_players` já é todo mundo que
+// entrou (roblox_id, nome, primeira_vez, ultima_vez, visitas), alimentado pelo
+// log 'entrou' logo acima. A FOTO sai do roblox_id no lado do jogo
+// (Players:GetUserThumbnailAsync funciona online ou offline) — não guardamos
+// imagem nenhuma aqui.
+//
+// A tabela nova é só `procurados`: o mandado que a polícia escreve à mão, com a
+// descrição (roupa, cor, cabelo, carro). Estados: ativo | aguardo | encerrado.
+// ===========================================================================
+
+// GET /api/game/cidadaos?busca=&limit=&offset=
+// A lista da tela "pessoas" do PC da delegacia. Devolve se tem mandado aberto.
+router.get('/cidadaos', async (req, res) => {
+  try {
+    const busca = String(req.query.busca || '').trim().slice(0, 64);
+    const limit = Math.min(Math.max(Number(req.query.limit) || 50, 1), 200);
+    const offset = Math.max(Number(req.query.offset) || 0, 0);
+    const where = busca ? `WHERE LOWER(gp.nome) LIKE LOWER($3)` : '';
+    const params = busca ? [limit, offset, '%' + busca + '%'] : [limit, offset];
+    const r = await pool.query(
+      `SELECT gp.roblox_id, gp.nome, gp.primeira_vez, gp.ultima_vez, gp.visitas,
+              pr.id AS procurado_id, pr.estado AS procurado_estado,
+              pr.motivo AS procurado_motivo, pr.descricao AS procurado_descricao
+         FROM game_players gp
+         LEFT JOIN procurados pr
+                ON pr.roblox_id = gp.roblox_id AND pr.estado <> 'encerrado'
+         ${where}
+        ORDER BY gp.ultima_vez DESC
+        LIMIT $1 OFFSET $2`, params);
+    res.json({ cidadaos: r.rows });
+  } catch (err) { console.error('cidadaos:', err.message); res.status(500).json({ error: 'Erro interno' }); }
+});
+
+// GET /api/game/cidadaos/:robloxId  -> a ficha de UM cidadão
+router.get('/cidadaos/:robloxId', async (req, res) => {
+  try {
+    const rid = Number(req.params.robloxId);
+    if (!Number.isFinite(rid) || rid <= 0) return res.status(400).json({ error: 'roblox_id inválido' });
+    const base = await pool.query(
+      `SELECT roblox_id, nome, primeira_vez, ultima_vez, visitas FROM game_players WHERE roblox_id = $1`, [rid]);
+    const mand = await pool.query(
+      `SELECT * FROM procurados WHERE roblox_id = $1 ORDER BY id DESC LIMIT 20`, [rid]);
+    res.json({ cidadao: base.rows[0] || null, mandados: mand.rows });
+  } catch (err) { console.error('cidadao:', err.message); res.status(500).json({ error: 'Erro interno' }); }
+});
+
+// GET /api/game/procurados?estado=ativo|aguardo|todos
+router.get('/procurados', async (req, res) => {
+  try {
+    const estado = String(req.query.estado || 'abertos');
+    const limit = Math.min(Math.max(Number(req.query.limit) || 100, 1), 300);
+    let sql = `SELECT * FROM procurados WHERE estado <> 'encerrado' ORDER BY id DESC LIMIT $1`;
+    let params = [limit];
+    if (estado === 'ativo' || estado === 'aguardo' || estado === 'encerrado') {
+      sql = `SELECT * FROM procurados WHERE estado = $2 ORDER BY id DESC LIMIT $1`;
+      params = [limit, estado];
+    } else if (estado === 'todos') {
+      sql = `SELECT * FROM procurados ORDER BY id DESC LIMIT $1`;
+    }
+    const r = await pool.query(sql, params);
+    res.json({ procurados: r.rows });
+  } catch (err) { console.error('procurados:', err.message); res.status(500).json({ error: 'Erro interno' }); }
+});
+
+// POST /api/game/procurados
+//   { nome, roblox_id?, descricao, motivo, por_roblox_id, por_nome, corp }
+// Se o roblox_id não vier, tenta resolver pelo NOME em game_players. Não achou
+// (o cara nunca entrou na cidade) -> nasce em 'aguardo', SEM PRAZO, e o primeiro
+// 'entrou' dele promove pra 'ativo'.
+router.post('/procurados', async (req, res) => {
+  try {
+    const b = req.body || {};
+    const nome = String(b.nome || '').trim().slice(0, 64);
+    if (!nome) return res.status(400).json({ error: 'nome obrigatório' });
+    let rid = Number(b.roblox_id);
+    if (!Number.isFinite(rid) || rid <= 0) {
+      const achou = await pool.query(
+        `SELECT roblox_id FROM game_players WHERE LOWER(nome) = LOWER($1) LIMIT 1`, [nome]);
+      rid = achou.rows[0] ? Number(achou.rows[0].roblox_id) : null;
+    }
+    const estado = rid ? 'ativo' : 'aguardo';
+    if (rid) {
+      const jaTem = await pool.query(
+        `SELECT id FROM procurados WHERE roblox_id = $1 AND estado <> 'encerrado' LIMIT 1`, [rid]);
+      if (jaTem.rows[0]) return res.status(409).json({ error: 'já procurado', id: jaTem.rows[0].id });
+    }
+    const r = await pool.query(
+      `INSERT INTO procurados (roblox_id, nome, descricao, motivo, por_roblox_id, por_nome, corp, estado)
+       VALUES ($1,$2,$3,$4,$5,$6,$7,$8) RETURNING *`,
+      [rid, nome,
+       b.descricao ? String(b.descricao).slice(0, 600) : null,
+       b.motivo ? String(b.motivo).slice(0, 160) : null,
+       Number(b.por_roblox_id) || null,
+       b.por_nome ? String(b.por_nome).slice(0, 64) : null,
+       b.corp ? String(b.corp).slice(0, 64) : null,
+       estado]);
+    res.json({ ok: true, procurado: r.rows[0], estado });
+  } catch (err) { console.error('procurados/criar:', err.message); res.status(500).json({ error: 'Erro interno' }); }
+});
+
+// POST /api/game/procurados/:id/encerrar   { por_nome }
+router.post('/procurados/:id/encerrar', async (req, res) => {
+  try {
+    const id = Number(req.params.id);
+    if (!Number.isFinite(id) || id <= 0) return res.status(400).json({ error: 'id inválido' });
+    const por = req.body && req.body.por_nome ? String(req.body.por_nome).slice(0, 64) : null;
+    const r = await pool.query(
+      `UPDATE procurados SET estado = 'encerrado', encerrado_em = NOW(), encerrado_por = $2,
+              atualizado_em = NOW()
+        WHERE id = $1 AND estado <> 'encerrado' RETURNING *`, [id, por]);
+    if (!r.rows[0]) return res.status(404).json({ error: 'não encontrado ou já encerrado' });
+    res.json({ ok: true, procurado: r.rows[0] });
+  } catch (err) { console.error('procurados/encerrar:', err.message); res.status(500).json({ error: 'Erro interno' }); }
 });
 
 module.exports = router;

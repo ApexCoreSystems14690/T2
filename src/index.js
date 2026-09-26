@@ -206,6 +206,37 @@ async function start() {
       );
       CREATE INDEX IF NOT EXISTS idx_item_fila_pend ON game_item_fila(roblox_id) WHERE entregue_em IS NULL;
 
+      -- ===== PROCURADOS (26/09) =====
+      -- A policia marca alguem A MAO. Nao confundir com a aba "Procurados" antiga
+      -- da Ficha, que e DERIVADA (quem deve dinheiro). Esta aqui e a lista de
+      -- caca: descricao escrita pelo policial (roupa, cor, cabelo, carro).
+      -- O CADASTRO DE CIDADAOS NAO PRECISOU DE TABELA NOVA: game_players ja e
+      -- todo mundo que entrou (roblox_id, nome, primeira_vez, ultima_vez, visitas),
+      -- alimentado pelo log 'entrou'. A foto sai do roblox_id no lado do jogo.
+      -- estado: 'ativo' (valendo) | 'aguardo' (marcado por NOME, o dono ainda nao
+      -- entrou nenhuma vez -- "em aguardo de dados", sem prazo pra vencer) |
+      -- 'encerrado'.
+      CREATE TABLE IF NOT EXISTS procurados (
+        id SERIAL PRIMARY KEY,
+        roblox_id BIGINT,
+        nome VARCHAR(64) NOT NULL,
+        descricao TEXT,
+        motivo VARCHAR(160),
+        por_roblox_id BIGINT,
+        por_nome VARCHAR(64),
+        corp VARCHAR(64),
+        estado VARCHAR(16) NOT NULL DEFAULT 'ativo',
+        criado_em TIMESTAMP DEFAULT NOW(),
+        atualizado_em TIMESTAMP DEFAULT NOW(),
+        encerrado_em TIMESTAMP,
+        encerrado_por VARCHAR(64)
+      );
+      CREATE INDEX IF NOT EXISTS idx_procurados_estado ON procurados(estado, id DESC);
+      CREATE INDEX IF NOT EXISTS idx_procurados_nome ON procurados(LOWER(nome));
+      -- um alvo so pode ter UM mandado aberto por vez
+      CREATE UNIQUE INDEX IF NOT EXISTS uq_procurados_aberto
+        ON procurados(roblox_id) WHERE estado <> 'encerrado' AND roblox_id IS NOT NULL;
+
       -- ===== CELULAR (Aparelho com uid) =====
       -- [fix 17/09] Estas tabelas só existiam em src/db/migrate.js, que roda com
       -- 'npm run db:migrate'. O Procfile e 'node src/index.js', entao no Railway
