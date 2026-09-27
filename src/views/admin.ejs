@@ -200,6 +200,7 @@
         <div id="ssu-estado" style="font-size:1.05rem;font-weight:600;margin:.35rem 0 .15rem">–</div>
         <div id="ssu-quando" class="muted" style="font-size:.82rem">–</div>
         <div class="clock" style="margin-top:.7rem">
+          <button class="btn" id="ssu-iniciar" onclick="ssuAcao('iniciar')">🚀 Iniciar SSU agora</button>
           <button class="btn danger" id="ssu-encerrar" onclick="ssuAcao('encerrar')">⏹️ Encerrar agora</button>
           <button class="btn" id="ssu-reabrir" onclick="ssuAcao('reabrir')">▶️ Reabrir</button>
           <button class="btn sec" id="ssu-estender" onclick="ssuAcao('estender')">⏱️ Estender</button>
@@ -317,6 +318,12 @@
           <h3>Noites</h3>
           <div style="overflow-x:auto"><table><thead><tr><th>Noite</th><th>Média</th><th>Pico</th><th>Mínimo</th><th>Amostras</th></tr></thead><tbody id="an-tbody"></tbody></table></div>
         </div>
+        <div class="card">
+          <h3>Quem entrou em serviço</h3>
+          <div class="muted" id="an-svc-sub" style="font-size:.78rem;margin:-.2rem 0 .6rem">Membros distintos que pegaram farda no armário.</div>
+          <div id="an-svc-vazio" class="empty" style="display:none">Ainda sem registro de serviço — começa a encher na próxima sessão, quando alguém pegar farda no armário.</div>
+          <div id="an-svc-wrap" style="overflow-x:auto"><table><thead><tr><th>Corporação</th><th>Membros (última noite)</th><th>Entradas (última noite)</th><th>Membros (7 noites)</th></tr></thead><tbody id="an-svc-tbody"></tbody></table></div>
+        </div>
       </div>
     </div>
   </div>
@@ -426,6 +433,7 @@
         $('ssu-quando').textContent = quando;
         $('ssu-grade').innerHTML = (d.grade || []).map(l => '• ' + l).join('<br>');
         const a = d.acoes || {};
+        $('ssu-iniciar').style.display  = a.iniciarAgora ? '' : 'none';
         $('ssu-encerrar').style.display = a.encerrar ? '' : 'none';
         $('ssu-reabrir').style.display  = a.reabrir  ? '' : 'none';
         $('ssu-estender').style.display = a.estender ? '' : 'none';
@@ -434,7 +442,7 @@
       } catch (err) {}
     }
     async function ssuAcao(acao) {
-      const nomes = { encerrar: 'ENCERRAR o SSU agora', reabrir: 'REABRIR o SSU', estender: 'ESTENDER o SSU' };
+      const nomes = { encerrar: 'ENCERRAR o SSU agora', reabrir: 'REABRIR o SSU', estender: 'ESTENDER o SSU', iniciar: 'INICIAR o SSU de hoje AGORA' };
       if (!confirm(nomes[acao] + '?\n\nIsso vale só pra sessão de hoje. A grade não muda.')) return;
       $('ssu-msg').textContent = 'mandando…';
       try {
@@ -478,6 +486,31 @@
         },
       });
     }
+    // [27/09] QUEM ENTROU EM SERVICO, por corporacao.
+    // MEMBROS e distinto por pessoa; ENTRADAS conta batida de ponto. Os dois numeros
+    // lado a lado sao o ponto do relatorio: 2 membros com 9 entradas e uma corp vazia
+    // com gente entrando e saindo, nao uma corp cheia.
+    const escTxt = t => String(t == null ? '' : t)
+      .replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;');
+    function renderServico(sv) {
+      sv = sv || {};
+      const daNoite = sv.porCorpNoite || [], de7 = sv.porCorp7 || [];
+      const tem = de7.length > 0;
+      $('an-svc-vazio').style.display = tem ? 'none' : 'block';
+      $('an-svc-wrap').style.display = tem ? '' : 'none';
+      $('an-svc-sub').textContent = tem
+        ? ('Membros distintos que pegaram farda no armário. Última noite com serviço: ' + (sv.noite ? fmtNoite(sv.noite) : '—'))
+        : 'Membros distintos que pegaram farda no armário.';
+      if (!tem) { $('an-svc-tbody').innerHTML = ''; return; }
+      const porCorp = {};
+      for (const r of daNoite) porCorp[r.corp] = r;
+      $('an-svc-tbody').innerHTML = de7.map(r => {
+        const n = porCorp[r.corp] || { membros: 0, entradas: 0 };
+        return '<tr><td><b>' + escTxt(r.corp) + '</b></td><td><b>' + fmtN(n.membros) + '</b></td><td class="muted">'
+          + fmtN(n.entradas) + '</td><td>' + fmtN(r.membros) + '</td></tr>';
+      }).join('');
+    }
+
     async function loadAnalise() {
       let d;
       try { d = await api('GET', '/analise'); } catch (e) { showAlert(e.message, 'error'); return; }
@@ -488,6 +521,9 @@
       $('an-online-sub').textContent = fmtN(d.online.servidores) + ' servidor(es)';
       $('an-vazio').style.display = temDado ? 'none' : 'block';
       $('an-conteudo').style.display = 'block';
+      // [27/09] serviço por corp é dado INDEPENDENTE dos snapshots: renderiza antes do
+      // return antecipado, senão sumiria sempre que ainda não houvesse amostra de player.
+      renderServico(d.servico);
       if (!temDado) {
         ['an-media7', 'an-pico', 'an-melhor', 'an-cresc'].forEach(id => $(id).textContent = '–');
         return;

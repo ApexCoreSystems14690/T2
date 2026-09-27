@@ -20,6 +20,10 @@ const cenarios = [
   ['encerrada sexta', { sessao: '2026-09-25', encerrada: true }],
   ['estendida quarta', { sessao: '2026-09-23', estendidaAte: 23 }],
   ['abuso: estender domingo ate 23', { sessao: '2026-09-27', estendidaAte: 23 }],
+  // [27/09] botao "Iniciar SSU agora" (ajuste iniciadaAs)
+  ['inicio antecipado quarta 17:30',   { sessao: '2026-09-23', iniciadaAs: ini + 2 * 86400 + 17.5 * 3600 }],
+  ['antecipado + encerrado depois',    { sessao: '2026-09-23', iniciadaAs: ini + 2 * 86400 + 17.5 * 3600, encerrada: true }],
+  ['antecipado num dia sem SSU (seg)', { sessao: '2026-09-21', iniciadaAs: ini + 18 * 3600 }],
 ];
 // o que o Lua devolveu, colado aqui pra comparar
 const doLua = {
@@ -27,6 +31,10 @@ const doLua = {
   'encerrada sexta': '0:f 241200:A 252000:f 414000:E 432000:f 500400:A 518400:f 586800:A 597600:f',
   'estendida quarta': '0:f 241200:A 255600:f 414000:A 432000:f 500400:A 518400:f 586800:A 597600:f',
   'abuso: estender domingo ate 23': '0:f 241200:A 252000:f 414000:A 432000:f 500400:A 518400:f 586800:A 597600:f',
+  // [27/09] geradas no Studio rodando o Regras.SSU editado — nao escrever a mao
+  'inicio antecipado quarta 17:30': '0:f 235800:A 252000:f 414000:A 432000:f 500400:A 518400:f 586800:A 597600:f',
+  'antecipado + encerrado depois': '0:f 235800:E 252000:f 414000:A 432000:f 500400:A 518400:f 586800:A 597600:f',
+  'antecipado num dia sem SSU (seg)': '0:f 241200:A 252000:f 414000:A 432000:f 500400:A 518400:f 586800:A 597600:f',
 };
 let ok = 0, dif = 0;
 for (const [nome, aj] of cenarios) {

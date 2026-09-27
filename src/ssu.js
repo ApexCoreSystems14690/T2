@@ -51,9 +51,21 @@ function sessaoDoDia(epoch, ajustes) {
     const nova = Number(ajustes.estendidaAte);
     if (nova > fecha && nova <= g.tetoExtensao) fecha = nova;
   }
+  // [27/09] INICIO ANTECIPADO — espelho do Regras.SSU do jogo (o comentario longo esta la).
+  // O diretor aperta "Iniciar SSU agora" e a sessao DE HOJE comeca na hora do clique.
+  // So mexe no COMECO: `fim` continua o da grade. Tres travas: mesma noite, nunca antes
+  // da meia-noite local do proprio dia, e so ANTECIPA (mandar hora maior nao atrasa).
+  const inicioGrade = base + g.abre * 3600;
+  let inicio = inicioGrade;
+  if (ajustes && ajustes.sessao === chave && Number.isFinite(Number(ajustes.iniciadaAs))) {
+    const n = Number(ajustes.iniciadaAs);
+    if (n >= base && n < inicio) inicio = n;
+  }
   return {
     chave, wday: c.wday, dia: NOME_DIA[c.wday],
-    inicio: base + g.abre * 3600,
+    inicio,
+    antecipada: inicio < inicioGrade,
+    inicioGrade,
     fim: base + fecha * 3600,
     abreHora: g.abre, fechaHora: fecha, fechaPadrao: g.fecha, tetoExtensao: g.tetoExtensao || null,
   };
@@ -88,7 +100,7 @@ function estado(epoch, ajustes) {
 function acoesPossiveis(epoch, ajustes) {
   ajustes = (ajustes && typeof ajustes === 'object') ? ajustes : {};
   const s = sessaoVigente(epoch, ajustes);
-  const acoes = { encerrar: false, reabrir: false, estender: false, estenderAte: null };
+  const acoes = { encerrar: false, reabrir: false, estender: false, estenderAte: null, iniciarAgora: false };
   if (s) {
     const encerrada = (ajustes.sessao === s.chave && ajustes.encerrada === true);
     acoes.encerrar = !encerrada;
@@ -97,6 +109,13 @@ function acoesPossiveis(epoch, ajustes) {
       acoes.estender = true;
       acoes.estenderAte = s.tetoExtensao;
     }
+  }
+  // [27/09] INICIAR AGORA olha a sessao DO DIA, nao a vigente: o sentido do botao e
+  // que ela ainda NAO comecou. Some sozinho quando a sessao abre — inclusive quando
+  // foi o proprio botao que antecipou.
+  const hoje = sessaoDoDia(epoch, ajustes);
+  if (hoje && epoch < hoje.inicio) {
+    acoes.iniciarAgora = !(ajustes.sessao === hoje.chave && ajustes.encerrada === true);
   }
   return acoes;
 }

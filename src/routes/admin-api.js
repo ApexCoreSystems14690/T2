@@ -666,20 +666,36 @@ router.post('/ssu', requirePoder('ssu'), async (req, res) => {
     const agora = Math.floor(Date.now() / 1000);
     const ajustes = await lerAjustes();
     const podem = SSU.acoesPossiveis(agora, ajustes);
-    const sessao = SSU.sessaoVigente(agora, ajustes);
-    if (!sessao) return res.status(400).json({ error: 'Nao ha SSU acontecendo agora' });
-    if (!podem[acao]) return res.status(400).json({ error: 'Essa acao nao cabe agora' });
+    // [27/09] 'iniciar' e o unico que age ANTES de a sessao comecar, entao ele olha a
+    // sessao DO DIA; os outros tres continuam exigindo uma sessao acontecendo agora.
+    const sessao = (acao === 'iniciar')
+      ? SSU.sessaoDoDia(agora, ajustes)
+      : SSU.sessaoVigente(agora, ajustes);
+    if (!sessao) return res.status(400).json({
+      error: acao === 'iniciar' ? 'Hoje nao tem SSU na grade' : 'Nao ha SSU acontecendo agora' });
+    if (!podem[acao === 'iniciar' ? 'iniciarAgora' : acao]) {
+      return res.status(400).json({ error: 'Essa acao nao cabe agora' });
+    }
 
     const novo = { sessao: sessao.chave, por: req.user.discord_username || ('user#' + req.user.id), em: agora };
+    // [27/09] carrega adiante o que JA foi ajustado nesta MESMA noite. Antes so o
+    // `estendidaAte` era preservado, e em dois ramos. Sem isto, reabrir depois de um
+    // inicio antecipado apagaria a antecipacao e fecharia a cidade de novo.
+    if (ajustes.sessao === sessao.chave) {
+      if (ajustes.estendidaAte) novo.estendidaAte = ajustes.estendidaAte;
+      if (ajustes.iniciadaAs) novo.iniciadaAs = ajustes.iniciadaAs;
+    }
     if (acao === 'encerrar') {
       novo.encerrada = true;
-      if (ajustes.sessao === sessao.chave && ajustes.estendidaAte) novo.estendidaAte = ajustes.estendidaAte;
     } else if (acao === 'reabrir') {
       novo.encerrada = false;
-      if (ajustes.sessao === sessao.chave && ajustes.estendidaAte) novo.estendidaAte = ajustes.estendidaAte;
     } else if (acao === 'estender') {
       novo.encerrada = false;
       novo.estendidaAte = podem.estenderAte;
+    } else if (acao === 'iniciar') {
+      // so muda o COMECO; o fim continua o da grade.
+      novo.encerrada = false;
+      novo.iniciadaAs = agora;
     }
 
     await pool.query(
@@ -739,11 +755,60 @@ router.get('/analise', requirePoder('ver_registro'), async (req, res) => {
               COALESCE(MAX(jogadores), 0)::int         AS pico_hist,
               COUNT(*)::int                            AS amostras_total
          FROM player_snapshots WHERE jogadores > 0`);
+    // [27/09] QUEM ENTROU EM SERVICO, por corporacao.
+    // A fonte e game_logs tipo='servico', que o jogo passou a mandar do funil
+    // `NovoEmprego` do DataHandler (os 12 armarios de corp + a prefeitura desembocam
+    // todos ali). detalhe = { acao:'entrou'|'saiu', corp, userId, de }.
+    // MEMBROS e COUNT(DISTINCT userId): o mesmo policial batendo o ponto cinco vezes
+    // na mesma noite conta como UM membro, e as cinco batidas viram ENTRADAS. Essa
+    // diferenca e o ponto do relatorio -- sem o DISTINCT, quem fica entrando e saindo
+    // parece uma corp cheia.
+    // NOITE = dia em Brasilia, igual ao resto da aba (o servidor so fica de pe no SSU).
+    const SERVICO_BASE = `
+      FROM game_logs
+      WHERE tipo = 'servico'
+        AND detalhe->>'acao' = 'entrou'
+        AND COALESCE(detalhe->>'corp', '') <> ''
+        AND COALESCE(ocorrido_em, created_at) > NOW() - INTERVAL '60 days'`;
+
+    // a noite mais recente que TEVE alguem entrando em servico
+    const ultima = await pool.query(
+      `SELECT MAX((COALESCE(ocorrido_em, created_at) - INTERVAL '3 hours')::date) AS noite ${SERVICO_BASE}`);
+    const noiteAlvo = ultima.rows[0] && ultima.rows[0].noite;
+
+    // por corp NAQUELA noite
+    const porCorpNoite = noiteAlvo ? await pool.query(
+      `SELECT detalhe->>'corp' AS corp,
+              COUNT(DISTINCT detalhe->>'userId')::int AS membros,
+              COUNT(*)::int                           AS entradas
+         ${SERVICO_BASE}
+          AND (COALESCE(ocorrido_em, created_at) - INTERVAL '3 hours')::date = $1
+        GROUP BY 1 ORDER BY 2 DESC, 1 ASC`, [noiteAlvo]) : { rows: [] };
+
+    // por corp nas ULTIMAS 7 NOITES que tiveram servico (nao 7 dias corridos: a cidade
+    // so abre 4 dias por semana, entao "7 dias" perderia metade das sessoes)
+    const porCorp7 = await pool.query(
+      `WITH noites7 AS (
+         SELECT DISTINCT (COALESCE(ocorrido_em, created_at) - INTERVAL '3 hours')::date AS d
+           ${SERVICO_BASE}
+          ORDER BY 1 DESC LIMIT 7)
+       SELECT detalhe->>'corp' AS corp,
+              COUNT(DISTINCT detalhe->>'userId')::int AS membros,
+              COUNT(*)::int                           AS entradas
+         ${SERVICO_BASE}
+          AND (COALESCE(ocorrido_em, created_at) - INTERVAL '3 hours')::date IN (SELECT d FROM noites7)
+        GROUP BY 1 ORDER BY 2 DESC, 1 ASC`);
+
     res.json({
       online: on.rows[0],
       serie: serie.rows,
       noites: noites.rows,     // mais nova primeiro
       resumo: resumo.rows[0],
+      servico: {
+        noite: noiteAlvo,
+        porCorpNoite: porCorpNoite.rows,
+        porCorp7: porCorp7.rows,
+      },
     });
   } catch (err) { console.error('analise:', err.message); res.status(500).json({ error: 'Erro interno' }); }
 });
