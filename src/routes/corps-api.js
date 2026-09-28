@@ -562,6 +562,16 @@ const CC = require('../corp-caixa');
 // GET /api/corps/:corpId/caixa — saldo, estoque, empréstimos, extrato e balanço
 router.get('/:corpId/caixa', requireCorpOwner, requireCorpPoder('ver_caixa'), async (req, res) => {
   try {
+    // [28/09] ORÇAMENTO: paga o repasse do governo SE estiver pendente, antes de
+    // montar o painel. É sob demanda de propósito -- o site não tem relógio, e um
+    // setInterval pagaria duas vezes a cada restart do Railway. A trava é o
+    // UNIQUE(corp, periodo) no banco, então chamar aqui toda vez é inofensivo.
+    try {
+      const cs = await pool.query(`SELECT slug FROM corporations WHERE id = $1`, [req.params.corpId]);
+      if (cs.rows[0]) await caixa.pagarOrcamentoSePendente(req.params.corpId, cs.rows[0].slug);
+    } catch (e) {
+      console.error('orcamento (painel):', e.message);   // repasse falhou não tira o painel do ar
+    }
     const [dados, precos] = await Promise.all([
       caixa.painel(req.params.corpId, req.query.limite),
       caixa.precos(),
@@ -569,6 +579,7 @@ router.get('/:corpId/caixa', requireCorpOwner, requireCorpPoder('ver_caixa'), as
     res.json({
       ...dados,
       precos,
+      proximo_repasse: caixa.ORC.proximoEm(Date.now()),
       pode_gastar: CP.pode(req.corpCtx, 'gastar_caixa'),
       pode_estoque: CP.pode(req.corpCtx, 'gerir_estoque'),
     });

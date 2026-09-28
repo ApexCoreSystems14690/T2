@@ -405,6 +405,36 @@ async function start() {
       );
       CREATE INDEX IF NOT EXISTS idx_corp_empr_corp ON corp_emprestimos(corporation_id);
       CREATE INDEX IF NOT EXISTS idx_corp_empr_nome ON corp_emprestimos(LOWER(nome));
+
+      -- ===== ORÇAMENTO DO GOVERNO (28/09) =====
+      -- Toda corp recebe um repasse a cada 7 dias: base fixa + parte por atividade.
+      -- Sem isto a SAMU fica em zero para sempre (ela não multa, não apreende, não cobra dívida).
+      -- corp_atividade: UMA linha por ocorrência. É a única definição de "atividade" —
+      -- o site insere sozinho quando entra dinheiro, e o jogo insere as da SAMU (reanimação).
+      CREATE TABLE IF NOT EXISTS corp_atividade (
+        id SERIAL PRIMARY KEY,
+        corporation_id INTEGER NOT NULL REFERENCES corporations(id) ON DELETE CASCADE,
+        tipo VARCHAR(24) NOT NULL,
+        quem VARCHAR(64),
+        em TIMESTAMP DEFAULT NOW()
+      );
+      CREATE INDEX IF NOT EXISTS idx_corp_ativ_corp_em ON corp_atividade(corporation_id, em DESC);
+
+      -- corp_orcamento_pago: a TRAVA da idempotência. O período é um inteiro derivado do
+      -- relógio, e o UNIQUE abaixo é o que impede pagar duas vezes o mesmo período mesmo
+      -- com dois servidores pedindo ao mesmo tempo.
+      CREATE TABLE IF NOT EXISTS corp_orcamento_pago (
+        id SERIAL PRIMARY KEY,
+        corporation_id INTEGER NOT NULL REFERENCES corporations(id) ON DELETE CASCADE,
+        periodo BIGINT NOT NULL,
+        valor BIGINT NOT NULL,
+        base BIGINT NOT NULL,
+        atividade INTEGER NOT NULL DEFAULT 0,
+        em TIMESTAMP DEFAULT NOW(),
+        UNIQUE (corporation_id, periodo)
+      );
+      CREATE INDEX IF NOT EXISTS idx_corp_orc_corp ON corp_orcamento_pago(corporation_id, periodo DESC);
+
     `);
     // Backfill: popula game_players a partir dos logs de "entrou" que já existem,
     // pra aba Registro já nascer com histórico. Roda toda vez, mas é idempotente.

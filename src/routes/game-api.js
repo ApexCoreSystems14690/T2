@@ -853,6 +853,9 @@ router.post('/corp/caixa', async (req, res) => {
       detalhe: { pago },
     });
     if (!r.ok) return res.status(400).json({ error: r.erro });
+    // [28/09] conta como ATIVIDADE pro orçamento do governo. Métrica, não dinheiro:
+    // se falhar não derruba a cobrança (a função já engole o erro por dentro).
+    caixa.registrarAtividade(c.id, String(tipo), String(quem || ''));
     res.json({ ok: true, corp: c.slug, creditado: parte, de: pago, saldo: r.saldo });
   } catch (err) {
     console.error('corp/caixa:', err.message);
@@ -894,6 +897,26 @@ router.get('/corp/:slug/estoque', async (req, res) => {
     res.json({ ok: true, corp: c.slug, saldo: d.saldo, itens: d.itens });
   } catch (err) {
     console.error('corp/estoque/ler:', err.message);
+    res.status(500).json({ error: 'Erro interno' });
+  }
+});
+
+// POST /api/game/corp/atividade  { corp, tipo, quem }
+// Ocorrência que NÃO move dinheiro -- a SAMU depende disto. Ela não multa, não
+// apreende e não cobra dívida, então sem uma via própria ficaria com atividade
+// zero e só receberia a base do governo pra sempre.
+// tipo livre (reanimacao, atendimento...), guardado como rótulo.
+router.post('/corp/atividade', async (req, res) => {
+  try {
+    const { corp, tipo, quem } = req.body || {};
+    const t = String(tipo || '').slice(0, 24);
+    if (!t) return res.status(400).json({ error: 'tipo vazio' });
+    const c = await corpPorSlug(corp);
+    if (!c) return res.status(404).json({ error: 'corporação não encontrada' });
+    await caixa.registrarAtividade(c.id, t, String(quem || ''));
+    res.json({ ok: true });
+  } catch (err) {
+    console.error('corp/atividade:', err.message);
     res.status(500).json({ error: 'Erro interno' });
   }
 });

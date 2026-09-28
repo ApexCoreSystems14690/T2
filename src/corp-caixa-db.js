@@ -204,4 +204,79 @@ async function precos() {
   return (v && typeof v === 'object' && v.itens && typeof v.itens === 'object') ? v.itens : {};
 }
 
-module.exports = { movDinheiro, movEstoque, comprar, painel, precos };
+// ===================================================================== ORÇAMENTO
+// O repasse do governo, a cada 7 dias: base fixa + parte por atividade.
+// A CONTA mora em corp-orcamento.js (puro, 38/38). Aqui fica a trava.
+const ORC = require('./corp-orcamento');
+
+// Registra uma ocorrência. É a ÚNICA definição de "atividade" — o site chama sozinho
+// quando entra dinheiro, e o jogo chama pra SAMU (reanimação), que não gera dinheiro.
+async function registrarAtividade(corpId, tipo, quem, cliente) {
+  const c = cliente || pool;
+  try {
+    await c.query(
+      `INSERT INTO corp_atividade (corporation_id, tipo, quem) VALUES ($1, $2, $3)`,
+      [corpId, String(tipo || '').slice(0, 24), String(quem || '').slice(0, 64)]);
+    return true;
+  } catch (err) {
+    // atividade é métrica, não dinheiro: se falhar, NÃO derruba a operação que a gerou
+    console.error('corp_atividade:', err.message);
+    return false;
+  }
+}
+
+// Paga o repasse SE estiver pendente. Idempotente de verdade: a corrida é resolvida
+// pelo UNIQUE(corporation_id, periodo) — dois servidores tentando ao mesmo tempo, um
+// leva o conflito e sai sem pagar. Chamar à vontade, de qualquer lugar.
+// Devolve { pagou, periodo, valor?, motivo? }.
+async function pagarOrcamentoSePendente(corpId, slug, agoraMs) {
+  const agora = Number.isFinite(Number(agoraMs)) ? Number(agoraMs) : Date.now();
+  const periodo = ORC.periodoDe(agora);
+
+  const ja = await pool.query(
+    `SELECT periodo FROM corp_orcamento_pago
+      WHERE corporation_id = $1 ORDER BY periodo DESC LIMIT 1`, [corpId]);
+  const ultimo = ja.rows[0] ? Number(ja.rows[0].periodo) : null;
+  const d = ORC.decidir(ultimo, agora);
+  if (!d.pagar) return { pagou: false, periodo, motivo: d.motivo };
+
+  // quantas ocorrências no período que está fechando
+  const desde = new Date(periodo * ORC.DIA * ORC.ORC.DIAS - ORC.DIA * ORC.ORC.DIAS);
+  const at = await pool.query(
+    `SELECT COUNT(*)::int AS n FROM corp_atividade
+      WHERE corporation_id = $1 AND em >= $2`, [corpId, desde]);
+  const conta = ORC.valorDe(slug, at.rows[0] ? at.rows[0].n : 0);
+
+  const cliente = await pool.connect();
+  try {
+    await cliente.query('BEGIN');
+    // a TRAVA: quem chegar segundo bate no UNIQUE e não paga
+    const ins = await cliente.query(
+      `INSERT INTO corp_orcamento_pago (corporation_id, periodo, valor, base, atividade)
+       VALUES ($1, $2, $3, $4, $5)
+       ON CONFLICT (corporation_id, periodo) DO NOTHING
+       RETURNING id`,
+      [corpId, periodo, conta.total, conta.base, conta.atividade]);
+    if (ins.rowCount === 0) {
+      await cliente.query('ROLLBACK');
+      return { pagou: false, periodo, motivo: 'outro servidor pagou primeiro' };
+    }
+    await cliente.query('COMMIT');
+  } catch (err) {
+    await cliente.query('ROLLBACK').catch(() => {});
+    throw err;
+  } finally {
+    cliente.release();
+  }
+
+  // o dinheiro entra pelo MESMO caminho de sempre (extrato, saldo, trava por corp)
+  const r = await movDinheiro(corpId, 'aporte', conta.total, {
+    quem: 'Governo',
+    por: 'reforço semanal',
+    detalhe: { orcamento: true, periodo, base: conta.base, atividade: conta.atividade },
+  });
+  if (!r.ok) return { pagou: false, periodo, motivo: r.erro };
+  return { pagou: true, periodo, valor: conta.total, base: conta.base, atividade: conta.atividade, saldo: r.saldo };
+}
+
+module.exports = { movDinheiro, movEstoque, comprar, painel, precos, registrarAtividade, pagarOrcamentoSePendente, ORC };
