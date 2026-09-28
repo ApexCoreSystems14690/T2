@@ -332,6 +332,62 @@ async function start() {
         UNIQUE(edital_id, roblox_id)
       );
       CREATE INDEX IF NOT EXISTS idx_net_cand_edital ON net_candidaturas(edital_id, id);
+
+      -- ===== CAIXA E ESTOQUE DA CORPORACAO (28/09) =====
+      -- Julio: "o comandante controlar isso pelo site da corp, poder ver o stock, o
+      -- lucro, oque a corp tem de dinheiro, quantos equipamentos perderam".
+      -- O SALDO NUNCA VIVE SOZINHO: corp_lancamentos e o extrato, e o saldo e a soma.
+      -- Sem extrato nao da pra auditar, e sem auditoria a corrupcao vira sumico
+      -- invisivel em vez de inquerito.
+      CREATE TABLE IF NOT EXISTS corp_caixa (
+        corporation_id INTEGER PRIMARY KEY REFERENCES corporations(id) ON DELETE CASCADE,
+        saldo BIGINT NOT NULL DEFAULT 0,
+        atualizado_em TIMESTAMP DEFAULT NOW()
+      );
+
+      CREATE TABLE IF NOT EXISTS corp_lancamentos (
+        id SERIAL PRIMARY KEY,
+        corporation_id INTEGER REFERENCES corporations(id) ON DELETE CASCADE,
+        tipo VARCHAR(24) NOT NULL,        -- multa|patio|divida|venda|aporte|compra|bonus|ajuste|estoque
+        motivo VARCHAR(24),               -- quando tipo='estoque': retirou|devolveu|saiu|roubada|morreu|comprou|baixa
+        valor BIGINT NOT NULL DEFAULT 0,  -- com sinal: positivo entra, negativo sai
+        saldo_depois BIGINT,
+        item VARCHAR(64),
+        qtd INTEGER,
+        perda BOOLEAN NOT NULL DEFAULT false,
+        quem VARCHAR(64),                 -- o jogador envolvido
+        por VARCHAR(64),                  -- quem autorizou (e o que acusa o desvio)
+        detalhe JSONB NOT NULL DEFAULT '{}',
+        criado_em TIMESTAMP DEFAULT NOW()
+      );
+      CREATE INDEX IF NOT EXISTS idx_corp_lanc ON corp_lancamentos(corporation_id, id DESC);
+      CREATE INDEX IF NOT EXISTS idx_corp_lanc_perda ON corp_lancamentos(corporation_id, item) WHERE perda = true;
+
+      -- O CHECK nao e enfeite: estoque negativo e bug de rota que some em silencio e
+      -- envenena a economia. Melhor estourar um erro alto na hora.
+      CREATE TABLE IF NOT EXISTS corp_estoque (
+        corporation_id INTEGER NOT NULL REFERENCES corporations(id) ON DELETE CASCADE,
+        item VARCHAR(64) NOT NULL,
+        qtd INTEGER NOT NULL DEFAULT 0 CHECK (qtd >= 0),
+        perdidos INTEGER NOT NULL DEFAULT 0 CHECK (perdidos >= 0),
+        atualizado_em TIMESTAMP DEFAULT NOW(),
+        PRIMARY KEY (corporation_id, item)
+      );
+
+      -- Quem esta com o que AGORA. O UNIQUE e a trava contra dois servidores
+      -- entregando a mesma peca pro mesmo policial ao mesmo tempo.
+      CREATE TABLE IF NOT EXISTS corp_emprestimos (
+        id SERIAL PRIMARY KEY,
+        corporation_id INTEGER NOT NULL REFERENCES corporations(id) ON DELETE CASCADE,
+        nome VARCHAR(64) NOT NULL,
+        roblox_id BIGINT,
+        item VARCHAR(64) NOT NULL,
+        qtd INTEGER NOT NULL DEFAULT 1 CHECK (qtd > 0),
+        pego_em TIMESTAMP DEFAULT NOW(),
+        UNIQUE(corporation_id, nome, item)
+      );
+      CREATE INDEX IF NOT EXISTS idx_corp_empr_corp ON corp_emprestimos(corporation_id);
+      CREATE INDEX IF NOT EXISTS idx_corp_empr_nome ON corp_emprestimos(LOWER(nome));
     `);
     // Backfill: popula game_players a partir dos logs de "entrou" que já existem,
     // pra aba Registro já nascer com histórico. Roda toda vez, mas é idempotente.

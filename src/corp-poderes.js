@@ -50,6 +50,14 @@ const MATRIZ = {
   ver_usuarios:   { staff: 1, dono: 1, gerente: 1 },
   gerir_gerentes: { staff: 1, dono: 1 },
   excluir_corp:   { staff: 1, dono: 1 },
+  // [28/09] CAIXA DA CORPORACAO. Ver e uma coisa, gastar e outra: o chefe
+  // precisa saber quanto tem e o que esta no estoque pra comandar a equipe, mas
+  // quem move dinheiro e compra arma e quem ja responde por salario
+  // (dono/co-gerente), pelo mesmo motivo do `gerir_cargos`. E o registro de
+  // quem gastou e o que torna o desvio acusavel em vez de invisivel.
+  ver_caixa:      { staff: 1, dono: 1, gerente: 1, chefe: 1 },
+  gastar_caixa:   { staff: 1, dono: 1, gerente: 1 },
+  gerir_estoque:  { staff: 1, dono: 1, gerente: 1 },
 };
 
 const ROTULO = {
@@ -61,6 +69,9 @@ const ROTULO = {
   ver_usuarios:   'Ver a lista de usuários da plataforma',
   gerir_gerentes: 'Gerir co-gerentes',
   excluir_corp:   'Excluir a corporação',
+  ver_caixa:      'Ver o caixa, o estoque e o extrato',
+  gastar_caixa:   'Gastar o dinheiro do caixa (compras e bônus)',
+  gerir_estoque:  'Comprar equipamento e dar baixa no estoque',
 };
 
 const PAPEIS = ['staff', 'dono', 'gerente', 'chefe', 'membro'];
