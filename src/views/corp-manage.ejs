@@ -288,6 +288,38 @@
           <button class="btn secondary" onclick="aportar()">Depositar</button>
         </div>
       </div>
+
+      <%
+        // Bonus so pode cair pra quem tem Roblox vinculado: a fila de entrega do
+        // jogo e chaveada por roblox_id. Membro sem vinculo nem aparece na lista,
+        // senao o comandante debita o caixa e o dinheiro nao chega em ninguem.
+        var comRoblox = members.filter(function (m) { return m.roblox_id; });
+      %>
+      <div class="form-row">
+        <div class="form-group">
+          <label>Pagar b&ocirc;nus</label>
+          <select id="cx-bonus-quem">
+            <% if (comRoblox.length === 0) { %>
+              <option value="">Nenhum membro com Roblox vinculado</option>
+            <% } else { %>
+              <% comRoblox.forEach(function (m) { %>
+                <option value="<%= m.roblox_id %>" data-nome="<%= m.roblox_username || ('ID ' + m.roblox_id) %>"><%= m.roblox_username || ('ID ' + m.roblox_id) %></option>
+              <% }) %>
+            <% } %>
+          </select>
+        </div>
+        <div class="form-group" style="max-width:160px">
+          <label>Valor</label>
+          <input type="number" id="cx-bonus-valor" placeholder="R$" min="1">
+        </div>
+        <div class="form-group" style="max-width:160px">
+          <label>&nbsp;</label>
+          <button class="btn" onclick="pagarBonus()">Pagar</button>
+        </div>
+      </div>
+      <div style="color:#7a8ba5;font-size:0.75rem;margin:-0.5rem 0 1rem">
+        Sai do caixa na hora. Cai na conta do jogador quando ele estiver num servidor.
+      </div>
       <% } %>
 
       <h3 style="color:#f0f4f8;font-size:0.9rem;margin:1.5rem 0 0.5rem">Estoque do vestiário</h3>
@@ -722,6 +754,20 @@
       if (d.error) return showAlert(d.error, 'error');
       document.getElementById('cx-aporte').value = '';
       showAlert('Depositado', 'success');
+      loadCaixa();
+    }
+
+    async function pagarBonus() {
+      var sel = document.getElementById('cx-bonus-quem');
+      var robloxId = sel && sel.value;
+      var valor = parseInt(document.getElementById('cx-bonus-valor').value, 10);
+      if (!robloxId) return showAlert('Escolha quem recebe', 'error');
+      if (!(valor > 0)) return showAlert('Informe um valor', 'error');
+      var nome = sel.options[sel.selectedIndex].getAttribute('data-nome') || '';
+      var d = await api('POST', '/caixa/bonus', { roblox_id: robloxId, nome: nome, valor: valor });
+      if (!d || d.error) return;
+      document.getElementById('cx-bonus-valor').value = '';
+      showAlert('B\u00f4nus de ' + dinheiro(valor) + ' pago pra ' + nome, 'success');
       loadCaixa();
     }
 
