@@ -206,6 +206,54 @@ async function start() {
       );
       CREATE INDEX IF NOT EXISTS idx_item_fila_pend ON game_item_fila(roblox_id) WHERE entregue_em IS NULL;
 
+      -- ===== PATRIMONIO (28/09) =====
+      -- Foto financeira do jogador pro painel admin ver mesmo OFFLINE. O jogo manda no
+      -- PlayerLeaving (estado final salvo). Uma linha por roblox_id, sempre a mais recente.
+      CREATE TABLE IF NOT EXISTS game_patrimonio (
+        roblox_id BIGINT PRIMARY KEY,
+        nome VARCHAR(64),
+        bolso BIGINT DEFAULT 0,
+        banco BIGINT DEFAULT 0,
+        level INTEGER DEFAULT 1,
+        xp BIGINT DEFAULT 0,
+        emprego VARCHAR(64),
+        carros JSONB DEFAULT '{}'::jsonb,
+        casas JSONB DEFAULT '[]'::jsonb,
+        atualizado_em TIMESTAMP DEFAULT NOW()
+      );
+      CREATE INDEX IF NOT EXISTS idx_game_patrimonio_atualizado ON game_patrimonio(atualizado_em DESC);
+
+      -- ===== PROCURADOS (26/09) =====
+      -- A policia marca alguem A MAO. Nao confundir com a aba "Procurados" antiga
+      -- da Ficha, que e DERIVADA (quem deve dinheiro). Esta aqui e a lista de
+      -- caca: descricao escrita pelo policial (roupa, cor, cabelo, carro).
+      -- O CADASTRO DE CIDADAOS NAO PRECISOU DE TABELA NOVA: game_players ja e
+      -- todo mundo que entrou (roblox_id, nome, primeira_vez, ultima_vez, visitas),
+      -- alimentado pelo log 'entrou'. A foto sai do roblox_id no lado do jogo.
+      -- estado: 'ativo' (valendo) | 'aguardo' (marcado por NOME, o dono ainda nao
+      -- entrou nenhuma vez -- "em aguardo de dados", sem prazo pra vencer) |
+      -- 'encerrado'.
+      CREATE TABLE IF NOT EXISTS procurados (
+        id SERIAL PRIMARY KEY,
+        roblox_id BIGINT,
+        nome VARCHAR(64) NOT NULL,
+        descricao TEXT,
+        motivo VARCHAR(160),
+        por_roblox_id BIGINT,
+        por_nome VARCHAR(64),
+        corp VARCHAR(64),
+        estado VARCHAR(16) NOT NULL DEFAULT 'ativo',
+        criado_em TIMESTAMP DEFAULT NOW(),
+        atualizado_em TIMESTAMP DEFAULT NOW(),
+        encerrado_em TIMESTAMP,
+        encerrado_por VARCHAR(64)
+      );
+      CREATE INDEX IF NOT EXISTS idx_procurados_estado ON procurados(estado, id DESC);
+      CREATE INDEX IF NOT EXISTS idx_procurados_nome ON procurados(LOWER(nome));
+      -- um alvo so pode ter UM mandado aberto por vez
+      CREATE UNIQUE INDEX IF NOT EXISTS uq_procurados_aberto
+        ON procurados(roblox_id) WHERE estado <> 'encerrado' AND roblox_id IS NOT NULL;
+
       -- ===== CELULAR (Aparelho com uid) =====
       -- [fix 17/09] Estas tabelas só existiam em src/db/migrate.js, que roda com
       -- 'npm run db:migrate'. O Procfile e 'node src/index.js', entao no Railway
@@ -301,6 +349,62 @@ async function start() {
         UNIQUE(edital_id, roblox_id)
       );
       CREATE INDEX IF NOT EXISTS idx_net_cand_edital ON net_candidaturas(edital_id, id);
+
+      -- ===== CAIXA E ESTOQUE DA CORPORACAO (28/09) =====
+      -- Julio: "o comandante controlar isso pelo site da corp, poder ver o stock, o
+      -- lucro, oque a corp tem de dinheiro, quantos equipamentos perderam".
+      -- O SALDO NUNCA VIVE SOZINHO: corp_lancamentos e o extrato, e o saldo e a soma.
+      -- Sem extrato nao da pra auditar, e sem auditoria a corrupcao vira sumico
+      -- invisivel em vez de inquerito.
+      CREATE TABLE IF NOT EXISTS corp_caixa (
+        corporation_id INTEGER PRIMARY KEY REFERENCES corporations(id) ON DELETE CASCADE,
+        saldo BIGINT NOT NULL DEFAULT 0,
+        atualizado_em TIMESTAMP DEFAULT NOW()
+      );
+
+      CREATE TABLE IF NOT EXISTS corp_lancamentos (
+        id SERIAL PRIMARY KEY,
+        corporation_id INTEGER REFERENCES corporations(id) ON DELETE CASCADE,
+        tipo VARCHAR(24) NOT NULL,        -- multa|patio|divida|venda|aporte|compra|bonus|ajuste|estoque
+        motivo VARCHAR(24),               -- quando tipo='estoque': retirou|devolveu|saiu|roubada|morreu|comprou|baixa
+        valor BIGINT NOT NULL DEFAULT 0,  -- com sinal: positivo entra, negativo sai
+        saldo_depois BIGINT,
+        item VARCHAR(64),
+        qtd INTEGER,
+        perda BOOLEAN NOT NULL DEFAULT false,
+        quem VARCHAR(64),                 -- o jogador envolvido
+        por VARCHAR(64),                  -- quem autorizou (e o que acusa o desvio)
+        detalhe JSONB NOT NULL DEFAULT '{}',
+        criado_em TIMESTAMP DEFAULT NOW()
+      );
+      CREATE INDEX IF NOT EXISTS idx_corp_lanc ON corp_lancamentos(corporation_id, id DESC);
+      CREATE INDEX IF NOT EXISTS idx_corp_lanc_perda ON corp_lancamentos(corporation_id, item) WHERE perda = true;
+
+      -- O CHECK nao e enfeite: estoque negativo e bug de rota que some em silencio e
+      -- envenena a economia. Melhor estourar um erro alto na hora.
+      CREATE TABLE IF NOT EXISTS corp_estoque (
+        corporation_id INTEGER NOT NULL REFERENCES corporations(id) ON DELETE CASCADE,
+        item VARCHAR(64) NOT NULL,
+        qtd INTEGER NOT NULL DEFAULT 0 CHECK (qtd >= 0),
+        perdidos INTEGER NOT NULL DEFAULT 0 CHECK (perdidos >= 0),
+        atualizado_em TIMESTAMP DEFAULT NOW(),
+        PRIMARY KEY (corporation_id, item)
+      );
+
+      -- Quem esta com o que AGORA. O UNIQUE e a trava contra dois servidores
+      -- entregando a mesma peca pro mesmo policial ao mesmo tempo.
+      CREATE TABLE IF NOT EXISTS corp_emprestimos (
+        id SERIAL PRIMARY KEY,
+        corporation_id INTEGER NOT NULL REFERENCES corporations(id) ON DELETE CASCADE,
+        nome VARCHAR(64) NOT NULL,
+        roblox_id BIGINT,
+        item VARCHAR(64) NOT NULL,
+        qtd INTEGER NOT NULL DEFAULT 1 CHECK (qtd > 0),
+        pego_em TIMESTAMP DEFAULT NOW(),
+        UNIQUE(corporation_id, nome, item)
+      );
+      CREATE INDEX IF NOT EXISTS idx_corp_empr_corp ON corp_emprestimos(corporation_id);
+      CREATE INDEX IF NOT EXISTS idx_corp_empr_nome ON corp_emprestimos(LOWER(nome));
     `);
     // Backfill: popula game_players a partir dos logs de "entrou" que já existem,
     // pra aba Registro já nascer com histórico. Roda toda vez, mas é idempotente.
