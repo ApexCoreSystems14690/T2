@@ -443,6 +443,26 @@ router.post('/registro/item', requirePoder('item'), async (req, res) => {
 //      apagados estavam online, pro painel avisar em vez de mentir.
 // Leva junto: fila de itens (inclusive as já entregues, que ficavam órfãs),
 // comandos pendentes e o aparelho de celular do jogador.
+// Patrimonio de um jogador (bolso, banco, carros, casas, level) — poder 'economia' (Supervisor+).
+// Vem da foto que o jogo manda no PlayerLeaving, entao funciona com o jogador OFFLINE.
+router.get('/registro/patrimonio/:roblox_id', requirePoder('economia'), async (req, res) => {
+  try {
+    const rid = Number(req.params.roblox_id);
+    if (!Number.isFinite(rid) || rid <= 0) return res.status(400).json({ error: 'roblox_id invalido' });
+    const r = await pool.query(
+      `SELECT gp.roblox_id, COALESCE(gp.nome, pl.nome) AS nome, gp.bolso, gp.banco, gp.level,
+              gp.xp, gp.emprego, gp.carros, gp.casas, gp.atualizado_em
+         FROM game_patrimonio gp
+         LEFT JOIN game_players pl ON pl.roblox_id = gp.roblox_id
+        WHERE gp.roblox_id = $1`, [rid]);
+    if (!r.rows[0]) return res.json({ ok: true, tem: false });
+    res.json({ ok: true, tem: true, patrimonio: r.rows[0] });
+  } catch (err) {
+    console.error('registro/patrimonio:', err.message);
+    res.status(500).json({ error: 'Erro interno' });
+  }
+});
+
 router.post('/registro/apagar', requirePoder('registro'), async (req, res) => {
   const cli = await pool.connect();
   try {

@@ -52,6 +52,12 @@
     .modal .sub { color: #7a8ba5; font-size: .78rem; margin-bottom: .9rem; }
     .modal .fg { margin-bottom: .7rem; }
     .modal .actions { display: flex; gap: .5rem; justify-content: flex-end; margin-top: .75rem; }
+    .pt-grid { display: grid; grid-template-columns: 1fr 1fr; gap: .5rem; margin-bottom: .6rem; }
+    .pt-box { background: rgba(255,255,255,.03); border: 1px solid #2d3a52; border-radius: 8px; padding: .5rem .6rem; }
+    .pt-k { color: #7a8ba5; font-size: .72rem; }
+    .pt-v { color: #e6edf7; font-size: 1rem; font-weight: 600; }
+    .pt-sec { margin-top: .5rem; }
+    .pt-list { color: #cdd7e6; font-size: .82rem; margin-top: .15rem; word-break: break-word; }
     .stat { display: flex; gap: 1.5rem; margin-bottom: 1rem; font-size: .8rem; color: #7a8ba5; }
     .stat b { color: #f0f4f8; }
     .empty { color: #7a8ba5; font-size: .85rem; padding: 1.5rem; text-align: center; }
@@ -351,6 +357,17 @@
       <div class="actions">
         <button class="btn sec" onclick="closeItem()">Cancelar</button>
         <button class="btn" id="ri-ok" onclick="submitItem()">Dar item</button>
+      </div>
+    </div>
+  </div>
+
+  <div class="modal-overlay" id="pmodal">
+    <div class="modal">
+      <h2 id="pt-title">Patrimônio</h2>
+      <div class="sub" id="pt-sub"></div>
+      <div id="pt-body"></div>
+      <div class="actions">
+        <button class="btn sec" onclick="closePatrimonio()">Fechar</button>
       </div>
     </div>
   </div>
@@ -886,6 +903,7 @@
           '<td class="muted" style="font-size:.74rem;white-space:nowrap">' + (p.ultima_vez ? fmtT(p.ultima_vez) : '—') + '</td>' +
           '<td>' + (p.online ? '<span class="pill ok">online</span>' : '<span class="pill">offline</span>') + '</td>' +
           '<td><div class="acts">' +
+            (podeP('economia') ? '<button onclick="verPatrimonio(' + rid + ')">💰 Patrimônio</button>' : '') +
             '<button onclick="openItem(' + rid + ')">🎒 Dar item</button>' +
             '<button class="d" onclick="apagarUm(' + rid + ')">🗑️ Apagar</button>' +
           '</div></td></tr>';
@@ -907,6 +925,33 @@
       $('rmodal').classList.add('active');
     }
     function closeItem() { $('rmodal').classList.remove('active'); RITEM = null; }
+    async function verPatrimonio(rid) {
+      const p = (REG.players || []).find(x => Number(x.roblox_id) === Number(rid));
+      $('pt-title').textContent = 'Patrimônio — ' + ((p && p.nome) || rid);
+      $('pt-sub').textContent = 'Carregando…';
+      $('pt-body').innerHTML = '';
+      $('pmodal').classList.add('active');
+      try {
+        const r = await api('GET', '/registro/patrimonio/' + Number(rid));
+        if (!r || !r.tem) { $('pt-sub').textContent = 'Sem dados ainda — o jogo grava a foto quando o jogador sai do servidor.'; return; }
+        const d = r.patrimonio;
+        const money = n => 'R$ ' + Number(n || 0).toLocaleString('pt-BR');
+        const carros = (d.carros && typeof d.carros === 'object' && !Array.isArray(d.carros)) ? Object.keys(d.carros) : [];
+        const casas = Array.isArray(d.casas) ? d.casas : [];
+        const nomeCasa = c => esc(typeof c === 'object' && c ? (c.nome || c.id || JSON.stringify(c)) : String(c));
+        $('pt-sub').textContent = 'Atualizado ' + (d.atualizado_em ? fmtT(d.atualizado_em) : '—') + (d.emprego ? ' · ' + d.emprego : '');
+        $('pt-body').innerHTML =
+          '<div class="pt-grid">' +
+            '<div class="pt-box"><div class="pt-k">💵 Bolso</div><div class="pt-v">' + money(d.bolso) + '</div></div>' +
+            '<div class="pt-box"><div class="pt-k">🏦 Banco</div><div class="pt-v">' + money(d.banco) + '</div></div>' +
+            '<div class="pt-box"><div class="pt-k">💰 Total</div><div class="pt-v">' + money(Number(d.bolso||0)+Number(d.banco||0)) + '</div></div>' +
+            '<div class="pt-box"><div class="pt-k">⭐ Level</div><div class="pt-v">' + Number(d.level||1) + '</div></div>' +
+          '</div>' +
+          '<div class="pt-sec"><div class="pt-k">🚗 Carros (' + carros.length + ')</div><div class="pt-list">' + (carros.length ? carros.map(esc).join(', ') : '<span class="muted">nenhum</span>') + '</div></div>' +
+          '<div class="pt-sec"><div class="pt-k">🏠 Casas (' + casas.length + ')</div><div class="pt-list">' + (casas.length ? casas.map(nomeCasa).join(', ') : '<span class="muted">nenhuma</span>') + '</div></div>';
+      } catch (e) { $('pt-sub').textContent = ''; $('pt-body').innerHTML = '<div class="muted">' + esc(e.message) + '</div>'; }
+    }
+    function closePatrimonio() { $('pmodal').classList.remove('active'); }
     async function submitItem() {
       if (!RITEM) return;
       const item = $('ri-item').value.trim(), qtd = Number($('ri-qtd').value) || 1;

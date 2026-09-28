@@ -539,4 +539,144 @@ router.post('/', requirePoder('corp'), async (req, res) => {
   }
 });
 
+// ===========================================================================
+// CAIXA E ESTOQUE DA CORPORAÇÃO (28/09) — o painel do comandante.
+//
+// Julio: "o ideal e o comandante controlar isso pelo site da corp, poder ver o
+// 'stock' o lucro, oque a corp tem de dinheiro, quantos equipamentos perderam
+// ... vendo o extrato em tempo real disso (tipo comprando cada uma)".
+//
+// REGRA DE OURO, como no resto do painel: o front esconde botão, o BACK barra.
+// `ver_caixa` inclui o chefe (precisa saber o que a equipe tem); `gastar_caixa`
+// e `gerir_estoque` só dono/co-gerente — é dinheiro, mesmo critério do salário.
+//
+// O QUE ENTRA NO ESTOQUE: só item COM PREÇO no ToolData do jogo. Medido em
+// 28/09: das 65 peças do vestiário, 51 não têm preço (boina, óculos, headset,
+// e os coletes de cada corp). Cosmético não é patrimônio — controlar isso é
+// burocracia sem jogo. Dar preço a uma peça é o que a coloca no estoque, sem
+// lista extra pra manter em sincronia.
+// ===========================================================================
+const caixa = require('../corp-caixa-db');
+const CC = require('../corp-caixa');
+
+// GET /api/corps/:corpId/caixa — saldo, estoque, empréstimos, extrato e balanço
+router.get('/:corpId/caixa', requireCorpOwner, requireCorpPoder('ver_caixa'), async (req, res) => {
+  try {
+    const [dados, precos] = await Promise.all([
+      caixa.painel(req.params.corpId, req.query.limite),
+      caixa.precos(),
+    ]);
+    res.json({
+      ...dados,
+      precos,
+      pode_gastar: CP.pode(req.corpCtx, 'gastar_caixa'),
+      pode_estoque: CP.pode(req.corpCtx, 'gerir_estoque'),
+    });
+  } catch (err) {
+    console.error('caixa/painel:', err.message);
+    res.status(500).json({ error: 'Erro interno' });
+  }
+});
+
+// POST /api/corps/:corpId/caixa/comprar { item, qtd } — compra pro vestiário.
+// Dinheiro e estoque na MESMA transação: pagar e não receber a peça (ou receber
+// sem pagar) é o pior bug possível num caixa.
+router.post('/:corpId/caixa/comprar', requireCorpOwner, requireCorpPoder('gerir_estoque'), async (req, res) => {
+  try {
+    const { item, qtd } = req.body || {};
+    if (!item) return res.status(400).json({ error: 'Item é obrigatório' });
+    const precos = await caixa.precos();
+    if (!Object.keys(precos).length) {
+      return res.status(503).json({ error: 'O jogo ainda não publicou a tabela de preços' });
+    }
+    const r = await caixa.comprar(req.params.corpId, String(item).slice(0, 64), qtd || 1, precos,
+      { por: req.user.roblox_username || req.user.discord_username || String(req.user.id) });
+    if (!r.ok) {
+      const texto = {
+        sem_preco: 'Esse item não tem preço no jogo — peça pro dev cadastrar',
+        qtd: 'Quantidade inválida (1 a 99)',
+        saldo: `Falta R$ ${r.falta} no caixa`,
+      }[r.erro] || 'Não deu pra comprar';
+      return res.status(400).json({ error: texto, codigo: r.erro });
+    }
+    res.json(r);
+  } catch (err) {
+    console.error('caixa/comprar:', err.message);
+    res.status(500).json({ error: 'Erro interno' });
+  }
+});
+
+// POST /api/corps/:corpId/caixa/baixa { item } — tira uma peça do estoque sem
+// devolver dinheiro (sumiu, quebrou, foi dada). Conta como PERDA no painel.
+router.post('/:corpId/caixa/baixa', requireCorpOwner, requireCorpPoder('gerir_estoque'), async (req, res) => {
+  try {
+    const { item } = req.body || {};
+    if (!item) return res.status(400).json({ error: 'Item é obrigatório' });
+    const r = await caixa.movEstoque(req.params.corpId, 'baixa', '', String(item).slice(0, 64),
+      { por: req.user.roblox_username || req.user.discord_username || String(req.user.id) });
+    if (!r.ok) {
+      return res.status(400).json({
+        error: r.erro === 'sem_estoque' ? 'Não tem essa peça no estoque' : 'Não deu pra dar baixa',
+        codigo: r.erro,
+      });
+    }
+    res.json(r);
+  } catch (err) {
+    console.error('caixa/baixa:', err.message);
+    res.status(500).json({ error: 'Erro interno' });
+  }
+});
+
+// POST /api/corps/:corpId/caixa/aporte { valor } — o comando põe dinheiro no
+// caixa (RP, ou pra começar). Fica no extrato com o nome de quem pôs.
+router.post('/:corpId/caixa/aporte', requireCorpOwner, requireCorpPoder('gastar_caixa'), async (req, res) => {
+  try {
+    const valor = parseInt(req.body && req.body.valor);
+    if (!(valor > 0)) return res.status(400).json({ error: 'Valor inválido' });
+    const quem = req.user.roblox_username || req.user.discord_username || String(req.user.id);
+    const r = await caixa.movDinheiro(req.params.corpId, 'aporte', valor, { quem, por: quem });
+    if (!r.ok) return res.status(400).json({ error: 'Não deu', codigo: r.erro });
+    res.json(r);
+  } catch (err) {
+    console.error('caixa/aporte:', err.message);
+    res.status(500).json({ error: 'Erro interno' });
+  }
+});
+
+// POST /api/corps/:corpId/caixa/bonus { roblox_id, nome, valor } — bônus por meta.
+// O salário BASE continua nascendo do nada (decisão do Julio): o caixa paga só
+// o bônus. Aqui o caixa é DEBITADO e o pagamento entra na fila de entrega que o
+// jogo já consome (game_item_fila).
+// O JOGO já trata isso: AdminBridge.Heartbeat tem um ramo para item = 'Dinheiro'
+// que faz IncrementDinheiro e avisa o jogador (28/09). 'Dinheiro' NÃO é um item
+// do ToolData, então o nome está livre e não colide com nada.
+router.post('/:corpId/caixa/bonus', requireCorpOwner, requireCorpPoder('gastar_caixa'), async (req, res) => {
+  try {
+    const valor = parseInt(req.body && req.body.valor);
+    const robloxId = parseInt(req.body && req.body.roblox_id);
+    const nome = String((req.body && req.body.nome) || '').slice(0, 64);
+    if (!(valor > 0)) return res.status(400).json({ error: 'Valor inválido' });
+    if (!(robloxId > 0)) return res.status(400).json({ error: 'Escolha quem recebe' });
+
+    const por = req.user.roblox_username || req.user.discord_username || String(req.user.id);
+    const r = await caixa.movDinheiro(req.params.corpId, 'bonus', valor, {
+      quem: nome, por, detalhe: { roblox_id: robloxId },
+    });
+    if (!r.ok) {
+      return res.status(400).json({
+        error: r.erro === 'saldo' ? `Falta R$ ${r.falta} no caixa` : 'Não deu pra pagar',
+        codigo: r.erro,
+      });
+    }
+    // só entra na fila DEPOIS que o caixa foi debitado com sucesso
+    await pool.query(
+      `INSERT INTO game_item_fila (roblox_id, item, qtd, criado_por) VALUES ($1, 'Dinheiro', $2, $3)`,
+      [robloxId, valor, req.user.id]);
+    res.json(r);
+  } catch (err) {
+    console.error('caixa/bonus:', err.message);
+    res.status(500).json({ error: 'Erro interno' });
+  }
+});
+
 module.exports = router;

@@ -101,6 +101,7 @@
     <div class="tabs">
       <div class="tab active" data-tab="cargos">Cargos (<%= ranks.length %>)</div>
       <div class="tab" data-tab="membros">Membros (<%= members.length %>)</div>
+      <% if (P.ver_caixa) { %><div class="tab" data-tab="caixa">Caixa</div><% } %>
       <% if (P.editar_corp || P.gerir_gerentes) { %><div class="tab" data-tab="config">Configurações</div><% } %>
     </div>
 
@@ -233,6 +234,81 @@
         </table>
       </div>
     </div>
+
+    <!-- CAIXA [28/09] — dinheiro, estoque e extrato da corporação.
+         O chefe VÊ (precisa saber o que a equipe tem); quem compra e paga bônus
+         é dono/co-gerente, mesmo critério do salário. Aqui a view só esconde
+         botão: quem barra de verdade é o requireCorpPoder nas rotas. -->
+    <% if (P.ver_caixa) { %>
+    <div class="panel" id="panel-caixa">
+      <div style="display:flex;gap:2rem;align-items:baseline;margin-bottom:1.25rem;flex-wrap:wrap">
+        <div>
+          <div style="color:#7a8ba5;font-size:0.75rem;text-transform:uppercase;letter-spacing:0.05em">Caixa da corporação</div>
+          <div id="cx-saldo" style="color:#00d4ff;font-size:2rem;font-weight:700;font-variant-numeric:tabular-nums">—</div>
+        </div>
+        <div>
+          <div style="color:#7a8ba5;font-size:0.75rem;text-transform:uppercase;letter-spacing:0.05em">Entrou</div>
+          <div id="cx-entrou" style="color:#3ddc84;font-size:1.1rem;font-weight:600;font-variant-numeric:tabular-nums">—</div>
+        </div>
+        <div>
+          <div style="color:#7a8ba5;font-size:0.75rem;text-transform:uppercase;letter-spacing:0.05em">Saiu</div>
+          <div id="cx-saiu" style="color:#ff6b6b;font-size:1.1rem;font-weight:600;font-variant-numeric:tabular-nums">—</div>
+        </div>
+        <div>
+          <div style="color:#7a8ba5;font-size:0.75rem;text-transform:uppercase;letter-spacing:0.05em">Equipamento perdido</div>
+          <div id="cx-perdas" style="color:#ffb347;font-size:1.1rem;font-weight:600;font-variant-numeric:tabular-nums">—</div>
+        </div>
+      </div>
+
+      <% if (P.gerir_estoque) { %>
+      <div class="form-row">
+        <div class="form-group">
+          <label>Comprar pro vestiário</label>
+          <select id="cx-item"><option value="">Carregando preços…</option></select>
+        </div>
+        <div class="form-group" style="max-width:120px">
+          <label>Quantidade</label>
+          <input type="number" id="cx-qtd" value="1" min="1" max="99">
+        </div>
+        <div class="form-group" style="max-width:160px">
+          <label>&nbsp;</label>
+          <button class="btn" onclick="comprarItem()">Comprar</button>
+        </div>
+      </div>
+      <% } %>
+
+      <% if (P.gastar_caixa) { %>
+      <div class="form-row">
+        <div class="form-group" style="max-width:200px">
+          <label>Aporte no caixa</label>
+          <input type="number" id="cx-aporte" placeholder="R$" min="1">
+        </div>
+        <div class="form-group" style="max-width:160px">
+          <label>&nbsp;</label>
+          <button class="btn secondary" onclick="aportar()">Depositar</button>
+        </div>
+      </div>
+      <% } %>
+
+      <h3 style="color:#f0f4f8;font-size:0.9rem;margin:1.5rem 0 0.5rem">Estoque do vestiário</h3>
+      <table class="member-table">
+        <thead><tr><th>Item</th><th>Na prateleira</th><th>Na rua</th><th>Perdidos</th><% if (P.gerir_estoque) { %><th></th><% } %></tr></thead>
+        <tbody id="cx-estoque"><tr><td colspan="5" class="empty">Carregando…</td></tr></tbody>
+      </table>
+
+      <h3 style="color:#f0f4f8;font-size:0.9rem;margin:1.5rem 0 0.5rem">Com quem está agora</h3>
+      <table class="member-table">
+        <thead><tr><th>Policial</th><th>Item</th><th>Desde</th></tr></thead>
+        <tbody id="cx-emprestimos"><tr><td colspan="3" class="empty">Carregando…</td></tr></tbody>
+      </table>
+
+      <h3 style="color:#f0f4f8;font-size:0.9rem;margin:1.5rem 0 0.5rem">Extrato</h3>
+      <table class="member-table">
+        <thead><tr><th>Quando</th><th>O quê</th><th>Quem</th><th>Autorizou</th><th style="text-align:right">Valor</th><th style="text-align:right">Saldo</th></tr></thead>
+        <tbody id="cx-extrato"><tr><td colspan="6" class="empty">Carregando…</td></tr></tbody>
+      </table>
+    </div>
+    <% } %>
 
     <!-- CONFIGURAÇÕES -->
     <div class="panel" id="panel-config">
@@ -548,6 +624,109 @@
       abaConfig.addEventListener('click', loadManagers);
       if (abaConfig.classList.contains('active')) loadManagers();
     }
+
+    // ---------------------------------------------------------------- CAIXA
+    // Recarrega a cada abertura da aba e depois de toda acao: o extrato "em
+    // tempo real" que o Julio pediu e simplesmente nao mostrar dado velho.
+    function dinheiro(v) {
+      var n = Math.round(Number(v) || 0);
+      var s = Math.abs(n).toLocaleString('pt-BR');
+      return (n < 0 ? '-R$ ' : 'R$ ') + s;
+    }
+    function quando(iso) {
+      if (!iso) return '';
+      var d = new Date(iso);
+      return d.toLocaleDateString('pt-BR') + ' ' + d.toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit' });
+    }
+    var CAIXA_PRECOS = {};
+
+    async function loadCaixa() {
+      var res = await fetch('/api/corps/' + CORP_ID + '/caixa');
+      var d = await res.json();
+      if (d.error) return showAlert(d.error, 'error');
+      CAIXA_PRECOS = d.precos || {};
+
+      document.getElementById('cx-saldo').textContent = dinheiro(d.saldo);
+      document.getElementById('cx-entrou').textContent = dinheiro(d.balanco.entrou);
+      document.getElementById('cx-saiu').textContent = dinheiro(d.balanco.saiu);
+      document.getElementById('cx-perdas').textContent =
+        (d.itens || []).reduce(function (a, i) { return a + (i.perdido || 0); }, 0) + ' peça(s)';
+
+      // o seletor de compra so lista o que TEM PRECO no jogo. Peca sem preco e
+      // cosmetico (boina, oculos): nao entra no estoque de proposito.
+      var sel = document.getElementById('cx-item');
+      if (sel) {
+        var nomes = Object.keys(CAIXA_PRECOS).sort();
+        sel.innerHTML = nomes.length
+          ? nomes.map(function (n) { return '<option value="' + n + '">' + n + ' — ' + dinheiro(CAIXA_PRECOS[n]) + '</option>'; }).join('')
+          : '<option value="">O jogo ainda não publicou os preços</option>';
+      }
+
+      var tb = document.getElementById('cx-estoque');
+      tb.innerHTML = (d.itens && d.itens.length)
+        ? d.itens.map(function (i) {
+            return '<tr><td>' + i.item + '</td>' +
+              '<td style="font-variant-numeric:tabular-nums">' + i.prateleira + '</td>' +
+              '<td style="font-variant-numeric:tabular-nums">' + i.rua + '</td>' +
+              '<td style="font-variant-numeric:tabular-nums;color:' + (i.perdido ? '#ffb347' : '#7a8ba5') + '">' + i.perdido + '</td>' +
+              (d.pode_estoque ? '<td><button class="btn-sm danger" onclick="darBaixa(\'' + i.item.replace(/'/g, "\\'") + '\')">Dar baixa</button></td>' : '') +
+              '</tr>';
+          }).join('')
+        : '<tr><td colspan="5" class="empty">Estoque vazio — compre equipamento acima.</td></tr>';
+
+      var te = document.getElementById('cx-emprestimos');
+      te.innerHTML = (d.emprestimos && d.emprestimos.length)
+        ? d.emprestimos.map(function (e) {
+            return '<tr><td>' + e.nome + '</td><td>' + e.item + '</td><td style="color:#7a8ba5">' + quando(e.pego_em) + '</td></tr>';
+          }).join('')
+        : '<tr><td colspan="3" class="empty">Ninguém está com equipamento da corp agora.</td></tr>';
+
+      var tx = document.getElementById('cx-extrato');
+      tx.innerHTML = (d.extrato && d.extrato.length)
+        ? d.extrato.map(function (l) {
+            var desc = l.tipo === 'estoque'
+              ? (l.motivo + (l.item ? ' · ' + l.item : ''))
+              : (l.tipo + (l.item ? ' · ' + l.item + (l.qtd > 1 ? ' x' + l.qtd : '') : ''));
+            var cor = l.valor > 0 ? '#3ddc84' : (l.valor < 0 ? '#ff6b6b' : '#7a8ba5');
+            return '<tr><td style="color:#7a8ba5;white-space:nowrap">' + quando(l.criado_em) + '</td>' +
+              '<td>' + desc + (l.perda ? ' <span style="color:#ffb347">· perda</span>' : '') + '</td>' +
+              '<td>' + (l.quem || '—') + '</td><td style="color:#7a8ba5">' + (l.por || '—') + '</td>' +
+              '<td style="text-align:right;font-variant-numeric:tabular-nums;color:' + cor + '">' + (l.valor ? dinheiro(l.valor) : '—') + '</td>' +
+              '<td style="text-align:right;font-variant-numeric:tabular-nums;color:#7a8ba5">' + (l.saldo_depois === null ? '—' : dinheiro(l.saldo_depois)) + '</td></tr>';
+          }).join('')
+        : '<tr><td colspan="6" class="empty">Nenhum movimento ainda.</td></tr>';
+    }
+
+    async function comprarItem() {
+      var item = document.getElementById('cx-item').value;
+      var qtd = parseInt(document.getElementById('cx-qtd').value) || 1;
+      if (!item) return showAlert('Escolha o item', 'error');
+      var d = await api('POST', '/caixa/comprar', { item: item, qtd: qtd });
+      if (d.error) return showAlert(d.error, 'error');
+      showAlert('Comprado por ' + dinheiro(d.total) + ' · ' + d.prateleira + ' na prateleira', 'success');
+      loadCaixa();
+    }
+
+    async function darBaixa(item) {
+      if (!confirm('Dar baixa em 1 ' + item + '? Isso conta como PERDA e não devolve dinheiro.')) return;
+      var d = await api('POST', '/caixa/baixa', { item: item });
+      if (d.error) return showAlert(d.error, 'error');
+      showAlert('Baixa registrada', 'success');
+      loadCaixa();
+    }
+
+    async function aportar() {
+      var v = parseInt(document.getElementById('cx-aporte').value);
+      if (!(v > 0)) return showAlert('Valor inválido', 'error');
+      var d = await api('POST', '/caixa/aporte', { valor: v });
+      if (d.error) return showAlert(d.error, 'error');
+      document.getElementById('cx-aporte').value = '';
+      showAlert('Depositado', 'success');
+      loadCaixa();
+    }
+
+    var abaCaixa = document.querySelector('[data-tab="caixa"]');
+    if (abaCaixa) abaCaixa.addEventListener('click', loadCaixa);
   </script>
 </body>
 </html>
