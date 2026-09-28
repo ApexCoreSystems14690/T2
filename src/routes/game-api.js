@@ -808,4 +808,138 @@ router.post('/patrimonio', async (req, res) => {
   }
 });
 
+// ===========================================================================
+// CAIXA E ESTOQUE DA CORPORAÇÃO — o lado do JOGO (28/09)
+//
+// REGRA DE OURO: o jogo manda o VALOR PAGO pelo infrator e o TIPO da cobrança.
+// Quem decide a fatia da corp é o servidor (corp-caixa.RATEIO), nunca o cliente
+// — mesmo princípio do talão de multa, onde o cliente manda a chave da infração
+// e jamais o valor.
+//
+// DE ONDE VEM O DINHEIRO: multa, dívida e liberação de pátio já debitavam o
+// infrator e não creditavam ninguém — sumia do jogo. Agora metade tem destino.
+// ===========================================================================
+const caixa = require('../corp-caixa-db');
+const CC = require('../corp-caixa');
+
+async function corpPorSlug(slug) {
+  const s = String(slug || '').toLowerCase().trim();
+  if (!s) return null;
+  const r = await pool.query(
+    `SELECT id, name, slug FROM corporations WHERE LOWER(slug) = $1 AND is_active LIMIT 1`, [s]);
+  return r.rows[0] || null;
+}
+
+// POST /api/game/corp/caixa  { corp, tipo, valor_pago, quem, por }
+// tipo: multa | patio | divida | venda
+router.post('/corp/caixa', async (req, res) => {
+  try {
+    const { corp, tipo, valor_pago, quem, por } = req.body || {};
+    if (!CC.RATEIO[String(tipo)] && String(tipo) !== 'venda') {
+      return res.status(400).json({ error: 'tipo inválido' });
+    }
+    const c = await corpPorSlug(corp);
+    if (!c) return res.status(404).json({ error: 'corporação não encontrada' });
+
+    // 'venda' (veículo apreendido transferido) vai 100%: o carro já era da
+    // apreensão, não é cobrança de ninguém. O resto vai pela fatia do RATEIO.
+    const pago = Math.max(0, Math.floor(Number(valor_pago) || 0));
+    const parte = String(tipo) === 'venda' ? pago : CC.parteDaCorp(String(tipo), pago);
+    if (parte <= 0) return res.json({ ok: true, creditado: 0, motivo: 'fatia zerada' });
+
+    const r = await caixa.movDinheiro(c.id, String(tipo), parte, {
+      quem: String(quem || '').slice(0, 64),
+      por: String(por || '').slice(0, 64),
+      detalhe: { pago },
+    });
+    if (!r.ok) return res.status(400).json({ error: r.erro });
+    res.json({ ok: true, corp: c.slug, creditado: parte, de: pago, saldo: r.saldo });
+  } catch (err) {
+    console.error('corp/caixa:', err.message);
+    res.status(500).json({ error: 'Erro interno' });
+  }
+});
+
+// POST /api/game/corp/estoque  { corp, motivo, quem, roblox_id, item }
+// motivo: retirou | devolveu | saiu | roubada | morreu
+// O vestiário pergunta ANTES de entregar; se vier `sem_estoque`, não entrega.
+router.post('/corp/estoque', async (req, res) => {
+  try {
+    const { corp, motivo, quem, roblox_id, item } = req.body || {};
+    const m = String(motivo || '');
+    // `comprou` e `baixa` são do COMANDO, pelo painel — o jogo não cria peça.
+    if (!['retirou', 'devolveu', 'saiu', 'roubada', 'morreu'].includes(m)) {
+      return res.status(400).json({ error: 'motivo inválido' });
+    }
+    const c = await corpPorSlug(corp);
+    if (!c) return res.status(404).json({ error: 'corporação não encontrada' });
+
+    const r = await caixa.movEstoque(c.id, m, String(quem || '').slice(0, 64), String(item || '').slice(0, 64),
+      { roblox_id: parseInt(roblox_id) || null, por: String(quem || '').slice(0, 64) });
+    if (!r.ok) return res.json({ ok: false, erro: r.erro });
+    res.json({ ok: true, lancamento: r.lancamento });
+  } catch (err) {
+    console.error('corp/estoque:', err.message);
+    res.status(500).json({ error: 'Erro interno' });
+  }
+});
+
+// GET /api/game/corp/:slug/estoque — o que o vestiário tem pra entregar agora.
+// O jogo lê isto no boot e guarda; a entrega em si confirma no POST acima.
+router.get('/corp/:slug/estoque', async (req, res) => {
+  try {
+    const c = await corpPorSlug(req.params.slug);
+    if (!c) return res.status(404).json({ error: 'corporação não encontrada' });
+    const d = await caixa.painel(c.id, 1);
+    res.json({ ok: true, corp: c.slug, saldo: d.saldo, itens: d.itens });
+  } catch (err) {
+    console.error('corp/estoque/ler:', err.message);
+    res.status(500).json({ error: 'Erro interno' });
+  }
+});
+
+// POST /api/game/precos  { itens: { "FAL": 8750, ... } }
+// O JOGO é dono da tabela de preço (ToolData). O site não tem lista própria de
+// propósito: duas listas de preço divergem no primeiro dia. O jogo publica no
+// boot e o painel do comandante passa a saber quanto custa cada peça.
+router.post('/precos', async (req, res) => {
+  try {
+    const itens = (req.body && req.body.itens) || {};
+    if (typeof itens !== 'object' || Array.isArray(itens)) {
+      return res.status(400).json({ error: 'itens tem que ser um objeto' });
+    }
+    const limpo = {};
+    let n = 0;
+    for (const [k, v] of Object.entries(itens)) {
+      const preco = Math.floor(Number(v) || 0);
+      if (k && preco > 0 && n < 500) { limpo[String(k).slice(0, 64)] = preco; n++; }
+    }
+    await pool.query(
+      `INSERT INTO game_config (key, value, updated_at) VALUES ('precos_itens', $1::jsonb, NOW())
+       ON CONFLICT (key) DO UPDATE SET value = $1::jsonb, updated_at = NOW()`,
+      [JSON.stringify({ itens: limpo })]);
+    res.json({ ok: true, itens: n });
+  } catch (err) {
+    console.error('precos:', err.message);
+    res.status(500).json({ error: 'Erro interno' });
+  }
+});
+
+// GET /api/game/patrimonio/ids -> roblox_ids do registro que AINDA NAO tem patrimonio.
+// O jogo usa isso pra fazer backfill (ViewProfileAsync read-only) sem esperar o cara sair.
+router.get('/patrimonio/ids', async (req, res) => {
+  try {
+    const r = await pool.query(
+      `SELECT gp.roblox_id FROM game_players gp
+         LEFT JOIN game_patrimonio pa ON pa.roblox_id = gp.roblox_id
+        WHERE pa.roblox_id IS NULL
+        ORDER BY gp.ultima_vez DESC
+        LIMIT 60`);
+    res.json({ ok: true, ids: r.rows.map(x => Number(x.roblox_id)) });
+  } catch (err) {
+    console.error('patrimonio/ids:', err.message);
+    res.status(500).json({ error: 'Erro interno' });
+  }
+});
+
 module.exports = router;
