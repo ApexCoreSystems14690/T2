@@ -961,7 +961,33 @@ router.post('/precos', async (req, res) => {
       `INSERT INTO game_config (key, value, updated_at) VALUES ('precos_itens', $1::jsonb, NOW())
        ON CONFLICT (key) DO UPDATE SET value = $1::jsonb, updated_at = NOW()`,
       [JSON.stringify({ itens: limpo })]);
-    res.json({ ok: true, itens: n });
+
+    // [29/09] CATÁLOGO POR CORP: { slug: [itens] } -- o que o vestiário daquela
+    // corporação entregava de graça antes. [stated] Julio: o painel tinha "TUDO do
+    // jogo praticamente, inclusive armas de crime"; "só deve ter como ele comprar
+    // exatamente o que o armário já dava". Preço é global, catálogo é por corp.
+    // Vem do próprio Vestuarios do jogo, então nunca sai de sincronia.
+    const cat = (req.body && req.body.catalogo) || null;
+    let nCat = 0;
+    if (cat && typeof cat === 'object' && !Array.isArray(cat)) {
+      const limpoCat = {};
+      for (const [slug, lista] of Object.entries(cat)) {
+        if (!Array.isArray(lista)) continue;
+        const itens = lista
+          .filter(x => typeof x === 'string' && x)
+          .slice(0, 200)
+          .map(x => String(x).slice(0, 64));
+        limpoCat[String(slug).toLowerCase().slice(0, 64)] = itens;
+        nCat++;
+      }
+      if (nCat) {
+        await pool.query(
+          `INSERT INTO game_config (key, value, updated_at) VALUES ('catalogo_corps', $1::jsonb, NOW())
+           ON CONFLICT (key) DO UPDATE SET value = $1::jsonb, updated_at = NOW()`,
+          [JSON.stringify({ corps: limpoCat })]);
+      }
+    }
+    res.json({ ok: true, itens: n, corps: nCat });
   } catch (err) {
     console.error('precos:', err.message);
     res.status(500).json({ error: 'Erro interno' });

@@ -91,6 +91,7 @@
         continua sendo o back (requireCorpPoder); isto aqui e conforto. %>
     <% var P = (typeof poderes !== 'undefined' && poderes) ? poderes : {gerir_cargos:true, editar_corp:true, gerir_membros:true, gerir_gerentes:isOwner, excluir_corp:isOwner};
        var MEU_NIVEL = (typeof meuNivel !== 'undefined') ? meuNivel : null;
+       var EH_STAFF_ALTO = (typeof ehStaffAlto !== 'undefined') && ehStaffAlto;  // [29/09] Diretor+/Dono do site
        var MEU_PAPEL = (typeof papel !== 'undefined') ? papel : (isOwner ? 'dono' : 'gerente'); %>
     <div id="alert-container"></div>
 
@@ -205,8 +206,9 @@
               <tr><td colspan="6" class="empty">Nenhum membro ainda.</td></tr>
             <% } else { %>
               <% members.forEach(m => { %>
-                <% var travado = !P.gerir_membros
-                     || m.eh_dono_da_corp || m.sou_eu
+                <% var euAlto = EH_STAFF_ALTO && m.sou_eu;   // [29/09] Diretor+ destrava a PRÓPRIA linha (cargo e Remover)
+                   var travado = !P.gerir_membros
+                     || (!euAlto && (m.eh_dono_da_corp || m.sou_eu))
                      || (MEU_NIVEL !== null && m.rank_level !== null && m.rank_level !== undefined && Number(m.rank_level) >= Number(MEU_NIVEL)); %>
                 <tr>
                   <td><%= m.roblox_id || '-' %></td>

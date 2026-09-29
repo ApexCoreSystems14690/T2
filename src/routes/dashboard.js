@@ -94,6 +94,7 @@ router.get('/corp/:corpId', async (req, res) => {
       papel: info.papel,
       poderes: info.poderes,
       meuNivel: CP.semTeto(info.ctx) ? null : info.ctx.meuNivel,
+      ehStaffAlto: !!info.ctx.ehStaffAlto,   // [29/09] Diretor+ destrava a própria linha na UI
     });
   } catch (err) {
     console.error('Corp manage error:', err.message, err.stack);

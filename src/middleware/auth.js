@@ -70,8 +70,12 @@ async function ctxDaCorp(corpId, user) {
   );
   if (r.rows.length === 0) return null;
   const row = r.rows[0];
+  const _perm = require('../permissoes');
   const ctx = {
-    ehStaffCorp: require('../permissoes').pode(user, 'corp'),
+    ehStaffCorp: _perm.pode(user, 'corp'),
+    // [29/09 Julio] Diretor Geral (80) e Dono (100) do site se gerenciam
+    // livremente dentro de qualquer corp (entrar, sair, trocar o próprio cargo).
+    ehStaffAlto: _perm.nivelDoCargo(_perm.cargoDe(user)) >= 80,
     ehDono:      !!row.eh_dono,
     ehGerente:   !!row.eh_gerente,
     souMembro:   !!row.sou_membro,

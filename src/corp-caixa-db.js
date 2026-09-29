@@ -165,11 +165,29 @@ async function comprar(corpId, item, qtd, precos, extra = {}) {
 // ---------------------------------------------------------------- leitura
 async function painel(corpId, limite = 60) {
   const lim = Math.min(200, Math.max(1, parseInt(limite) || 60));
-  const [cx, est, empr, lanc] = await Promise.all([
+  // [29/09] O EXTRATO NÃO MOSTRA MOVIMENTO DE EQUIPAMENTO -- `tipo <> 'estoque'`.
+  // [stated] Julio: o comandante "só pode ver quantas armas foram perdidas no dia
+  // etc quantas tinham e pa, ele que descubra e cobre seus agentes".
+  // Uma linha "FAL tomada numa revista · PolicialX" entregaria de bandeja quem
+  // está desviando -- e a graça da corrupção é ele ter que desconfiar e cobrar.
+  // Sobra o extrato de DINHEIRO, que é gestão dele mesmo (multa, pátio, compra,
+  // bônus). Os lançamentos de estoque têm valor 0, então o balanço não muda.
+  const [cx, est, empr, lanc, perd] = await Promise.all([
     pool.query(`SELECT saldo FROM corp_caixa WHERE corporation_id = $1`, [corpId]),
     pool.query(`SELECT item, qtd, perdidos FROM corp_estoque WHERE corporation_id = $1 ORDER BY item`, [corpId]),
     pool.query(`SELECT nome, item, qtd, pego_em FROM corp_emprestimos WHERE corporation_id = $1 ORDER BY nome, item`, [corpId]),
-    pool.query(`SELECT * FROM corp_lancamentos WHERE corporation_id = $1 ORDER BY id DESC LIMIT $2`, [corpId, lim]),
+    pool.query(
+      `SELECT * FROM corp_lancamentos
+        WHERE corporation_id = $1 AND tipo <> 'estoque'
+        ORDER BY id DESC LIMIT $2`, [corpId, lim]),
+    // PERDAS AGREGADAS POR DIA: quantas peças sumiram na rua, sem nome nenhum.
+    // `baixa` fica de fora porque é o próprio comando dando baixa -- misturar
+    // sujaria justamente o número que ele usa pra desconfiar.
+    pool.query(
+      `SELECT criado_em::date AS dia, item, COUNT(*)::int AS qtd
+         FROM corp_lancamentos
+        WHERE corporation_id = $1 AND tipo = 'estoque' AND perda AND motivo <> 'baixa'
+        GROUP BY 1, 2 ORDER BY 1 DESC, 3 DESC LIMIT 60`, [corpId]),
   ]);
 
   const naRua = {};
@@ -192,16 +210,39 @@ async function painel(corpId, limite = 60) {
     itens,
     emprestimos: empr.rows.map(e => ({ nome: e.nome, item: e.item, qtd: Number(e.qtd), pego_em: e.pego_em })),
     extrato: lanc.rows.map(l => ({ ...l, valor: Number(l.valor), saldo_depois: l.saldo_depois === null ? null : Number(l.saldo_depois) })),
+    perdas_dia: perd.rows.map(r => ({ dia: r.dia, item: r.item, qtd: Number(r.qtd) })),
     balanco: C.balanco(lanc.rows.map(l => ({ tipo: l.tipo, valor: Number(l.valor) }))),
   };
 }
 
 // Preços vêm do JOGO (ToolData), guardados em game_config. O site não tem
 // tabela de preço própria: duas listas divergem no primeiro dia.
-async function precos() {
+async function precos(slug) {
   const r = await pool.query(`SELECT value FROM game_config WHERE key = 'precos_itens'`);
   const v = r.rows[0] && r.rows[0].value;
-  return (v && typeof v === 'object' && v.itens && typeof v.itens === 'object') ? v.itens : {};
+  const todos = (v && typeof v === 'object' && v.itens && typeof v.itens === 'object') ? v.itens : {};
+  if (!slug) return todos;
+  // [29/09] com slug, devolve SÓ o que o vestiário DAQUELA corp entregava. Sem
+  // isso o comandante comprava AK47 e CAR15 pro armário -- arma de crime, que
+  // nunca saiu de vestiário nenhum. Filtrar aqui, e não na tela, é o que faz a
+  // trava valer também na rota de compra.
+  const cat = await catalogo(slug);
+  if (cat === null) return {};          // catálogo ainda não publicado: não libera nada
+  const so = {};
+  for (const item of cat) if (todos[item] > 0) so[item] = todos[item];
+  return so;
+}
+
+// A lista de itens do vestiário de uma corp, como o JOGO publicou.
+// null = o jogo ainda não publicou catálogo nenhum (diferente de [] = corp sem
+// vestiário, que não pode comprar nada mesmo).
+async function catalogo(slug) {
+  const r = await pool.query(`SELECT value FROM game_config WHERE key = 'catalogo_corps'`);
+  const v = r.rows[0] && r.rows[0].value;
+  const corps = (v && typeof v === 'object' && v.corps && typeof v.corps === 'object') ? v.corps : null;
+  if (!corps) return null;
+  const lista = corps[String(slug || '').toLowerCase()];
+  return Array.isArray(lista) ? lista : [];
 }
 
 // ===================================================================== ORÇAMENTO
@@ -314,4 +355,4 @@ async function resumoOrcamento(corpId, slug, agoraMs) {
   };
 }
 
-module.exports = { movDinheiro, movEstoque, comprar, painel, precos, registrarAtividade, pagarOrcamentoSePendente, resumoOrcamento, ORC };
+module.exports = { movDinheiro, movEstoque, comprar, painel, precos, catalogo, registrarAtividade, pagarOrcamentoSePendente, resumoOrcamento, ORC };

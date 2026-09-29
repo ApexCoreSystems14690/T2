@@ -583,9 +583,11 @@ router.get('/:corpId/caixa', requireCorpOwner, requireCorpPoder('ver_caixa'), as
     } catch (e) {
       console.error('orcamento (resumo):', e.message);
     }
+    // [29/09] os preços vêm FILTRADOS pelo catálogo do vestiário dessa corp:
+    // o seletor de compra só lista o que o armário dela já entregava de graça.
     const [dados, precos] = await Promise.all([
       caixa.painel(req.params.corpId, req.query.limite),
-      caixa.precos(),
+      caixa.precos(slugCorp),
     ]);
     res.json({
       ...dados,
@@ -608,7 +610,21 @@ router.post('/:corpId/caixa/comprar', requireCorpOwner, requireCorpPoder('gerir_
   try {
     const { item, qtd } = req.body || {};
     if (!item) return res.status(400).json({ error: 'Item é obrigatório' });
-    const precos = await caixa.precos();
+
+    // [29/09] A TRAVA DE VERDADE É AQUI, não no seletor da tela. O comandante só
+    // compra o que o vestiário DELE já entregava de graça -- nada de AK47 e CAR15,
+    // que são arma de crime e nunca saíram de armário nenhum.
+    const cs = await pool.query(`SELECT slug FROM corporations WHERE id = $1`, [req.params.corpId]);
+    const slugCorp = cs.rows[0] ? cs.rows[0].slug : null;
+    const cat = await caixa.catalogo(slugCorp);
+    if (cat === null) {
+      return res.status(503).json({ error: 'O jogo ainda não publicou o catálogo do vestiário' });
+    }
+    if (!cat.includes(String(item))) {
+      return res.status(400).json({ error: 'Esse item não é do vestiário da sua corporação', codigo: 'fora_do_catalogo' });
+    }
+
+    const precos = await caixa.precos(slugCorp);
     if (!Object.keys(precos).length) {
       return res.status(503).json({ error: 'O jogo ainda não publicou a tabela de preços' });
     }
