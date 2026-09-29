@@ -126,6 +126,8 @@
         <div class="row">
           <div class="fg" style="max-width:220px"><label>Roblox ID</label><input id="off-id" type="number" placeholder="123456789"></div>
           <div class="fg" style="max-width:320px"><label>Motivo (ban)</label><input id="off-motivo" placeholder="Motivo do banimento"></div>
+          <div class="fg" style="max-width:110px"><label>Duração</label><input id="off-dur" type="number" min="1" value="24"></div>
+          <div class="fg" style="max-width:160px"><label>Unidade</label><select id="off-unid"><option value="h">horas</option><option value="d">dias</option><option value="p">permanente</option></select></div>
           <button class="btn danger" onclick="banOffline()">Banir</button>
           <button class="btn sec" onclick="unbanOffline()">Desbanir</button>
         </div>
@@ -664,7 +666,9 @@
         { k: 'modo', l: 'Ação', type: 'select', opts: [['on', 'Ativar'], ['off', 'Desativar']] },
         { k: 'velocidade', l: 'Velocidade (studs/s · Shift no jogo dá boost)', type: 'number', v: 80 }] },
       kick: { t: 'Expulsar', f: [{ k: 'motivo', l: 'Motivo', type: 'text', v: 'Expulso por um administrador' }], danger: true },
-      ban: { t: 'Banir', f: [{ k: 'motivo', l: 'Motivo', type: 'text', v: 'Banido por um administrador' }], danger: true },
+      ban: { t: 'Banir', f: [{ k: 'motivo', l: 'Motivo', type: 'text', v: 'Banido por um administrador' },
+        { k: 'dur', l: 'Duração', type: 'number', v: 24 },
+        { k: 'unid', l: 'Unidade', type: 'select', opts: [['h', 'horas'], ['d', 'dias'], ['p', 'permanente']] }], danger: true },
       mais: { t: 'Mais ações', f: [
         { k: 'modo', l: 'Ação', type: 'select', opts: [['level_set', 'Definir level'], ['slots_set', 'Definir slots da barra (1–6)'], ['carro_add', 'Dar carro'], ['carro_remove', 'Tirar carro'], ['matar', 'Matar (derrubar)'], ['corp_refresh', 'Atualizar corporação (site → jogo)'], ['resetar_dados', 'RESETAR DADOS (zera tudo)']] },
         { k: 'level', l: 'Level', type: 'number', v: 1 }, { k: 'slots', l: 'Slots', type: 'number', v: 4 },
@@ -714,7 +718,7 @@
       else if (kind === 'mensagem') { payload = { texto: val('texto') }; }
       else if (kind === 'noclip') { tipo = 'noclip'; payload = { ativar: val('modo') === 'on', velocidade: Number(val('velocidade')) || 80 }; }
       else if (kind === 'kick') { payload = { motivo: val('motivo') }; }
-      else if (kind === 'ban') { payload = { roblox_id: p.userId, motivo: val('motivo') }; }
+      else if (kind === 'ban') { const h = horasBan(val('dur'), val('unid')); if (h == null) return showAlert('Duração inválida', 'error'); payload = { roblox_id: p.userId, motivo: val('motivo'), horas: h }; }
       else if (kind === 'mais') { tipo = val('modo'); if (tipo === 'level_set') payload = { level: Number(val('level')) }; if (tipo === 'slots_set') payload = { slots: Number(val('slots')) }; if (tipo === 'carro_add' || tipo === 'carro_remove') payload = { carro: val('carro') }; if (tipo === 'resetar_dados' && !confirm('ZERAR todos os dados de ' + p.name + '? Isso não tem volta.')) return; }
       try {
         await api('POST', '/command', { tipo, target_roblox_id: p.userId, target_name: p.name, payload });
@@ -743,10 +747,20 @@
     async function cmdServer(tipo, payload) {
       try { const r = await api('POST', '/command', { tipo, payload }); showAlert('Enviado pra ' + r.ids.length + ' servidor(es)', 'success'); } catch (e) { showAlert(e.message, 'error'); }
     }
+    // ban por tempo: devolve horas (0 = permanente) ou null se inválido
+    function horasBan(dur, unid) {
+      if (unid === 'p') return 0;
+      const n = Number(dur);
+      if (!Number.isFinite(n) || n <= 0) return null;
+      const h = unid === 'd' ? n * 24 : n;
+      return h > 87600 ? null : h;
+    }
+    function textoBan(h) { return h === 0 ? 'PERMANENTE' : (h % 24 === 0 ? (h / 24) + ' dia(s)' : h + ' hora(s)'); }
     async function banOffline() {
       const id = Number($('off-id').value); if (!id) return showAlert('Informe o Roblox ID', 'error');
-      if (!confirm('Banir o Roblox ID ' + id + '?')) return;
-      try { await api('POST', '/command', { tipo: 'ban', payload: { roblox_id: id, motivo: $('off-motivo').value } }); showAlert('Ban enviado', 'success'); } catch (e) { showAlert(e.message, 'error'); }
+      const h = horasBan($('off-dur').value, $('off-unid').value); if (h == null) return showAlert('Duração inválida', 'error');
+      if (!confirm('Banir o Roblox ID ' + id + ' — ' + textoBan(h) + '?')) return;
+      try { await api('POST', '/command', { tipo: 'ban', payload: { roblox_id: id, motivo: $('off-motivo').value, horas: h } }); showAlert('Ban enviado (' + textoBan(h) + ')', 'success'); } catch (e) { showAlert(e.message, 'error'); }
     }
     async function unbanOffline() {
       const id = Number($('off-id').value); if (!id) return showAlert('Informe o Roblox ID', 'error');

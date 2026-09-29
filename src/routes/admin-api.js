@@ -47,7 +47,8 @@ const COMANDOS = {
   corp_refresh:   { alvo: true,  valida: () => ({}) },
   noclip:         { alvo: true,  valida: p => ({ ativar: !!p.ativar, velocidade: num(p.velocidade, 16, 800) || 80 }) }, // voar / atravessar paredes
   // alvo por roblox_id, pode estar offline
-  ban:            { alvo: 'id',  valida: p => ({ roblox_id: num(p.roblox_id, 1), motivo: str(p.motivo, 200) || 'Banido por um administrador' }) },
+  // horas: 0/vazio = PERMANENTE; >0 = ban temporário (máx. 10 anos). O jogo grava {ate=os.time()+horas*3600}.
+  ban:            { alvo: 'id',  valida: p => ({ roblox_id: num(p.roblox_id, 1), motivo: str(p.motivo, 200) || 'Banido por um administrador', horas: num(p.horas, 0, 87600) || 0 }) },
   unban:          { alvo: 'id',  valida: p => ({ roblox_id: num(p.roblox_id, 1) }) },
   // servidor inteiro
   hora:           { alvo: false, valida: p => ({ clock: num(p.clock, 0, 24) }) },
