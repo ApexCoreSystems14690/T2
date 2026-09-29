@@ -287,6 +287,10 @@ async function pagarOrcamentoSePendente(corpId, slug, agoraMs) {
     `SELECT COUNT(*)::int AS n FROM corp_atividade
       WHERE corporation_id = $1 AND em >= $2`, [corpId, desde]);
   const conta = ORC.valorDe(slug, at.rows[0] ? at.rows[0].n : 0);
+  // [29/09] corp sem repasse (pavuna, loja) não gera linha nenhuma. Sem isto o
+  // INSERT abaixo gravaria um pagamento de R$ 0 e o movDinheiro recusaria depois
+  // -- ficaria um registro de repasse que nunca creditou nada.
+  if (conta.total <= 0) return { pagou: false, periodo, motivo: 'corp sem repasse' };
 
   const cliente = await pool.connect();
   try {

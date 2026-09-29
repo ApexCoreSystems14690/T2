@@ -44,7 +44,7 @@ const t = (n, c, e) => { if (c) ok++; else falhas.push(n + (e !== undefined ? ' 
   t('resumo responde em corp virgem', !!r0, r0);
   t('ultimo = null quando nunca recebeu', r0.ultimo === null, r0.ultimo);
   t('dias = 7', r0.dias === 7, r0.dias);
-  t('previsto = base quando nao houve atividade', r0.previsto.total === ORC.ORC.BASE_PADRAO, r0.previsto);
+  t('previsto = base quando nao houve atividade', r0.previsto.total === ORC.baseDe('policia-militar'), r0.previsto);
   const pago0 = (await pool.query(`SELECT COUNT(*)::int n FROM corp_orcamento_pago`)).rows[0].n;
   const saldo0 = (await pool.query(`SELECT COUNT(*)::int n FROM corp_caixa WHERE saldo <> 0`)).rows[0].n;
   t('RESUMO NAO PAGA: nenhuma linha de repasse', pago0 === 0, pago0);
@@ -52,7 +52,7 @@ const t = (n, c, e) => { if (c) ok++; else falhas.push(n + (e !== undefined ? ' 
 
   // ---- 2) SAMU usa a base menor
   const rs = await caixa.resumoOrcamento(samu, 'samu');
-  t('SAMU tem base menor', rs.previsto.base === ORC.ORC.BASE_SAMU, rs.previsto);
+  t('SAMU tem base menor', rs.previsto.base === ORC.baseDe('samu') && rs.previsto.base < ORC.baseDe('policia-militar'), rs.previsto);
   t('SAMU < PM', rs.previsto.total < r0.previsto.total);
 
   // ---- 3) atividade no período entra na previsão
@@ -60,7 +60,7 @@ const t = (n, c, e) => { if (c) ok++; else falhas.push(n + (e !== undefined ? ' 
   const r1 = await caixa.resumoOrcamento(pm, 'policia-militar');
   t('conta as 3 ocorrencias', r1.atividade_periodo === 3, r1.atividade_periodo);
   t('previsto = base + 3*POR_ATIVIDADE',
-    r1.previsto.total === ORC.ORC.BASE_PADRAO + 3 * ORC.ORC.POR_ATIVIDADE, r1.previsto);
+    r1.previsto.total === ORC.baseDe('policia-militar') + 3 * ORC.ORC.POR_ATIVIDADE, r1.previsto);
 
   // ---- 4) atividade de OUTRO período não conta (fora da janela)
   await pool.query(

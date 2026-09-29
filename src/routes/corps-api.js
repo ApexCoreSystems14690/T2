@@ -666,9 +666,12 @@ router.post('/:corpId/caixa/baixa', requireCorpOwner, requireCorpPoder('gerir_es
   }
 });
 
-// POST /api/corps/:corpId/caixa/aporte { valor } — o comando põe dinheiro no
-// caixa (RP, ou pra começar). Fica no extrato com o nome de quem pôs.
-router.post('/:corpId/caixa/aporte', requireCorpOwner, requireCorpPoder('gastar_caixa'), async (req, res) => {
+// POST /api/corps/:corpId/caixa/aporte { valor } — dinheiro criado DO NADA no
+// caixa. Não sai da carteira de ninguém. [29/09] Passou a ser poder de STAFF
+// (`aportar_caixa`): a corp já recebe o repasse do governo e se vira com multa,
+// pátio e dívida; dono de corp com botão de imprimir dinheiro não é gestão.
+// Fica pra corrigir erro e pra evento. Vai pro extrato com o nome de quem pôs.
+router.post('/:corpId/caixa/aporte', requireCorpOwner, requireCorpPoder('aportar_caixa'), async (req, res) => {
   try {
     const valor = parseInt(req.body && req.body.valor);
     if (!(valor > 0)) return res.status(400).json({ error: 'Valor inválido' });

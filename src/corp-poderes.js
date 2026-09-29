@@ -58,6 +58,12 @@ const MATRIZ = {
   ver_caixa:      { staff: 1, dono: 1, gerente: 1, chefe: 1 },
   gastar_caixa:   { staff: 1, dono: 1, gerente: 1 },
   gerir_estoque:  { staff: 1, dono: 1, gerente: 1 },
+  // [29/09] APORTE = dinheiro criado DO NADA no caixa da corp; não sai da
+  // carteira de ninguém. [stated] Julio: "a corp ja tem 50 mil ja e ele pode
+  // usar para comprar os itens, aporte/depositar e para quem etc oq?" -- ele
+  // está certo: dono de corp com botão de imprimir dinheiro não é gestão.
+  // Virou poder de STAFF, pra corrigir erro e pra evento.
+  aportar_caixa:  { staff: 1 },
 };
 
 const ROTULO = {
@@ -72,6 +78,7 @@ const ROTULO = {
   ver_caixa:      'Ver o caixa, o estoque e o extrato',
   gastar_caixa:   'Gastar o dinheiro do caixa (compras e bônus)',
   gerir_estoque:  'Comprar equipamento e dar baixa no estoque',
+  aportar_caixa:  'Depositar dinheiro no caixa (só staff)',
 };
 
 const PAPEIS = ['staff', 'dono', 'gerente', 'chefe', 'membro'];

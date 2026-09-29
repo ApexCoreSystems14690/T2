@@ -25,6 +25,14 @@ const chefe = render({ ver_caixa: false, gastar_caixa: false, gerir_estoque: fal
 t('chefe: template renderiza', chefe.length > 1000);
 t('sem ver_caixa NAO tem bloco de repasse', !chefe.includes('id="cx-orcamento"'));
 
+// [29/09] APORTE SÓ PRA STAFF: dono de corp não imprime dinheiro.
+const donoSemStaff = render({ ver_caixa: true, gastar_caixa: true, gerir_estoque: true, aportar_caixa: false, gerir_cargos: true, gerir_gerentes: true, editar_corp: true });
+t('dono NAO ve o aporte', !donoSemStaff.includes('id="cx-aporte"'));
+t('dono ainda ve comprar', donoSemStaff.includes('id="cx-item"'));
+t('dono ainda ve bonus', donoSemStaff.includes('id="cx-bonus-valor"'));
+const staff = render({ ver_caixa: true, gastar_caixa: true, gerir_estoque: true, aportar_caixa: true, gerir_cargos: true, gerir_gerentes: true, editar_corp: true });
+t('staff ve o aporte', staff.includes('id="cx-aporte"'));
+
 const soVer = render({ ver_caixa: true, gastar_caixa: false, gerir_estoque: false, gerir_cargos: false, gerir_gerentes: false, editar_corp: false });
 t('so_ver: ve o repasse', soVer.includes('id="cx-orcamento"'));
 t('so_ver: NAO ve comprar', !soVer.includes('id="cx-item"'));

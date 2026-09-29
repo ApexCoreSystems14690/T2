@@ -91,7 +91,6 @@
         continua sendo o back (requireCorpPoder); isto aqui e conforto. %>
     <% var P = (typeof poderes !== 'undefined' && poderes) ? poderes : {gerir_cargos:true, editar_corp:true, gerir_membros:true, gerir_gerentes:isOwner, excluir_corp:isOwner};
        var MEU_NIVEL = (typeof meuNivel !== 'undefined') ? meuNivel : null;
-       var EH_STAFF_ALTO = (typeof ehStaffAlto !== 'undefined') && ehStaffAlto;  // [29/09] Diretor+/Dono do site
        var MEU_PAPEL = (typeof papel !== 'undefined') ? papel : (isOwner ? 'dono' : 'gerente'); %>
     <div id="alert-container"></div>
 
@@ -206,9 +205,8 @@
               <tr><td colspan="6" class="empty">Nenhum membro ainda.</td></tr>
             <% } else { %>
               <% members.forEach(m => { %>
-                <% var euAlto = EH_STAFF_ALTO && m.sou_eu;   // [29/09] Diretor+ destrava a PRÓPRIA linha (cargo e Remover)
-                   var travado = !P.gerir_membros
-                     || (!euAlto && (m.eh_dono_da_corp || m.sou_eu))
+                <% var travado = !P.gerir_membros
+                     || m.eh_dono_da_corp || m.sou_eu
                      || (MEU_NIVEL !== null && m.rank_level !== null && m.rank_level !== undefined && Number(m.rank_level) >= Number(MEU_NIVEL)); %>
                 <tr>
                   <td><%= m.roblox_id || '-' %></td>
@@ -286,10 +284,12 @@
       </div>
       <% } %>
 
-      <% if (P.gastar_caixa) { %>
+      <% if (P.aportar_caixa) { %>
+      <!-- [29/09] SÓ STAFF. Aporte é dinheiro do nada; a corp normal vive do
+           repasse do governo + multa/pátio/dívida. -->
       <div class="form-row">
         <div class="form-group" style="max-width:200px">
-          <label>Aporte no caixa</label>
+          <label>Aporte no caixa <span style="color:#7a8ba5;font-weight:400">(staff)</span></label>
           <input type="number" id="cx-aporte" placeholder="R$" min="1">
         </div>
         <div class="form-group" style="max-width:160px">
@@ -297,6 +297,9 @@
           <button class="btn secondary" onclick="aportar()">Depositar</button>
         </div>
       </div>
+      <% } %>
+
+      <% if (P.gastar_caixa) { %>
 
       <%
         // Bonus so pode cair pra quem tem Roblox vinculado: a fila de entrega do
@@ -343,7 +346,16 @@
         <tbody id="cx-emprestimos"><tr><td colspan="3" class="empty">Carregando…</td></tr></tbody>
       </table>
 
-      <h3 style="color:#f0f4f8;font-size:0.9rem;margin:1.5rem 0 0.5rem">Extrato</h3>
+      <!-- [29/09] PERDAS: só o NÚMERO, sem nome. O comandante vê quantas peças
+           sumiram na rua em cada dia e cobra a equipe; quem desviou ele tem que
+           descobrir. Baixa dada pelo próprio comando não entra aqui. -->
+      <h3 style="color:#f0f4f8;font-size:0.9rem;margin:1.5rem 0 0.5rem">Equipamento perdido por dia</h3>
+      <table class="member-table">
+        <thead><tr><th>Dia</th><th>Item</th><th style="text-align:right">Perdidas</th></tr></thead>
+        <tbody id="cx-perdas-dia"><tr><td colspan="3" class="empty">Carregando…</td></tr></tbody>
+      </table>
+
+      <h3 style="color:#f0f4f8;font-size:0.9rem;margin:1.5rem 0 0.5rem">Extrato do caixa</h3>
       <table class="member-table">
         <thead><tr><th>Quando</th><th>O quê</th><th>Quem</th><th>Autorizou</th><th style="text-align:right">Valor</th><th style="text-align:right">Saldo</th></tr></thead>
         <tbody id="cx-extrato"><tr><td colspan="6" class="empty">Carregando…</td></tr></tbody>
@@ -745,15 +757,27 @@
           }).join('')
         : '<tr><td colspan="3" class="empty">Ninguém está com equipamento da corp agora.</td></tr>';
 
+      // [29/09] perdas agregadas: dia, item, quantidade. Nenhum nome -- de propósito.
+      var tp = document.getElementById('cx-perdas-dia');
+      if (tp) {
+        tp.innerHTML = (d.perdas_dia && d.perdas_dia.length)
+          ? d.perdas_dia.map(function (p) {
+              var dia = new Date(p.dia).toLocaleDateString('pt-BR');
+              return '<tr><td style="color:#7a8ba5;white-space:nowrap">' + dia + '</td>' +
+                '<td>' + p.item + '</td>' +
+                '<td style="text-align:right;font-variant-numeric:tabular-nums;color:#ffb347">' + p.qtd + '</td></tr>';
+            }).join('')
+          : '<tr><td colspan="3" class="empty">Nenhuma peça perdida ainda.</td></tr>';
+      }
+
+      // O extrato é só DINHEIRO: a rota já filtra `tipo <> 'estoque'`.
       var tx = document.getElementById('cx-extrato');
       tx.innerHTML = (d.extrato && d.extrato.length)
         ? d.extrato.map(function (l) {
-            var desc = l.tipo === 'estoque'
-              ? (l.motivo + (l.item ? ' · ' + l.item : ''))
-              : (l.tipo + (l.item ? ' · ' + l.item + (l.qtd > 1 ? ' x' + l.qtd : '') : ''));
+            var desc = l.tipo + (l.item ? ' · ' + l.item + (l.qtd > 1 ? ' x' + l.qtd : '') : '');
             var cor = l.valor > 0 ? '#3ddc84' : (l.valor < 0 ? '#ff6b6b' : '#7a8ba5');
             return '<tr><td style="color:#7a8ba5;white-space:nowrap">' + quando(l.criado_em) + '</td>' +
-              '<td>' + desc + (l.perda ? ' <span style="color:#ffb347">· perda</span>' : '') + '</td>' +
+              '<td>' + desc + '</td>' +
               '<td>' + (l.quem || '—') + '</td><td style="color:#7a8ba5">' + (l.por || '—') + '</td>' +
               '<td style="text-align:right;font-variant-numeric:tabular-nums;color:' + cor + '">' + (l.valor ? dinheiro(l.valor) : '—') + '</td>' +
               '<td style="text-align:right;font-variant-numeric:tabular-nums;color:#7a8ba5">' + (l.saldo_depois === null ? '—' : dinheiro(l.saldo_depois)) + '</td></tr>';

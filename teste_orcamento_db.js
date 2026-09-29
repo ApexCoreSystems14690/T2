@@ -43,9 +43,9 @@ const t = (nome, cond, extra) => { if (cond) ok++; else falhas.push(nome + (extr
   // ---- 1) primeiro repasse cai
   const r1 = await caixa.pagarOrcamentoSePendente(pm, 'policia-militar');
   t('primeiro repasse paga', r1.pagou === true, r1);
-  t('valor = base da PM (sem atividade)', r1.valor === ORC.ORC.BASE_PADRAO, r1);
+  t('valor = base da PM (sem atividade)', r1.valor === ORC.baseDe('policia-militar'), r1);
   const saldo1 = (await pool.query(`SELECT saldo FROM corp_caixa WHERE corporation_id=$1`, [pm])).rows[0].saldo;
-  t('o dinheiro entrou no caixa', Number(saldo1) === ORC.ORC.BASE_PADRAO, saldo1);
+  t('o dinheiro entrou no caixa', Number(saldo1) === ORC.baseDe('policia-militar'), saldo1);
 
   // ---- 2) chamar de novo no mesmo período NÃO paga
   const r2 = await caixa.pagarOrcamentoSePendente(pm, 'policia-militar');
@@ -62,13 +62,13 @@ const t = (nome, cond, extra) => { if (cond) ok++; else falhas.push(nome + (extr
   const linhas = (await pool.query(`SELECT COUNT(*)::int n FROM corp_orcamento_pago WHERE corporation_id=$1`, [pm])).rows[0].n;
   t('so 1 linha de repasse gravada', linhas === 1, linhas);
   const saldo3 = Number((await pool.query(`SELECT saldo FROM corp_caixa WHERE corporation_id=$1`, [pm])).rows[0].saldo);
-  t('caixa recebeu UMA vez so', saldo3 === ORC.ORC.BASE_PADRAO, saldo3);
+  t('caixa recebeu UMA vez so', saldo3 === ORC.baseDe('policia-militar'), saldo3);
 
   // ---- 4) atividade aumenta o repasse
   await pool.query(`DELETE FROM corp_orcamento_pago WHERE corporation_id=$1`, [samu]);
   for (let i = 0; i < 6; i++) await caixa.registrarAtividade(samu, 'reanimacao', 'Medico' + i);
   const rs = await caixa.pagarOrcamentoSePendente(samu, 'samu');
-  t('SAMU recebe base + atividade', rs.valor === ORC.ORC.BASE_SAMU + 6 * ORC.ORC.POR_ATIVIDADE, rs);
+  t('SAMU recebe base + atividade', rs.valor === ORC.baseDe('samu') + 6 * ORC.ORC.POR_ATIVIDADE, rs);
   t('a contagem de atividade bate', rs.atividade === 6, rs);
   t('SAMU recebe MENOS que a PM com a mesma atividade',
     ORC.valorDe('samu', 6).total < ORC.valorDe('policia-militar', 6).total);

@@ -24,25 +24,44 @@ t('proximo repasse é no futuro', prox > t0);
 t('proximo repasse em ate 7 dias', prox - t0 <= SEMANA);
 
 // ---- base por corp: SAMU menor, foi o pedido do Julio
-t('PM usa a base padrao', O.baseDe('policia-militar') === O.ORC.BASE_PADRAO);
+// [29/09] cada corp tem base propria (rebalanceado pelo custo do KIT dela).
+const SAMU = O.BASE_POR_CORP['samu'];
+t('PM tem base propria, nao a padrao', O.baseDe('policia-militar') === 55000);
 t('SAMU recebe MENOS que a PM', O.baseDe('samu') < O.baseDe('policia-militar'));
-t('jornal tambem é menor', O.baseDe('jornal') < O.ORC.BASE_PADRAO);
+t('jornal é o menor dos que recebem', O.baseDe('jornal') < O.baseDe('samu'));
 t('corp desconhecida cai no padrao', O.baseDe('corp-que-nao-existe') === O.ORC.BASE_PADRAO);
-t('slug com espaco/maiuscula normaliza', O.baseDe('  SAMU ') === O.ORC.BASE_SAMU);
+t('slug com espaco/maiuscula normaliza', O.baseDe('  SAMU ') === SAMU);
 t('slug nulo nao explode', O.baseDe(null) === O.ORC.BASE_PADRAO);
+// corp que NAO e do Estado nao recebe nada -- e 0 nao pode virar base padrao
+t('pavuna nao recebe repasse', O.baseDe('pavuna') === 0);
+t('loja nao recebe repasse', O.baseDe('extra-10') === 0);
+t('0 NAO cai no padrao (armadilha do ||)', O.valorDe('pavuna', 0).total === 0);
+t('pavuna ativa continua em 0 de base', O.valorDe('pavuna', 0).base === 0);
+// a ordem das bases tem que espelhar o custo do kit medido no jogo
+t('PC >= PM', O.baseDe('policia-civil') >= O.baseDe('policia-militar'));
+t('PM > CHOQUE e BOPE', O.baseDe('policia-militar') > O.baseDe('choque') && O.baseDe('policia-militar') > O.baseDe('bope'));
+t('CHOQUE == BOPE', O.baseDe('choque') === O.baseDe('bope'));
+t('governo < corps de rua', O.baseDe('governo') < O.baseDe('rotam'));
+// a base tem que comprar pelo menos 4 kits completos da corp (barca em ~2 semanas)
+const KIT = { 'policia-militar': 8950, 'rotam': 8950, 'choque': 10450, 'bope': 10450, 'policia-civil': 10450, 'governo': 3850, 'samu': 1130 };
+for (const [slug, kit] of Object.entries(KIT)) {
+  t('base de ' + slug + ' compra >= 4 kits', Math.floor(O.baseDe(slug) / kit) >= 4, Math.floor(O.baseDe(slug) / kit));
+}
 
 // ---- valor: base + atividade
 const semNada = O.valorDe('policia-militar', 0);
-t('sem atividade recebe so a base', semNada.total === O.ORC.BASE_PADRAO && semNada.extra === 0);
+t('sem atividade recebe so a base', semNada.total === O.baseDe('policia-militar') && semNada.extra === 0);
 const com10 = O.valorDe('policia-militar', 10);
 t('10 ocorrencias somam 10x o por-atividade', com10.extra === 10 * O.ORC.POR_ATIVIDADE);
 t('total = base + extra', com10.total === com10.base + com10.extra);
-t('SAMU parada ainda recebe algo', O.valorDe('samu', 0).total === O.ORC.BASE_SAMU);
+t('SAMU parada ainda recebe algo', O.valorDe('samu', 0).total === SAMU && SAMU > 0);
 t('SAMU ativa recebe mais que SAMU parada', O.valorDe('samu', 5).total > O.valorDe('samu', 0).total);
 // teto: nao da pra farmar infinito
 const absurdo = O.valorDe('policia-militar', 999999);
 t('atividade tem TETO', absurdo.atividade === O.ORC.TETO_ATIVIDADE);
-t('teto limita o total', absurdo.total === O.ORC.BASE_PADRAO + O.ORC.TETO_ATIVIDADE * O.ORC.POR_ATIVIDADE);
+t('teto limita o total', absurdo.total === O.baseDe('policia-militar') + O.ORC.TETO_ATIVIDADE * O.ORC.POR_ATIVIDADE);
+// a parte por atividade nao pode dominar a base, senao vira farm e nao repasse
+t('atividade no teto nao passa a base', O.ORC.TETO_ATIVIDADE * O.ORC.POR_ATIVIDADE <= O.baseDe('policia-militar'));
 t('atividade negativa vira 0', O.valorDe('policia-militar', -50).extra === 0);
 t('atividade fracionada arredonda pra baixo', O.valorDe('policia-militar', 3.9).atividade === 3);
 t('atividade NaN vira 0', O.valorDe('policia-militar', NaN).extra === 0);
