@@ -566,11 +566,22 @@ router.get('/:corpId/caixa', requireCorpOwner, requireCorpPoder('ver_caixa'), as
     // montar o painel. É sob demanda de propósito -- o site não tem relógio, e um
     // setInterval pagaria duas vezes a cada restart do Railway. A trava é o
     // UNIQUE(corp, periodo) no banco, então chamar aqui toda vez é inofensivo.
+    let slugCorp = null;
     try {
       const cs = await pool.query(`SELECT slug FROM corporations WHERE id = $1`, [req.params.corpId]);
-      if (cs.rows[0]) await caixa.pagarOrcamentoSePendente(req.params.corpId, cs.rows[0].slug);
+      slugCorp = cs.rows[0] ? cs.rows[0].slug : null;
+      if (slugCorp) await caixa.pagarOrcamentoSePendente(req.params.corpId, slugCorp);
     } catch (e) {
       console.error('orcamento (painel):', e.message);   // repasse falhou não tira o painel do ar
+    }
+    // [28/09] O RESUMO DO REPASSE pro painel. Só leitura, e vem DEPOIS do
+    // pagamento acima -- então já mostra o dinheiro que acabou de cair. Em try
+    // separado de propósito: se ele falhar, o painel continua de pé sem o bloco.
+    let orcamento = null;
+    try {
+      orcamento = await caixa.resumoOrcamento(req.params.corpId, slugCorp);
+    } catch (e) {
+      console.error('orcamento (resumo):', e.message);
     }
     const [dados, precos] = await Promise.all([
       caixa.painel(req.params.corpId, req.query.limite),
@@ -580,6 +591,7 @@ router.get('/:corpId/caixa', requireCorpOwner, requireCorpPoder('ver_caixa'), as
       ...dados,
       precos,
       proximo_repasse: caixa.ORC.proximoEm(Date.now()),
+      orcamento,
       pode_gastar: CP.pode(req.corpCtx, 'gastar_caixa'),
       pode_estoque: CP.pode(req.corpCtx, 'gerir_estoque'),
     });

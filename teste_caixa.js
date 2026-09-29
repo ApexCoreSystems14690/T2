@@ -16,6 +16,10 @@ const ESPERADO_LUAU = ['baixa', 'comprou', 'devolveu', 'morreu', 'retirou', 'rou
 t('motivos batem com o Luau', JSON.stringify(Object.keys(C.ESTOQUE).sort()) === JSON.stringify(ESPERADO_LUAU), Object.keys(C.ESTOQUE).sort());
 t('roubada nao credita a prateleira', C.ESTOQUE.roubada.estoque === 0 && C.ESTOQUE.roubada.perda === true);
 t('morreu nao credita a prateleira', C.ESTOQUE.morreu.estoque === 0 && C.ESTOQUE.morreu.perda === true);
+// [29/09] CONTRABANDO nao tem motivo proprio de proposito: o desvio do policial
+// entra como `roubada`, igual a quem foi assaltado. O comandante tem que
+// descobrir. Este teste existe pra ninguem "consertar" isso achando que faltou.
+t('contrabando NAO tem motivo proprio', C.ESTOQUE.desviada === undefined);
 t('saiu de servico credita', C.ESTOQUE.saiu.estoque === 1 && C.ESTOQUE.saiu.perda === false);
 
 // ---------------------------------------------------------------- 2. rateio

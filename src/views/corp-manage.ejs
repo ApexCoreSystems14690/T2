@@ -260,6 +260,13 @@
         </div>
       </div>
 
+      <!-- [28/09] REPASSE DO GOVERNO. Toda corp recebe a cada 7 dias: base fixa +
+           parte por atividade. É a ÚNICA entrada da SAMU -- ela não multa, não
+           apreende e não cobra dívida. O bloco some sozinho se a rota não mandar
+           o resumo (banco velho, erro na leitura): painel sem bloco é melhor que
+           painel quebrado. -->
+      <div id="cx-orcamento" style="display:none;margin-bottom:1.25rem;padding:0.75rem 1rem;border-left:3px solid #00d4ff;background:rgba(0,212,255,0.06);border-radius:4px;color:#b9c7d9;font-size:0.85rem;line-height:1.6"></div>
+
       <% if (P.gerir_estoque) { %>
       <div class="form-row">
         <div class="form-group">
@@ -683,6 +690,29 @@
       document.getElementById('cx-saiu').textContent = dinheiro(d.balanco.saiu);
       document.getElementById('cx-perdas').textContent =
         (d.itens || []).reduce(function (a, i) { return a + (i.perdido || 0); }, 0) + ' peça(s)';
+
+      // [28/09] REPASSE DO GOVERNO. A rota já pagou o que estava pendente antes de
+      // montar isto, então o "último" aqui pode ser o que acabou de cair.
+      var orc = d.orcamento;
+      var elOrc = document.getElementById('cx-orcamento');
+      if (elOrc) {
+        if (!orc) {
+          elOrc.style.display = 'none';
+        } else {
+          elOrc.style.display = '';
+          var faltaMs = Math.max(0, Number(orc.proximo_em) - Date.now());
+          var dd = Math.floor(faltaMs / 86400000);
+          var hh = Math.floor((faltaMs % 86400000) / 3600000);
+          var falta = dd > 0 ? (dd + 'd ' + hh + 'h') : (hh + 'h');
+          var ult = orc.ultimo
+            ? ('último: ' + dinheiro(orc.ultimo.valor) + ' em ' + quando(orc.ultimo.em))
+            : 'nenhum repasse ainda';
+          elOrc.innerHTML =
+            '<b style="color:#00d4ff">Repasse do governo</b> · a cada ' + orc.dias + ' dias · próximo em <b>' + falta + '</b><br>' +
+            'previsto <b>' + dinheiro(orc.previsto.total) + '</b> = base ' + dinheiro(orc.previsto.base) +
+            ' + ' + orc.atividade_periodo + ' ocorrência(s) no período · ' + ult;
+        }
+      }
 
       // o seletor de compra so lista o que TEM PRECO no jogo. Peca sem preco e
       // cosmetico (boina, oculos): nao entra no estoque de proposito.

@@ -827,8 +827,28 @@ async function corpPorSlug(slug) {
   if (!s) return null;
   const r = await pool.query(
     `SELECT id, name, slug FROM corporations WHERE LOWER(slug) = $1 AND is_active LIMIT 1`, [s]);
+  // [28/09] O BURACO MAIS SILENCIOSO DO CAIXA: o jogo manda o crédito
+  // fire-and-forget. Se o slug não existir aqui, a rota devolve 404, o jogo não
+  // olha a resposta e o dinheiro da corp simplesmente SOME -- e o repasse do
+  // governo nunca cai pra ela, porque ele só roda pra corp que existe.
+  // Um warn nomeando o slug transforma isso num log em vez de um mistério.
+  if (!r.rows[0]) console.warn('[corp] slug inexistente ou inativo:', s);
   return r.rows[0] || null;
 }
+
+// GET /api/game/corps — os slugs que existem DE VERDADE.
+// O jogo confere isto uma vez no boot e grita no console o que estiver faltando,
+// em vez de descobrir semanas depois que a SAMU nunca recebeu nada.
+router.get('/corps', async (req, res) => {
+  try {
+    const r = await pool.query(
+      `SELECT slug, name FROM corporations WHERE is_active ORDER BY slug`);
+    res.json({ ok: true, corps: r.rows.map(x => ({ slug: x.slug, nome: x.name })) });
+  } catch (err) {
+    console.error('corps (lista):', err.message);
+    res.status(500).json({ error: 'Erro interno' });
+  }
+});
 
 // POST /api/game/corp/caixa  { corp, tipo, valor_pago, quem, por }
 // tipo: multa | patio | divida | venda

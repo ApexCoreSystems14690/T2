@@ -279,4 +279,39 @@ async function pagarOrcamentoSePendente(corpId, slug, agoraMs) {
   return { pagou: true, periodo, valor: conta.total, base: conta.base, atividade: conta.atividade, saldo: r.saldo };
 }
 
-module.exports = { movDinheiro, movEstoque, comprar, painel, precos, registrarAtividade, pagarOrcamentoSePendente, ORC };
+/* SÓ LEITURA: o que o painel precisa mostrar sobre o repasse -- quando cai o
+ * próximo, o que caiu no último, e quanto está previsto pro período que está
+ * correndo. Não paga nada: quem paga é pagarOrcamentoSePendente, e ela é
+ * chamada antes disto na rota do painel.
+ *
+ * A janela da atividade é a MESMA que o pagamento usa: o período que está
+ * correndo agora é exatamente o que vai ser contado quando ele fechar. */
+async function resumoOrcamento(corpId, slug, agoraMs) {
+  const agora = Number.isFinite(Number(agoraMs)) ? Number(agoraMs) : Date.now();
+  const periodo = ORC.periodoDe(agora);
+  const inicio = new Date(periodo * ORC.DIA * ORC.ORC.DIAS);
+  const [ult, at] = await Promise.all([
+    pool.query(
+      `SELECT periodo, valor, base, atividade, em FROM corp_orcamento_pago
+        WHERE corporation_id = $1 ORDER BY periodo DESC LIMIT 1`, [corpId]),
+    pool.query(
+      `SELECT COUNT(*)::int AS n FROM corp_atividade
+        WHERE corporation_id = $1 AND em >= $2`, [corpId, inicio]),
+  ]);
+  const n = at.rows[0] ? at.rows[0].n : 0;
+  const previsto = ORC.valorDe(slug, n);
+  const u = ult.rows[0];
+  return {
+    dias: ORC.ORC.DIAS,
+    periodo,
+    proximo_em: ORC.proximoEm(agora),
+    atividade_periodo: n,
+    previsto,
+    ultimo: u ? {
+      periodo: Number(u.periodo), valor: Number(u.valor),
+      base: Number(u.base), atividade: Number(u.atividade), em: u.em,
+    } : null,
+  };
+}
+
+module.exports = { movDinheiro, movEstoque, comprar, painel, precos, registrarAtividade, pagarOrcamentoSePendente, resumoOrcamento, ORC };

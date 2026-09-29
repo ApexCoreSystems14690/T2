@@ -57,6 +57,11 @@ const ESTOQUE = {
   saiu:     { estoque: +1, emprestado: -1, perda: false, rotulo: 'Saiu de serviço' },
   roubada:  { estoque:  0, emprestado: -1, perda: true,  rotulo: 'Tomada numa revista' },
   morreu:   { estoque:  0, emprestado: -1, perda: true,  rotulo: 'Perdida na morte' },
+  // [29/09] CONTRABANDO NÃO TEM MOTIVO PRÓPRIO, DE PROPÓSITO. Quando o policial
+  // desvia a arma dele, o que entra aqui é `roubada` -- igual a quem foi
+  // assaltado de verdade. O comandante "tem que descobrir" (Julio); um rótulo
+  // separado entregaria a corrupção de bandeja. O registro honesto só existe no
+  // log de admin, que o comandante não vê.
   comprou:  { estoque: +1, emprestado:  0, perda: false, rotulo: 'Comprada pelo comando' },
   baixa:    { estoque: -1, emprestado:  0, perda: true,  rotulo: 'Baixa dada pelo comando' },
 };
