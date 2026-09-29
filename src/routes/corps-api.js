@@ -585,13 +585,21 @@ router.get('/:corpId/caixa', requireCorpOwner, requireCorpPoder('ver_caixa'), as
     }
     // [29/09] os preços vêm FILTRADOS pelo catálogo do vestiário dessa corp:
     // o seletor de compra só lista o que o armário dela já entregava de graça.
-    const [dados, precos] = await Promise.all([
+    // [29/09, 2ª passada] `catalogo_publicado` separa dois casos que o painel
+    // mostrava igual: o jogo nunca publicou (null) e a corp NÃO COMPRA NADA ([]).
+    // Depois da ordem do Julio -- "só arma e algema deve cobrar, o resto é
+    // infinito" -- SAMU e Pavuna caíram no segundo caso de verdade: o vestiário
+    // delas só tem skin e item de cena. Sem essa flag o comandante da SAMU lia
+    // "o jogo ainda não publicou os preços" e ia caçar bug que não existe.
+    const [dados, precos, cat] = await Promise.all([
       caixa.painel(req.params.corpId, req.query.limite),
       caixa.precos(slugCorp),
+      caixa.catalogo(slugCorp),
     ]);
     res.json({
       ...dados,
       precos,
+      catalogo_publicado: cat !== null,
       proximo_repasse: caixa.ORC.proximoEm(Date.now()),
       orcamento,
       pode_gastar: CP.pode(req.corpCtx, 'gastar_caixa'),

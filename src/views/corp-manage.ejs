@@ -272,6 +272,10 @@
         <div class="form-group">
           <label>Comprar pro vestiário</label>
           <select id="cx-item"><option value="">Carregando preços…</option></select>
+          <div style="margin-top:0.35rem;color:#7a8ba5;font-size:0.78rem;line-height:1.5">
+            Só arma e algema gastam caixa. Colete, capacete, uniforme e acessório
+            são infinitos no vestiário — não acabam, não se perdem e não aparecem aqui.
+          </div>
         </div>
         <div class="form-group" style="max-width:120px">
           <label>Quantidade</label>
@@ -728,14 +732,18 @@
         }
       }
 
-      // o seletor de compra so lista o que TEM PRECO no jogo. Peca sem preco e
-      // cosmetico (boina, oculos): nao entra no estoque de proposito.
+      // [29/09] o seletor lista SO arma e algema -- o resto do vestiario e
+      // infinito e nao tem preco de proposito. Vazio tem dois motivos bem
+      // diferentes, e o painel agora diz qual e: ou o jogo nao publicou o
+      // catalogo ainda, ou esta corp realmente nao compra nada (SAMU, Pavuna).
       var sel = document.getElementById('cx-item');
       if (sel) {
         var nomes = Object.keys(CAIXA_PRECOS).sort();
         sel.innerHTML = nomes.length
           ? nomes.map(function (n) { return '<option value="' + n + '">' + n + ' — ' + dinheiro(CAIXA_PRECOS[n]) + '</option>'; }).join('')
-          : '<option value="">O jogo ainda não publicou os preços</option>';
+          : (d.catalogo_publicado
+              ? '<option value="">Esta corporação não compra nada — o vestiário dela só tem item infinito</option>'
+              : '<option value="">O jogo ainda não publicou os preços</option>');
       }
 
       var tb = document.getElementById('cx-estoque');
