@@ -873,9 +873,15 @@ router.post('/corp/caixa', async (req, res) => {
       detalhe: { pago },
     });
     if (!r.ok) return res.status(400).json({ error: r.erro });
-    // [28/09] conta como ATIVIDADE pro orçamento do governo. Métrica, não dinheiro:
-    // se falhar não derruba a cobrança (a função já engole o erro por dentro).
-    caixa.registrarAtividade(c.id, String(tipo), String(quem || ''));
+    // [29/09] SÓ A MULTA CONTA COMO ATIVIDADE AQUI -- ver ATIVIDADES_VALIDAS abaixo.
+    // Antes qualquer entrada de dinheiro virava atividade, e isso estava errado em
+    // dois níveis: (1) a corp era paga DUAS VEZES pela mesma multa -- 50% na hora e
+    // mais o extra no repasse; (2) `divida` cai semanas depois, com o policial
+    // offline, e `venda` é clique do comando no painel -- nenhum dos dois é trabalho
+    // feito naquela semana. Atividade é OCORRÊNCIA DE TRABALHO, não entrada de caixa.
+    if (String(tipo) === 'multa') {
+      caixa.registrarAtividade(c.id, 'multa', String(quem || ''));
+    }
     res.json({ ok: true, corp: c.slug, creditado: parte, de: pago, saldo: r.saldo });
   } catch (err) {
     console.error('corp/caixa:', err.message);
@@ -926,11 +932,27 @@ router.get('/corp/:slug/estoque', async (req, res) => {
 // apreende e não cobra dívida, então sem uma via própria ficaria com atividade
 // zero e só receberia a base do governo pra sempre.
 // tipo livre (reanimacao, atendimento...), guardado como rótulo.
+// [29/09] O QUE É UMA "ATIVIDADE" -- a definição mora aqui e em lugar nenhum mais.
+// Julio: "nao e definido nem setado em momento algum oque seria uma operacao da
+// policia, uma prisao? multa? e do jornal?". Estava mesmo indefinido: valia
+// qualquer string que o jogo mandasse, e na prática era "entrou dinheiro".
+// Atividade = UM ATO DE TRABALHO, no momento em que acontece:
+//   polícia -> prisao | multa | apreensao
+//   SAMU     -> reanimacao | estabilizacao
+// Jornal e Governo ainda NÃO TÊM fonte de atividade (não existe "publicar matéria"
+// nem ato de governo medido no jogo) -- por isso vivem só da base do repasse.
+// Tipo fora da lista é recusado: senão um typo no jogo vira métrica fantasma.
+const ATIVIDADES_VALIDAS = ['prisao', 'multa', 'apreensao', 'reanimacao', 'estabilizacao'];
+
 router.post('/corp/atividade', async (req, res) => {
   try {
     const { corp, tipo, quem } = req.body || {};
     const t = String(tipo || '').slice(0, 24);
     if (!t) return res.status(400).json({ error: 'tipo vazio' });
+    if (!ATIVIDADES_VALIDAS.includes(t)) {
+      console.warn('[corp/atividade] tipo desconhecido, ignorado:', t);
+      return res.status(400).json({ error: 'tipo de atividade desconhecido', validos: ATIVIDADES_VALIDAS });
+    }
     const c = await corpPorSlug(corp);
     if (!c) return res.status(404).json({ error: 'corporação não encontrada' });
     await caixa.registrarAtividade(c.id, t, String(quem || ''));
