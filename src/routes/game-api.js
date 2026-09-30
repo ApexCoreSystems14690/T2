@@ -777,6 +777,121 @@ router.post('/procurados/:id/encerrar', async (req, res) => {
   } catch (err) { console.error('procurados/encerrar:', err.message); res.status(500).json({ error: 'Erro interno' }); }
 });
 
+// ===========================================================================
+// ALERTAS DE COMPRA SUSPEITA (30/09) -- a denuncia automatica que chega no PC
+// da Policia Civil quando alguem compra material de fabricar arma pelo cll.
+//
+// QUEM DECIDE O QUE E SUSPEITO E O JOGO, nao o site: o SuspeitaNucleo le as
+// receitas de arma de verdade (Receitas.lua) e pontua. Aqui so guardamos, e a
+// razao de guardar e uma so -- a PC precisa ver o alerta DEPOIS que o suspeito
+// fechou o jogo. Dado ao vivo do servidor nao serve pra investigacao.
+//
+// ANTI-PAREDE: dois alertas do mesmo cidadao dentro de AGRUPAR_MIN minutos nao
+// viram duas linhas. O segundo SOMA no primeiro e incrementa "vezes". Sem isso
+// quem monta 3 CAR15 seguidos enche a aba inteira com o proprio nome e o
+// policial perde o resto.
+// ===========================================================================
+const AGRUPAR_MIN = 10;
+
+// POST /api/game/alertas/compra
+// { roblox_id, nome, numero, motivo, nivel, pontos, acumulado, itens, resumo, pedido_id }
+router.post('/alertas/compra', async (req, res) => {
+  try {
+    const b = req.body || {};
+    const rid = Number(b.roblox_id);
+    if (!Number.isFinite(rid) || rid <= 0) return res.status(400).json({ error: 'roblox_id invalido' });
+    const nome = String(b.nome || '').slice(0, 64);
+    if (!nome) return res.status(400).json({ error: 'nome obrigatorio' });
+
+    const motivo = ['pedido', 'acumulado'].includes(String(b.motivo)) ? String(b.motivo) : 'pedido';
+    const nivel = ['media', 'alta'].includes(String(b.nivel)) ? String(b.nivel) : 'media';
+    const numero = b.numero ? String(b.numero).slice(0, 24) : null;
+    const pontos = Math.max(0, Math.floor(Number(b.pontos) || 0));
+    const acumulado = Math.max(0, Math.floor(Number(b.acumulado) || 0));
+    const resumo = String(b.resumo || '').slice(0, 200);
+    const pedidoId = b.pedido_id ? String(b.pedido_id).slice(0, 40) : null;
+    // itens vem do jogo como [{nome, qtd, pontos}] -- guardamos cru, em jsonb
+    const itens = Array.isArray(b.itens) ? b.itens.slice(0, 20) : [];
+
+    // agrupa com o alerta aberto recente do mesmo cidadao, se houver
+    const recente = await pool.query(
+      `SELECT id FROM alertas_compra
+        WHERE roblox_id = $1 AND estado = 'aberto'
+          AND atualizado_em > NOW() - ($2 || ' minutes')::interval
+        ORDER BY id DESC LIMIT 1`, [rid, String(AGRUPAR_MIN)]);
+
+    if (recente.rows[0]) {
+      const r = await pool.query(
+        `UPDATE alertas_compra
+            SET vezes = vezes + 1,
+                pontos = pontos + $2,
+                acumulado = GREATEST(acumulado, $3),
+                nivel = CASE WHEN $4 = 'alta' THEN 'alta' ELSE nivel END,
+                numero = COALESCE($5, numero),
+                resumo = $6,
+                itens = $7::jsonb,
+                atualizado_em = NOW()
+          WHERE id = $1 RETURNING *`,
+        [recente.rows[0].id, pontos, acumulado, nivel, numero, resumo, JSON.stringify(itens)]);
+      return res.json({ ok: true, alerta: r.rows[0], agrupado: true });
+    }
+
+    const r = await pool.query(
+      `INSERT INTO alertas_compra
+         (roblox_id, nome, numero, motivo, nivel, pontos, acumulado, itens, resumo, pedido_id)
+       VALUES ($1,$2,$3,$4,$5,$6,$7,$8::jsonb,$9,$10) RETURNING *`,
+      [rid, nome, numero, motivo, nivel, pontos, acumulado, JSON.stringify(itens), resumo, pedidoId]);
+    res.json({ ok: true, alerta: r.rows[0], agrupado: false });
+  } catch (err) {
+    console.error('alertas/compra:', err.message);
+    res.status(500).json({ error: 'Erro interno' });
+  }
+});
+
+// GET /api/game/alertas/compra?estado=aberto|arquivado|todos&limit=
+// O que o terminal da PC le. Traz junto se o alvo JA tem mandado aberto, pra
+// nao mandar o policial procurar na outra aba.
+router.get('/alertas/compra', async (req, res) => {
+  try {
+    const limit = Math.min(Math.max(Number(req.query.limit) || 40, 1), 100);
+    const estado = String(req.query.estado || 'aberto');
+    let filtro = `WHERE a.estado = 'aberto'`;
+    const params = [limit];
+    if (estado === 'todos') filtro = '';
+    else if (estado === 'arquivado') filtro = `WHERE a.estado = 'arquivado'`;
+    const r = await pool.query(
+      `SELECT a.*, pr.id AS procurado_id, pr.estado AS procurado_estado
+         FROM alertas_compra a
+         LEFT JOIN procurados pr
+                ON pr.roblox_id = a.roblox_id AND pr.estado <> 'encerrado'
+         ${filtro}
+        ORDER BY a.id DESC LIMIT $1`, params);
+    res.json({ alertas: r.rows });
+  } catch (err) {
+    console.error('alertas/compra/ler:', err.message);
+    res.status(500).json({ error: 'Erro interno' });
+  }
+});
+
+// POST /api/game/alertas/compra/:id/arquivar   { por_nome }
+// "ja investiguei" -- some da lista sem apagar o historico.
+router.post('/alertas/compra/:id/arquivar', async (req, res) => {
+  try {
+    const id = Number(req.params.id);
+    if (!Number.isFinite(id) || id <= 0) return res.status(400).json({ error: 'id invalido' });
+    const por = req.body && req.body.por_nome ? String(req.body.por_nome).slice(0, 64) : null;
+    const r = await pool.query(
+      `UPDATE alertas_compra SET estado = 'arquivado', arquivado_em = NOW(),
+              arquivado_por = $2, atualizado_em = NOW()
+        WHERE id = $1 AND estado = 'aberto' RETURNING *`, [id, por]);
+    if (!r.rows[0]) return res.status(404).json({ error: 'nao encontrado ou ja arquivado' });
+    res.json({ ok: true, alerta: r.rows[0] });
+  } catch (err) {
+    console.error('alertas/compra/arquivar:', err.message);
+    res.status(500).json({ error: 'Erro interno' });
+  }
+});
+
 // POST /api/game/patrimonio  { roblox_id, nome, bolso, banco, level, xp, emprego, carros, casas }
 // O jogo manda a foto financeira do jogador no PlayerLeaving. Upsert: sempre a mais recente.
 // Funciona com o jogador OFFLINE porque e a ultima foto salva, nao um dado ao vivo.

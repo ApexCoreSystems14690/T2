@@ -260,6 +260,38 @@ async function start() {
       CREATE UNIQUE INDEX IF NOT EXISTS uq_procurados_aberto
         ON procurados(roblox_id) WHERE estado <> 'encerrado' AND roblox_id IS NOT NULL;
 
+      -- ===== ALERTAS DE COMPRA SUSPEITA (30/09) =====
+      -- Julio: "se o cara comprar muito papel parafuso etc coisas suspeitas de
+      -- fabricacao de armas, faca chegar no pc da policia civil notificando eles,
+      -- junto do contacto direto nome etc, para que possam investigar".
+      -- O JOGO decide o que e suspeito (ReplicatedStorage.Shared.SuspeitaNucleo, que
+      -- le as receitas de arma de verdade); aqui so fica o registro, porque a PC
+      -- precisa ver alerta de quem ja saiu do servidor.
+      -- numero e o numero do cll do comprador: e com ele que a PC puxa o rastreio
+      -- do aparelho que ja existe. Por isso a compra SO gera alerta se vier do
+      -- celular -- e o que torna o cidadao rastreavel.
+      CREATE TABLE IF NOT EXISTS alertas_compra (
+        id SERIAL PRIMARY KEY,
+        roblox_id BIGINT NOT NULL,
+        nome VARCHAR(64) NOT NULL,
+        numero VARCHAR(24),
+        motivo VARCHAR(16) NOT NULL,
+        nivel VARCHAR(8) NOT NULL DEFAULT 'media',
+        pontos INT NOT NULL DEFAULT 0,
+        acumulado INT NOT NULL DEFAULT 0,
+        itens JSONB NOT NULL DEFAULT '[]'::jsonb,
+        resumo VARCHAR(200),
+        pedido_id VARCHAR(40),
+        vezes INT NOT NULL DEFAULT 1,
+        estado VARCHAR(16) NOT NULL DEFAULT 'aberto',
+        criado_em TIMESTAMP DEFAULT NOW(),
+        atualizado_em TIMESTAMP DEFAULT NOW(),
+        arquivado_em TIMESTAMP,
+        arquivado_por VARCHAR(64)
+      );
+      CREATE INDEX IF NOT EXISTS idx_alertas_compra_estado ON alertas_compra(estado, id DESC);
+      CREATE INDEX IF NOT EXISTS idx_alertas_compra_alvo ON alertas_compra(roblox_id, id DESC);
+
       -- ===== CELULAR (Aparelho com uid) =====
       -- [fix 17/09] Estas tabelas só existiam em src/db/migrate.js, que roda com
       -- 'npm run db:migrate'. O Procfile e 'node src/index.js', entao no Railway
