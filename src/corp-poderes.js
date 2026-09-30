@@ -136,10 +136,15 @@ function semTeto(ctx) {
 function podeMexerEmMembro(ctx, alvo = {}) {
   if (!pode(ctx, 'gerir_membros')) return false;
   // [29/09 Julio] Diretor+ do site (ehStaffAlto = Diretor Geral 80 / Dono 100) se
-  // gerencia LIVREMENTE dentro de qualquer corp: trocar o próprio cargo, se
-  // remover, mesmo sendo o dono da corp. Vale SÓ pra ele mesmo — pra mexer nos
-  // OUTROS ele continua caindo nas regras de baixo (dono/teto/chefe).
-  if (ctx.ehStaffAlto && alvo.ehEuMesmo) return true;
+  // gerencia LIVREMENTE dentro de qualquer corp.
+  // [30/09 Julio] AMPLIADO: "N consigo demitir esse gb de nada, ele ta como dono,
+  // mas o problema e que ele NAO TEM DONO NEM ADM". O `ehDonoDaCorp` logo abaixo é
+  // só `corporations.owner_id` -- ou seja, QUEM CRIOU a corp no painel, sem admin
+  // nenhum. Ele era intocável pra ninguém deixar a corp órfã, e isso deixava o
+  // Julio sem saída: o criador ficava lá pra sempre. Agora o Diretor+ passa por
+  // cima disso também. A corp não fica órfã porque existe o "Transferir posse"
+  // (POST /:corpId/dono) -- e remover o dono da LISTA não apaga o owner_id.
+  if (ctx.ehStaffAlto) return true;
   if (alvo.ehDonoDaCorp) return false;          // o dono não se mexe por aqui
   if (semTeto(ctx)) return true;
   if (alvo.ehEuMesmo) return false;             // pra sair existe o botão Sair

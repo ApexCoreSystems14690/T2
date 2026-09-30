@@ -91,7 +91,11 @@
         continua sendo o back (requireCorpPoder); isto aqui e conforto. %>
     <% var P = (typeof poderes !== 'undefined' && poderes) ? poderes : {gerir_cargos:true, editar_corp:true, gerir_membros:true, gerir_gerentes:isOwner, excluir_corp:isOwner};
        var MEU_NIVEL = (typeof meuNivel !== 'undefined') ? meuNivel : null;
-       var MEU_PAPEL = (typeof papel !== 'undefined') ? papel : (isOwner ? 'dono' : 'gerente'); %>
+       var MEU_PAPEL = (typeof papel !== 'undefined') ? papel : (isOwner ? 'dono' : 'gerente');
+       // [29/09, reposto em 30/09] Diretor Geral (80) e Dono do site. Esta linha
+       // ja tinha sido escrita em 29/09 e SUMIU do arquivo no PC do Julio -- o
+       // back tinha o ehStaffAlto e a tela continuava trancando tudo.
+       var EH_STAFF_ALTO = (typeof ehStaffAlto !== 'undefined') && ehStaffAlto; %>
     <div id="alert-container"></div>
 
     <div style="margin-bottom:1rem;color:#7a8ba5;font-size:0.8rem">
@@ -205,9 +209,13 @@
               <tr><td colspan="6" class="empty">Nenhum membro ainda.</td></tr>
             <% } else { %>
               <% members.forEach(m => { %>
-                <% var travado = !P.gerir_membros
-                     || m.eh_dono_da_corp || m.sou_eu
-                     || (MEU_NIVEL !== null && m.rank_level !== null && m.rank_level !== undefined && Number(m.rank_level) >= Number(MEU_NIVEL)); %>
+                <%# [30/09 Julio] "N consigo demitir esse gb de nada, ele ta como dono".
+                    `eh_dono_da_corp` e so quem CRIOU a corp no painel -- nao tem nada
+                    a ver com admin. Diretor+ do site agora passa por cima de tudo aqui
+                    (o back concorda: corp-poderes.podeMexerEmMembro). %>
+                <% var travado = !P.gerir_membros || (!EH_STAFF_ALTO && (
+                     m.eh_dono_da_corp || m.sou_eu
+                     || (MEU_NIVEL !== null && m.rank_level !== null && m.rank_level !== undefined && Number(m.rank_level) >= Number(MEU_NIVEL)))); %>
                 <tr>
                   <td><%= m.roblox_id || '-' %></td>
                   <td><%= m.roblox_username || '-' %></td>
@@ -222,9 +230,15 @@
                   </td>
                   <td><%= new Date(m.joined_at).toLocaleDateString('pt-BR') %></td>
                   <td>
-                    <% if (!travado) { %><button class="btn-sm danger" onclick="deleteMember(<%= m.id %>)">Remover</button>
-                    <% } else if (m.eh_dono_da_corp) { %><span style="color:#7a8ba5;font-size:0.75rem">dono</span>
-                    <% } else if (m.sou_eu) { %><span style="color:#7a8ba5;font-size:0.75rem">você</span>
+                    <% if (m.eh_dono_da_corp) { %><span style="color:#f59e0b;font-size:0.75rem;margin-right:.4rem" title="Criou esta corporação no painel. Não tem relação com admin do site.">dono</span><% } %>
+                    <% if (m.sou_eu && !m.eh_dono_da_corp) { %><span style="color:#7a8ba5;font-size:0.75rem;margin-right:.4rem">você</span><% } %>
+                    <% if (!travado) { %><button class="btn-sm danger" onclick="deleteMember(<%= m.id %>)">Remover</button><% } %>
+                    <%# Passar a posse. So quem poderia apagar a corp inteira mexe nisto. %>
+                    <% if (P.excluir_corp && !m.eh_dono_da_corp) { %>
+                      <button class="btn-sm" onclick="tornarDono(<%= m.id %>, <%= m.user_id %>, '<%= String(m.roblox_username || m.discord_username || 'essa pessoa').replace(/'/g, "\\'") %>')">Tornar dono</button>
+                    <% } %>
+                    <% if (P.excluir_corp && m.eh_dono_da_corp) { %>
+                      <button class="btn-sm danger" onclick="tirarDono()" title="Deixa a corporação sem dono; só staff gerencia até alguém assumir">Tirar posse</button>
                     <% } %>
                   </td>
                 </tr>
@@ -580,6 +594,20 @@
       const data = await api('PUT', '/members/' + memberId, { rank_id: rankId || null });
       if (data.error) { showAlert(data.error, 'error'); setTimeout(() => location.reload(), 800); return; }
       showAlert('Cargo atualizado!', 'success');
+    }
+
+    // [30/09] TRANSFERIR A POSSE. `owner_id` é quem criou a corp -- até hoje não
+    // existia nenhum jeito de mudar isso fora do SQL.
+    async function tornarDono(memberId, userId, nome) {
+      if (!confirm('Passar a posse da corporação para ' + nome + '?\n\nQuem é dono não pode sair sozinho e responde pela corp.')) return;
+      const r = await api('POST', '/dono', { user_id: userId });
+      if (r !== false) location.reload();
+    }
+
+    async function tirarDono() {
+      if (!confirm('Deixar a corporação SEM dono?\n\nEla continua existindo, mas só staff do site vai conseguir gerenciar até alguém assumir.')) return;
+      const r = await api('POST', '/dono', { limpar: true });
+      if (r !== false) location.reload();
     }
 
     async function deleteMember(memberId) {

@@ -383,6 +383,53 @@ router.delete('/:corpId/members/:memberId', requireCorpOwner, requireCorpPoder('
 });
 
 // ---------------------------------------------------------------------------
+// [30/09/2026] POST /api/corps/:corpId/dono — TRANSFERIR A POSSE DA CORP.
+//
+// Julio: "N consigo demitir esse gb de nada, ele ta como dono, mas o problema e
+// que ele NAO TEM DONO NEM ADM ... pq ele e dono e como isso aconteceu?"
+// Resposta: `corporations.owner_id` é só QUEM CRIOU a corporação no painel. Não
+// tem relação com admin do site. Até hoje não existia jeito nenhum de mudar isso
+// -- nem pelo painel, nem por rota. Só por SQL na mão.
+//
+// Quem pode: o poder `excluir_corp` (dono da corp ou staff). É o mesmo nível de
+// quem poderia apagar a corporação inteira, então dar a posse é menos grave.
+// Body: { user_id } pra passar pra alguém, ou { limpar: true } pra deixar sem
+// dono (a corp continua viva e só staff gerencia -- útil quando o criador sumiu).
+// ---------------------------------------------------------------------------
+router.post('/:corpId/dono', requireCorpOwner, requireCorpPoder('excluir_corp'), async (req, res) => {
+  try {
+    const corpId = parseInt(req.params.corpId);
+    if (!corpId) return res.status(400).json({ error: 'Corporação inválida' });
+    const { user_id, limpar } = req.body || {};
+
+    if (limpar === true || limpar === 'true') {
+      await pool.query('UPDATE corporations SET owner_id = NULL, updated_at = NOW() WHERE id = $1', [corpId]);
+      return res.json({ ok: true, dono: null });
+    }
+
+    const uid = parseInt(user_id);
+    if (!uid) return res.status(400).json({ error: 'Escolha para quem vai a posse' });
+
+    const u = await pool.query('SELECT id, discord_username FROM users WHERE id = $1', [uid]);
+    if (u.rows.length === 0) return res.status(404).json({ error: 'Usuário não encontrado' });
+
+    // O dono novo tem que ser MEMBRO -- dono que não está na corp é o mesmo
+    // buraco de hoje, só que com outro nome.
+    const m = await pool.query(
+      'SELECT 1 FROM members WHERE corporation_id = $1 AND user_id = $2', [corpId, uid]);
+    if (m.rows.length === 0) {
+      return res.status(400).json({ error: 'Essa pessoa precisa ser membro da corporação antes de virar dona' });
+    }
+
+    await pool.query('UPDATE corporations SET owner_id = $2, updated_at = NOW() WHERE id = $1', [corpId, uid]);
+    res.json({ ok: true, dono: { id: uid, nome: u.rows[0].discord_username } });
+  } catch (err) {
+    console.error('corps/dono:', err.message);
+    res.status(500).json({ error: 'Erro interno' });
+  }
+});
+
+// ---------------------------------------------------------------------------
 // POST /api/corps/:corpId/sair — o PRÓPRIO jogador sai da corporação.
 // Julio, 19/09: "o usuário deve poder sair da corporação opcionalmente se quiser".
 //

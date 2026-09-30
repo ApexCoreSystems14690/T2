@@ -979,6 +979,87 @@ router.post('/corp/salario', async (req, res) => {
   }
 });
 
+// ============================================================================
+// [30/09/2026, pedido do Julio] CONTA EMPRESARIAL NO JOGO, PELO CNPJ.
+//
+//   "a empresa vai receber um cnpj ... e com esse cnpj ele pode acessar a conta
+//    da empresa e ate depositar dinheiro pessoal la, que vai aparecer no painel
+//    do T2 como caixa da empresa, afinal empresa nao ganha dinheiro do governo."
+//
+// O CNPJ é a SENHA da conta: quem tem o número entra. É de propósito -- é assim
+// que o dono "entrega a conta" pros sócios dentro do RP, sem precisar de painel.
+// Por isso a comparação é feita só com dígitos (o jogador pode digitar com ou
+// sem pontuação) e só existe pra corporação com tipo = 'empresa'.
+// ============================================================================
+function soDigitos(v) { return String(v || '').replace(/\D+/g, ''); }
+
+async function empresaPorCnpj(cnpj) {
+  const d = soDigitos(cnpj);
+  if (d.length !== 14) return null;
+  const r = await pool.query(
+    `SELECT c.id, c.name, c.slug, c.cnpj,
+            COALESCE((SELECT saldo FROM corp_caixa k WHERE k.corporation_id = c.id), 0) AS saldo
+       FROM corporations c
+      WHERE c.tipo = 'empresa' AND c.cnpj IS NOT NULL
+        AND regexp_replace(c.cnpj, '[^0-9]', '', 'g') = $1
+      LIMIT 1`, [d]);
+  return r.rows[0] || null;
+}
+
+// POST /api/game/empresa/acessar  { cnpj }
+router.post('/empresa/acessar', async (req, res) => {
+  try {
+    const e = await empresaPorCnpj((req.body || {}).cnpj);
+    if (!e) return res.json({ ok: false, erro: 'cnpj_invalido' });
+    res.json({ ok: true, slug: e.slug, nome: e.name, cnpj: e.cnpj, saldo: Number(e.saldo) });
+  } catch (err) {
+    console.error('empresa/acessar:', err.message);
+    res.status(500).json({ error: 'Erro interno' });
+  }
+});
+
+// POST /api/game/empresa/deposito  { cnpj, valor, quem, roblox_id }
+// O jogo só tira o dinheiro do bolso DEPOIS de ver ok: true -- por isso aqui o
+// caixa sobe primeiro e o extrato pessoal depois. Reaproveita o `movDinheiro`
+// (motivo 'aporte'), que já trava a linha do caixa numa transação: dois sócios
+// depositando ao mesmo tempo não podem perder um dos depósitos.
+router.post('/empresa/deposito', async (req, res) => {
+  try {
+    const { cnpj, valor, quem, roblox_id } = req.body || {};
+    const v = Math.max(0, Math.floor(Number(valor) || 0));
+    if (v <= 0) return res.json({ ok: false, erro: 'valor_invalido' });
+
+    const e = await empresaPorCnpj(cnpj);
+    if (!e) return res.json({ ok: false, erro: 'cnpj_invalido' });
+
+    const r = await caixa.movDinheiro(e.id, 'aporte', v, {
+      quem: String(quem || '').slice(0, 64),
+      por: String(quem || '').slice(0, 64),
+      detalhe: { origem: 'deposito_cnpj', roblox_id: parseInt(roblox_id) || null },
+    });
+    if (!r.ok) return res.json({ ok: false, erro: r.erro });
+
+    // O extrato de QUEM pôs do próprio bolso fica separado de propósito: em
+    // corp_lancamentos interessa o caixa, aqui interessa a dívida da empresa com
+    // o sócio. Se este INSERT falhar o dinheiro NÃO some (já está no caixa), mas
+    // o registro pessoal sim -- então grita no log em vez de falhar calado.
+    try {
+      await pool.query(
+        `INSERT INTO empresa_depositos (corporation_id, quem, roblox_id, valor)
+              VALUES ($1, $2, $3, $4)`,
+        [e.id, String(quem || '').slice(0, 64), parseInt(roblox_id) || null, v]);
+    } catch (e2) {
+      console.error('[empresa/deposito] caixa creditado mas extrato pessoal falhou:', e2.message,
+                    { corp: e.slug, quem, valor: v });
+    }
+
+    res.json({ ok: true, slug: e.slug, nome: e.name, depositado: v, saldo: r.saldo });
+  } catch (err) {
+    console.error('empresa/deposito:', err.message);
+    res.status(500).json({ error: 'Erro interno' });
+  }
+});
+
 // POST /api/game/corp/estoque  { corp, motivo, quem, roblox_id, item }
 // motivo: retirou | devolveu | saiu | roubada | morreu | recuperou
 // O vestiário pergunta ANTES de entregar; se vier `sem_estoque`, não entrega.
