@@ -45,6 +45,11 @@ const DINHEIRO = {
   compra:   { sinal: -1, rotulo: 'Compra de equipamento' },
   bonus:    { sinal: -1, rotulo: 'Bônus pago' },
   ajuste:   { sinal: -1, rotulo: 'Ajuste do comando' },
+  // [30/09 Julio] SALÁRIO ADICIONAL. Os primeiros R$ 500 são piso e vêm do jogo
+  // -- não saem do caixa de ninguém. O `ranks.salary` é o ADICIONAL que o dono
+  // configura por cargo, e ESSE sai daqui. Se o caixa não cobre, o débito é
+  // recusado e o jogo paga só o piso: empresa não imprime dinheiro.
+  salario:  { sinal: -1, rotulo: 'Adicional de salário pago' },
 };
 
 // ---------------------------------------------------------------- estoque
@@ -62,6 +67,17 @@ const ESTOQUE = {
   // assaltado de verdade. O comandante "tem que descobrir" (Julio); um rótulo
   // separado entregaria a corrupção de bandeja. O registro honesto só existe no
   // log de admin, que o comandante não vê.
+  // [30/09 Julio] RECUPEROU. "se ele dropar, mais RECUPERAR, ele pode ir la onde
+  // ele pegou, no armario ao lado... para ele segurar a arma na mao e ae aparece
+  // 'Devolver ao estoque' e ja era."
+  // Quem dropou já levou `roubada`: a peça saiu do emprestado dele e não voltou
+  // pra prateleira. Achando a peça de novo e levando no armário, `devolveu` dá
+  // `nao_tem` -- ele já não consta com ela. Este motivo credita a prateleira sem
+  // mexer no emprestado (que já é zero).
+  // QUEM CHAMA tenta `devolveu` primeiro e só cai aqui com `nao_tem`; senão quem
+  // nunca dropou devolveria a arma e CONTINUARIA constando com ela -- peça
+  // duplicada na prateleira toda vez.
+  recuperou:{ estoque: +1, emprestado:  0, perda: false, rotulo: 'Recuperada e devolvida no armário' },
   comprou:  { estoque: +1, emprestado:  0, perda: false, rotulo: 'Comprada pelo comando' },
   baixa:    { estoque: -1, emprestado:  0, perda: true,  rotulo: 'Baixa dada pelo comando' },
 };

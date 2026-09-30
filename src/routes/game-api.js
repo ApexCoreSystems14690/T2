@@ -889,15 +889,106 @@ router.post('/corp/caixa', async (req, res) => {
   }
 });
 
+// ============================================================================
+// [30/09/2026, pedido do Julio] TIRAR DINHEIRO DO CAIXA.
+//
+// O POST /corp/caixa acima só SOMA -- todos os motivos dele são entrada, e o
+// jogo manda "o que o infrator pagou", não "o quanto creditar". Pra pagar o
+// adicional de salário faltava o contrário, e faltava BLOQUEANTE: o jogo tem
+// que saber se o dinheiro saiu ANTES de botar na mão do jogador. Fire-and-forget
+// aqui seria dinheiro nascendo do nada toda semana.
+// ============================================================================
+
+// POST /api/game/corp/caixa/debitar  { corp, tipo, valor, quem, por }
+// tipo: qualquer motivo de saída do núcleo (compra | bonus | ajuste | salario).
+// Resposta: { ok: true, saldo } · { ok: false, erro: 'sem_saldo', falta, saldo }
+router.post('/corp/caixa/debitar', async (req, res) => {
+  try {
+    const { corp, tipo, valor, quem, por } = req.body || {};
+    const t = String(tipo || '');
+    const regra = CC.DINHEIRO[t];
+    // Só motivo de SAÍDA. Deixar passar um motivo de entrada aqui viraria a
+    // porta dos fundos pra creditar caixa sem cobrança nenhuma no jogo.
+    if (!regra || regra.sinal !== -1) return res.status(400).json({ error: 'tipo inválido' });
+
+    const v = Math.max(0, Math.floor(Number(valor) || 0));
+    if (v <= 0) return res.status(400).json({ error: 'valor inválido' });
+
+    const c = await corpPorSlug(corp);
+    if (!c) return res.status(404).json({ error: 'corporação não encontrada' });
+
+    const r = await caixa.movDinheiro(c.id, t, v, {
+      quem: String(quem || '').slice(0, 64),
+      por: String(por || quem || '').slice(0, 64),
+    });
+    // `saldo` é o erro que o núcleo devolve quando o caixa não cobre. Traduzo pra
+    // 'sem_saldo' porque é isso que o jogo testa, e mando o que falta junto: o
+    // painel consegue dizer "faltaram R$ X" em vez de só "não deu".
+    if (!r.ok) {
+      return res.json({ ok: false, erro: r.erro === 'saldo' ? 'sem_saldo' : r.erro, falta: r.falta || null });
+    }
+    res.json({ ok: true, corp: c.slug, debitado: v, saldo: r.saldo });
+  } catch (err) {
+    console.error('corp/caixa/debitar:', err.message);
+    res.status(500).json({ error: 'Erro interno' });
+  }
+});
+
+// POST /api/game/corp/salario  { corp, roblox_id, quem }
+// O JOGO NÃO MANDA O VALOR. Quem sabe quanto é o adicional é o site -- é lá que
+// o dono configura, no `ranks.salary` do cargo. Se o jogo mandasse o número,
+// bastaria forjar o pedido pra sacar o caixa inteiro.
+// Resposta: { ok, adicional, pago, saldo, cargo } · { ok:false, erro }
+//   erro 'nao_e_membro'  -> não tem cargo nessa corp: paga só o piso
+//   erro 'sem_adicional' -> cargo com adicional 0: paga só o piso (não é falha)
+//   erro 'sem_saldo'     -> o caixa não cobre: paga só o piso
+router.post('/corp/salario', async (req, res) => {
+  try {
+    const { corp, roblox_id, quem } = req.body || {};
+    const rid = parseInt(roblox_id);
+    if (!rid) return res.status(400).json({ error: 'roblox_id inválido' });
+
+    const c = await corpPorSlug(corp);
+    if (!c) return res.status(404).json({ error: 'corporação não encontrada' });
+
+    const m = await pool.query(
+      `SELECT r.name AS cargo, COALESCE(r.salary, 0) AS adicional
+         FROM members mb
+         JOIN users u ON u.id = mb.user_id
+         LEFT JOIN ranks r ON r.id = mb.rank_id
+        WHERE mb.corporation_id = $1 AND u.roblox_id = $2
+        LIMIT 1`, [c.id, rid]);
+    if (m.rows.length === 0) return res.json({ ok: false, erro: 'nao_e_membro' });
+
+    const adicional = Math.max(0, Math.floor(Number(m.rows[0].adicional) || 0));
+    if (adicional <= 0) return res.json({ ok: false, erro: 'sem_adicional', adicional: 0, cargo: m.rows[0].cargo });
+
+    const r = await caixa.movDinheiro(c.id, 'salario', adicional, {
+      quem: String(quem || '').slice(0, 64),
+      por: String(quem || '').slice(0, 64),
+      detalhe: { cargo: m.rows[0].cargo, roblox_id: rid },
+    });
+    if (!r.ok) {
+      return res.json({ ok: false, erro: r.erro === 'saldo' ? 'sem_saldo' : r.erro,
+                        adicional, falta: r.falta || null, cargo: m.rows[0].cargo });
+    }
+    res.json({ ok: true, corp: c.slug, cargo: m.rows[0].cargo, adicional, pago: adicional, saldo: r.saldo });
+  } catch (err) {
+    console.error('corp/salario:', err.message);
+    res.status(500).json({ error: 'Erro interno' });
+  }
+});
+
 // POST /api/game/corp/estoque  { corp, motivo, quem, roblox_id, item }
-// motivo: retirou | devolveu | saiu | roubada | morreu
+// motivo: retirou | devolveu | saiu | roubada | morreu | recuperou
 // O vestiário pergunta ANTES de entregar; se vier `sem_estoque`, não entrega.
 router.post('/corp/estoque', async (req, res) => {
   try {
     const { corp, motivo, quem, roblox_id, item } = req.body || {};
     const m = String(motivo || '');
     // `comprou` e `baixa` são do COMANDO, pelo painel — o jogo não cria peça.
-    if (!['retirou', 'devolveu', 'saiu', 'roubada', 'morreu'].includes(m)) {
+    // [30/09] `recuperou` entra aqui: e o armario de devolucao, disparado pelo jogo.
+    if (!['retirou', 'devolveu', 'saiu', 'roubada', 'morreu', 'recuperou'].includes(m)) {
       return res.status(400).json({ error: 'motivo inválido' });
     }
     const c = await corpPorSlug(corp);
