@@ -874,6 +874,7 @@ async function start() {
   app.use('/api/corps', require('./routes/corps-api'));
   app.use('/api/admin', require('./routes/admin-api'));
   app.use('/admin', require('./routes/admin'));
+  app.use('/empresas', require('./routes/empresas'));   // [30/09] Empresas Oficiais
   app.use('/faccoes', require('./routes/faccoes'));
 
   // Home

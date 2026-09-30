@@ -522,7 +522,10 @@ router.post('/', requirePoder('corp'), async (req, res) => {
     }
     // [20/09] tipo decide em qual painel ela aparece: 'corp' (padrão) ou 'faccao'.
     // Lista fechada de propósito — o cliente manda a chave, o servidor resolve.
-    const tipoLimpo = tipo === 'faccao' ? 'faccao' : 'corp';
+    // [30/09] entrou 'empresa' (Empresas Oficiais). Lista branca de proposito:
+    // tipo e o que decide em qual painel a linha aparece, entao um valor solto
+    // aqui faz a corp sumir de todos os paineis sem erro nenhum.
+    const tipoLimpo = (tipo === 'faccao' || tipo === 'empresa') ? tipo : 'corp';
     // Slug deve ser lowercase e sem espaços
     const cleanSlug = slug.toLowerCase().replace(/\s+/g, '-').replace(/[^a-z0-9-]/g, '');
     const result = await pool.query(

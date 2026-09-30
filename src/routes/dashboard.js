@@ -40,7 +40,7 @@ router.get('/', async (req, res) => {
                 )
               ) AS pode_gerenciar
        FROM corporations c
-       WHERE c.tipo <> 'faccao'    -- [20/09] faccao tem painel proprio: /faccoes
+       WHERE c.tipo NOT IN ('faccao','empresa')   -- [20/09] faccao: /faccoes · [30/09] empresa: /empresas
          AND ($2::boolean
           OR c.owner_id = $1
           OR c.id IN (SELECT corporation_id FROM corp_managers WHERE user_id = $1)

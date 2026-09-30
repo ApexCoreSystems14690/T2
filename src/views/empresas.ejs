@@ -3,35 +3,34 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>Painel — Santa Fé</title>
+  <title>Empresas Oficiais — Santa Fé</title>
   <style>
     * { margin: 0; padding: 0; box-sizing: border-box; }
     body { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif; background: #0a0e17; color: #f0f4f8; min-height: 100vh; }
     .topbar { background: #131a2b; border-bottom: 1px solid #1e2a40; padding: 0.75rem 1.5rem; display: flex; align-items: center; justify-content: space-between; }
-    .topbar h1 { font-size: 1rem; color: #00d4ff; letter-spacing: 0.04em; }
+    .topbar h1 { font-size: 1rem; color: #22c55e; letter-spacing: 0.04em; }
     .topbar .user { display: flex; align-items: center; gap: 0.75rem; font-size: 0.85rem; color: #7a8ba5; }
     .topbar a { color: #7a8ba5; text-decoration: none; font-size: 0.8rem; }
-    .topbar a:hover { color: #00d4ff; }
+    .topbar a:hover { color: #22c55e; }
     .main { max-width: 800px; margin: 0 auto; padding: 2rem 1.25rem; }
     .section-title { font-size: 1.1rem; font-weight: 600; margin-bottom: 1rem; display: flex; align-items: center; justify-content: space-between; }
-    .roblox-link { background: #1e2a40; border: 1px solid #2d3a52; border-radius: 6px; padding: 1rem; margin-bottom: 1.5rem; font-size: 0.85rem; }
-    .roblox-link a { color: #00d4ff; text-decoration: none; }
+    .nota { background: #1e2a40; border: 1px solid #2d3a52; border-left: 3px solid #22c55e; border-radius: 6px; padding: 0.9rem 1rem; margin-bottom: 1.5rem; font-size: 0.82rem; color: #9fb0c8; line-height: 1.5; }
     .corp-card { background: #131a2b; border: 1px solid #1e2a40; border-radius: 8px; padding: 1rem 1.25rem; margin-bottom: 0.75rem; display: flex; align-items: center; justify-content: space-between; transition: border-color 0.15s; }
     .corp-card:hover { border-color: #3d4a62; }
     .corp-info { display: flex; align-items: center; gap: 0.75rem; }
     .corp-color { width: 12px; height: 12px; border-radius: 3px; flex-shrink: 0; }
-    .corp-icon { width: 36px; height: 36px; border-radius: 6px; object-fit: cover; flex-shrink: 0; }
+    .corp-icon { width: 36px; height: 36px; border-radius: 6px; object-fit: cover; flex-shrink: 0; background: #0a0e17; }
     .corp-name { font-weight: 600; font-size: 0.95rem; }
     .corp-members { color: #7a8ba5; font-size: 0.8rem; }
-    .corp-btn { color: #00d4ff; text-decoration: none; font-size: 0.8rem; font-weight: 600; padding: 0.4rem 0.8rem; border: 1px solid #00d4ff33; border-radius: 4px; }
-    .corp-btn:hover { background: #00d4ff11; }
+    .corp-btn { color: #22c55e; text-decoration: none; font-size: 0.8rem; font-weight: 600; padding: 0.4rem 0.8rem; border: 1px solid #22c55e33; border-radius: 4px; }
+    .corp-btn:hover { background: #22c55e11; }
     .empty { color: #7a8ba5; font-size: 0.9rem; text-align: center; padding: 2rem; }
-    .create-btn { background: #00d4ff; color: #0a0e17; border: none; padding: 0.4rem 0.8rem; border-radius: 4px; font-size: 0.8rem; font-weight: 700; cursor: pointer; text-decoration: none; }
-    .create-btn:hover { background: #00b8e0; }
+    .create-btn { background: #22c55e; color: #0a0e17; border: none; padding: 0.4rem 0.8rem; border-radius: 4px; font-size: 0.8rem; font-weight: 700; cursor: pointer; text-decoration: none; }
+    .create-btn:hover { background: #16a34a; }
     .modal-overlay { display: none; position: fixed; top: 0; left: 0; width: 100%; height: 100%; background: rgba(0,0,0,0.6); z-index: 100; align-items: center; justify-content: center; }
     .modal-overlay.active { display: flex; }
     .modal { background: #131a2b; border: 1px solid #2d3a52; border-radius: 10px; padding: 1.5rem; width: 90%; max-width: 420px; }
-    .modal h2 { font-size: 1rem; margin-bottom: 1rem; color: #00d4ff; }
+    .modal h2 { font-size: 1rem; margin-bottom: 1rem; color: #22c55e; }
     .modal label { display: block; font-size: 0.8rem; color: #7a8ba5; margin-bottom: 0.25rem; margin-top: 0.75rem; }
     .modal input, .modal textarea { width: 100%; background: #0a0e17; border: 1px solid #2d3a52; border-radius: 4px; padding: 0.5rem; color: #f0f4f8; font-size: 0.85rem; }
     .modal textarea { height: 60px; resize: vertical; }
@@ -45,10 +44,10 @@
   <div class="topbar">
     <div style="display:flex;align-items:center;gap:1rem">
       <a href="/" title="Voltar ao início" style="font-size:1.1rem;line-height:1">&larr; Início</a>
-      <h1>SANTA FÉ — CORPORAÇÕES</h1>
+      <h1>SANTA FÉ — EMPRESAS OFICIAIS</h1>
     </div>
     <div class="user">
-      <a href="/empresas" style="color:#22c55e">Empresas Oficiais</a>
+      <a href="/dashboard">Corporações</a>
       <a href="/faccoes">Facções</a>
       <% if (typeof ehStaff !== 'undefined' && ehStaff) { %><a href="/admin" style="color:#ef4444">Painel Admin</a><% } %>
       <span><%= user.discord_username %></span>
@@ -56,28 +55,26 @@
     </div>
   </div>
   <div class="main">
-    <% if (!user.roblox_id) { %>
-      <div class="roblox-link">
-        Você ainda não vinculou seu Roblox. <a href="/dashboard/link-roblox">Vincular agora</a>
-      </div>
-    <% } else { %>
-      <div class="roblox-link">
-        Roblox: <strong><%= user.roblox_username || user.roblox_id %></strong> (ID: <%= user.roblox_id %>)
-        &middot; <a href="/dashboard/link-roblox">Alterar</a>
-      </div>
-    <% } %>
+    <div class="nota">
+      Empresa usa a mesma estrutura de uma corporação — cargos, membros, caixa e estoque —
+      e o jogo lê pelo <strong>slug</strong>. O que muda é a regra:
+      <strong>empresa não recebe repasse do governo</strong>. O caixa só enche com venda,
+      aporte de sócio e depósito pessoal feito no jogo pelo <strong>CNPJ</strong>.<br>
+      No salário, os primeiros <strong>R$ 500 são fixos e não saem do caixa</strong>;
+      o valor do cargo é o <strong>adicional</strong> que o dono paga por cima — e esse sai.
+    </div>
 
     <div class="section-title">
-      <%= (typeof podeCorp !== 'undefined' && podeCorp) ? 'Todas as Corporações (staff)' : 'Suas Corporações' %>
+      <%= (typeof podeCorp !== 'undefined' && podeCorp) ? 'Todas as Empresas (staff)' : 'Suas Empresas' %>
       <% if (typeof podeCorp !== 'undefined' && podeCorp) { %>
-      <button class="create-btn" onclick="document.getElementById('createModal').classList.add('active')">+ Nova Corporação</button>
+      <button class="create-btn" onclick="document.getElementById('createModal').classList.add('active')">+ Nova Empresa</button>
       <% } %>
     </div>
 
-    <% if (corporations.length === 0) { %>
-      <div class="empty">Você não faz parte de nenhuma corporação.</div>
+    <% if (empresas.length === 0) { %>
+      <div class="empty">Você não faz parte de nenhuma empresa.</div>
     <% } else { %>
-      <% corporations.forEach(corp => { %>
+      <% empresas.forEach(corp => { %>
         <div class="corp-card">
           <div class="corp-info">
             <% if (corp.has_icon_file) { %>
@@ -91,9 +88,12 @@
               <div class="corp-name"><%= corp.name %></div>
               <div class="corp-members">
                 <%= corp.member_count %> membros<% if (corp.sou_dono) { %> · você é o dono<% } else if (corp.meu_cargo) { %> · seu cargo: <%= corp.meu_cargo %><%
-                   /* [23/09, pedido do Julio] o membro comum ve o proprio salario aqui */
-                   if (corp.meu_salario) { %> · salário: R$ <%= Number(corp.meu_salario).toLocaleString('pt-BR') %><% }
+                   if (corp.meu_adicional) { %> · R$ 500 + R$ <%= Number(corp.meu_adicional).toLocaleString('pt-BR') %> de adicional<% } else { %> · R$ 500 (sem adicional)<% }
                  } else if (corp.sou_gerente) { %> · você é co-gerente<% } %>
+              </div>
+              <div class="corp-members" style="margin-top:0.15rem">
+                <% if (corp.cnpj) { %><span style="font-family:monospace;color:#9fb0c8">CNPJ <%= corp.cnpj %></span> · <% } %>
+                caixa <strong style="color:<%= Number(corp.saldo) > 0 ? '#22c55e' : '#ef4444' %>">R$ <%= Number(corp.saldo).toLocaleString('pt-BR') %></strong>
               </div>
             </div>
           </div>
@@ -101,7 +101,6 @@
             <% if (corp.pode_gerenciar) { %>
             <a href="/dashboard/corp/<%= corp.id %>" class="corp-btn">Gerenciar</a>
             <% } %>
-            <%# [19/09] Sair por conta propria. Nao aparece pro DONO: a corp ficaria orfa. %>
             <% if ((corp.sou_membro || corp.sou_gerente) && !corp.sou_dono) { %>
             <button class="corp-btn" style="color:#f59e0b;border-color:#f59e0b33;cursor:pointer;background:none" onclick="sairCorp(<%= corp.id %>, '<%= corp.name.replace(/'/g, "\\'") %>')">Sair</button>
             <% } %>
@@ -114,31 +113,30 @@
     <% } %>
   </div>
 
-  <!-- Modal Criar Corporação -->
+  <!-- Modal Criar Facção -->
   <div class="modal-overlay" id="createModal">
     <div class="modal">
-      <h2>Criar Corporação</h2>
+      <h2>Criar Empresa</h2>
       <label>Nome</label>
-      <input type="text" id="corpName" placeholder="Ex: Polícia Militar">
-      <label>Slug (URL amigável)</label>
-      <input type="text" id="corpSlug" placeholder="Ex: policia-militar">
+      <input type="text" id="corpName" placeholder="Ex: Mercado Fechado">
+      <label>Slug (é o nome que o jogo consulta)</label>
+      <input type="text" id="corpSlug" placeholder="Ex: mercado-fechado">
       <label>Descrição (opcional)</label>
-      <textarea id="corpDesc" placeholder="Descrição da corporação"></textarea>
+      <textarea id="corpDesc" placeholder="O que a empresa faz"></textarea>
       <label>Imagem / Logo</label>
       <input type="file" id="corpIconFile" accept="image/png,image/jpeg,image/gif,image/webp" style="margin-bottom:0.5rem">
-      <input type="text" id="corpIcon" placeholder="Ou cole uma URL: https://i.imgur.com/exemplo.png" style="font-size:0.8rem">
+      <input type="text" id="corpIcon" placeholder="Ou cole uma URL de imagem" style="font-size:0.8rem">
       <label>Cor</label>
-      <input type="color" id="corpColor" value="#3B82F6" style="height: 36px; padding: 2px;">
+      <input type="color" id="corpColor" value="#22C55E" style="height: 36px; padding: 2px;">
       <div class="error-msg" id="createError"></div>
       <div class="actions">
         <button class="cancel-btn" onclick="document.getElementById('createModal').classList.remove('active')">Cancelar</button>
-        <button class="create-btn" onclick="criarCorp()">Criar</button>
+        <button class="create-btn" onclick="criarEmpresa()">Criar</button>
       </div>
     </div>
   </div>
 
   <script>
-    // Auto-gerar slug a partir do nome
     document.getElementById('corpName').addEventListener('input', function() {
       const slug = this.value.toLowerCase()
         .normalize('NFD').replace(/[̀-ͯ]/g, '')
@@ -157,10 +155,8 @@
       } catch (err) { alert('Erro de conexão'); }
     }
 
-    // [19/09] Sair da corporação por conta própria. Só mexe em quem está logado —
-    // o servidor pega o id da sessão, não daqui.
     async function sairCorp(id, name) {
-      if (!confirm('Sair de "' + name + '"?\n\nVocê perde o cargo e os acessos dessa corporação dentro do jogo. Pra voltar, alguém de lá precisa te adicionar de novo.')) return;
+      if (!confirm('Sair de "' + name + '"?\n\nVocê perde o cargo e os acessos dessa empresa dentro do jogo.')) return;
       try {
         const res = await fetch('/api/corps/' + id + '/sair', {
           method: 'POST', headers: { 'Content-Type': 'application/json' }, body: '{}',
@@ -172,7 +168,7 @@
       } catch (err) { alert('Erro de conexão'); }
     }
 
-    async function criarCorp() {
+    async function criarEmpresa() {
       const name = document.getElementById('corpName').value.trim();
       const slug = document.getElementById('corpSlug').value.trim();
       const description = document.getElementById('corpDesc').value.trim();
@@ -186,13 +182,12 @@
         errorEl.style.display = 'block';
         return;
       }
-
       try {
-        // 1. Cria a corp
         const res = await fetch('/api/corps', {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ name, slug, description, color, icon_url: iconFile ? null : icon_url })
+          // tipo: o servidor aceita 'corp', 'faccao' ou 'empresa' — aqui é sempre empresa
+          body: JSON.stringify({ name, slug, description, color, tipo: 'empresa', icon_url: iconFile ? null : icon_url })
         });
         const data = await res.json();
         if (!res.ok) {
@@ -200,7 +195,6 @@
           errorEl.style.display = 'block';
           return;
         }
-        // 2. Se tem arquivo, faz upload
         if (iconFile && data.corporation) {
           const form = new FormData();
           form.append('icon', iconFile);
