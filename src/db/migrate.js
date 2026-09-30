@@ -301,6 +301,33 @@ CREATE TABLE IF NOT EXISTS corp_orcamento_pago (
 );
 CREATE INDEX IF NOT EXISTS idx_corp_orc_corp ON corp_orcamento_pago(corporation_id, periodo DESC);
 
+-- ===== EMPRESAS OFICIAIS (30/09) =====
+-- Empresa = corporação com tipo = 'empresa'. Reaproveita de propósito TODA a
+-- estrutura das corps (corp_caixa, corp_lancamentos, corp_estoque,
+-- corp_emprestimos, ranks, members) -- o que muda é a REGRA, não o schema.
+-- A regra que importa, do Julio: EMPRESA NÃO GANHA DINHEIRO DO GOVERNO.
+-- O repasse (corp_orcamento_pago) nunca roda pra tipo='empresa'; o caixa dela
+-- enche por venda, por aporte de sócio e por depósito pessoal via CNPJ.
+-- O adicional de salário por cargo é o ranks.salary, que já existia e estava
+-- sem uso -- o piso de R$ 500 é fixo e vem do jogo, não sai do caixa.
+ALTER TABLE corporations ADD COLUMN IF NOT EXISTS cnpj VARCHAR(20);
+CREATE UNIQUE INDEX IF NOT EXISTS idx_corporations_cnpj
+  ON corporations(cnpj) WHERE cnpj IS NOT NULL;
+
+-- Depósito pessoal de um jogador no caixa da empresa, identificado pelo CNPJ.
+-- Fica separado de corp_lancamentos porque aqui interessa QUEM depositou do
+-- próprio bolso -- é o extrato que o sócio cobra depois.
+CREATE TABLE IF NOT EXISTS empresa_depositos (
+  id SERIAL PRIMARY KEY,
+  corporation_id INTEGER NOT NULL REFERENCES corporations(id) ON DELETE CASCADE,
+  quem VARCHAR(64) NOT NULL,
+  roblox_id BIGINT,
+  valor BIGINT NOT NULL CHECK (valor > 0),
+  em TIMESTAMP DEFAULT NOW()
+);
+CREATE INDEX IF NOT EXISTS idx_empresa_dep ON empresa_depositos(corporation_id, id DESC);
+
+
 
 `;
 
