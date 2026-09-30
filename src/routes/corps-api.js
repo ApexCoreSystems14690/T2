@@ -383,6 +383,39 @@ router.delete('/:corpId/members/:memberId', requireCorpOwner, requireCorpPoder('
 });
 
 // ---------------------------------------------------------------------------
+// [30/09] DELETE /api/corps/:corpId/caixa/estoque/:item — some com a LINHA.
+// O `baixa` tira 1 unidade e marca perda; ele nunca apaga o registro. Então um
+// item zerado (ou um item de teste) ficava na lista do painel pra sempre, sem
+// nenhum caminho fora do SQL na mão.
+// SÓ APAGA O QUE NÃO ESTÁ PRESO: zero na prateleira e zero emprestado. Os
+// lançamentos no extrato continuam -- isto mexe na CONTAGEM, não no histórico.
+// ---------------------------------------------------------------------------
+router.delete('/:corpId/caixa/estoque/:item', requireCorpOwner, requireCorpPoder('gerir_estoque'), async (req, res) => {
+  try {
+    const corpId = parseInt(req.params.corpId);
+    const item = String(req.params.item || '').slice(0, 64);
+    if (!corpId || !item) return res.status(400).json({ error: 'Item inválido' });
+
+    const naRua = await pool.query(
+      `SELECT COALESCE(SUM(qtd), 0)::int AS n FROM corp_emprestimos
+        WHERE corporation_id = $1 AND item = $2`, [corpId, item]);
+    if (Number(naRua.rows[0].n) > 0) {
+      return res.status(400).json({ error: 'Ainda tem ' + naRua.rows[0].n + ' na mão de alguém' });
+    }
+    const r = await pool.query(
+      `DELETE FROM corp_estoque WHERE corporation_id = $1 AND item = $2 AND qtd = 0 RETURNING item`,
+      [corpId, item]);
+    if (r.rows.length === 0) {
+      return res.status(400).json({ error: 'Só dá pra remover item zerado na prateleira' });
+    }
+    res.json({ ok: true, removido: item });
+  } catch (err) {
+    console.error('caixa/estoque/remover:', err.message);
+    res.status(500).json({ error: 'Erro interno' });
+  }
+});
+
+// ---------------------------------------------------------------------------
 // [30/09/2026] POST /api/corps/:corpId/dono — TRANSFERIR A POSSE DA CORP.
 //
 // Julio: "N consigo demitir esse gb de nada, ele ta como dono, mas o problema e

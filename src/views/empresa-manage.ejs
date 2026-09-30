@@ -313,7 +313,14 @@
           '<td class="num' + (Number(i.prateleira) === 0 ? ' neg' : '') + '">' + i.prateleira + '</td>' +
           '<td class="num">' + i.rua + '</td>' +
           '<td class="num esconde-mob" style="color:#7a8ba5">' + i.perdido + '</td>' +
-          '<td>' + (PODE_ESTOQUE ? '<button class="btn-sm danger" onclick="darBaixa(\'' + i.item.replace(/'/g, "\\'") + '\')">Baixa</button>' : '') + '</td>';
+          '<td>' + (PODE_ESTOQUE ? (
+            '<button class="btn-sm danger" onclick="darBaixa(\'' + i.item.replace(/'/g, "\\'") + '\')">Baixa</button> ' +
+            // some com a linha inteira. Só aparece quando não tem nada preso nela:
+            // nada na prateleira e nada na mão de ninguém.
+            (Number(i.prateleira) === 0 && Number(i.rua) === 0
+              ? '<button class="btn-sm" title="Tira o item da lista" onclick="removerItem(\'' + i.item.replace(/'/g, "\\'") + '\')">Remover</button>'
+              : '')
+          ) : '') + '</td>';
         tb.appendChild(tr);
       });
     }
@@ -386,6 +393,14 @@
     var d = await api('POST', '/caixa/comprar', { item: item, qtd: qtd });
     if (d) { diz('Comprado: ' + qtd + 'x ' + item); carregarCaixa(); }
   }
+  // [30/09] Some com a linha do estoque de vez. `baixa` só tira 1 unidade e não
+  // apaga o registro -- item zerado (ou de teste) ficava na lista pra sempre.
+  async function removerItem(item) {
+    if (!confirm('Tirar ' + item + ' da lista de estoque?\n\nSó dá certo se não tiver nenhuma unidade na prateleira nem na mão de ninguém. O histórico do extrato continua.')) return;
+    var d = await api('DELETE', '/caixa/estoque/' + encodeURIComponent(item));
+    if (d) { diz(item + ' saiu da lista'); carregarCaixa(); }
+  }
+
   async function darBaixa(item) {
     if (!confirm('Dar baixa em 1 unidade de ' + item + '?\n\nUse pra corrigir contagem — a unidade some do estoque.')) return;
     var d = await api('POST', '/caixa/baixa', { item: item });
@@ -422,7 +437,9 @@
 
   async function carregarPessoas() {
     try {
-      var res = await fetch('/api/corps/' + ID + '/users/list');
+      // a rota da lista de usuarios e GLOBAL, sem corpId -- com o id no meio ela
+      // nao casa com nada e o painel dizia 'sem permissao pra listar'.
+      var res = await fetch('/api/corps/users/list');
       if (!res.ok) { document.getElementById('fn-user').innerHTML = '<option value="">sem permissão pra listar</option>'; return; }
       var d = await res.json();
       var lista = d.users || d || [];
