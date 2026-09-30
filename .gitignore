@@ -37,3 +37,8 @@ Claude outputs/
 
 # vault do Obsidian: o estado da janela muda a cada abertura e suja todo commit
 Santa fe RP/Santa fe RP/.obsidian/workspace.json
+
+# [30/09] backup dos perfis do ProfileService: sao DADOS DE JOGADOR (dinheiro,
+# inventario, casas) tirados do DataStore por Open Cloud. Os scripts ficam no
+# repo, os perfis NAO -- nem pra repo privado.
+backup_perfis/perfis_*/
