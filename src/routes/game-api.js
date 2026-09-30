@@ -892,6 +892,54 @@ router.post('/alertas/compra/:id/arquivar', async (req, res) => {
   }
 });
 
+// ===========================================================================
+// REEMBOLSO PENDENTE DO MERCADO FECHADO (30/09)
+// O cliente paga o pedido na hora. Se ele sai antes da entrega, o jogo nao
+// consegue devolver -- perfil de quem deslogou nao esta carregado. Grava aqui e
+// acerta no proximo login. Mesmo desenho da OLX (acertarPendencias).
+// O "pago" e marcado na MESMA query que le, entao dois servidores lendo junto
+// nao pagam duas vezes.
+// ===========================================================================
+
+// POST /api/game/mf/reembolso   { roblox_id, nome, valor, pedido_id, motivo }
+router.post('/mf/reembolso', async (req, res) => {
+  try {
+    const b = req.body || {};
+    const rid = Number(b.roblox_id);
+    const valor = Math.floor(Number(b.valor) || 0);
+    if (!Number.isFinite(rid) || rid <= 0) return res.status(400).json({ error: 'roblox_id invalido' });
+    if (valor <= 0) return res.status(400).json({ error: 'valor invalido' });
+    const r = await pool.query(
+      `INSERT INTO mf_reembolsos (roblox_id, nome, valor, pedido_id, motivo)
+       VALUES ($1,$2,$3,$4,$5) RETURNING id, valor`,
+      [rid, b.nome ? String(b.nome).slice(0, 64) : null, valor,
+       b.pedido_id ? String(b.pedido_id).slice(0, 40) : null,
+       b.motivo ? String(b.motivo).slice(0, 40) : null]);
+    res.json({ ok: true, reembolso: r.rows[0] });
+  } catch (err) {
+    console.error('mf/reembolso:', err.message);
+    res.status(500).json({ error: 'Erro interno' });
+  }
+});
+
+// POST /api/game/mf/reembolso/acertar   { roblox_id }
+// Le e marca como pago numa tacada so. Devolve o total pro jogo creditar.
+router.post('/mf/reembolso/acertar', async (req, res) => {
+  try {
+    const rid = Number((req.body || {}).roblox_id);
+    if (!Number.isFinite(rid) || rid <= 0) return res.status(400).json({ error: 'roblox_id invalido' });
+    const r = await pool.query(
+      `UPDATE mf_reembolsos SET pago_em = NOW()
+        WHERE roblox_id = $1 AND pago_em IS NULL
+        RETURNING valor, pedido_id`, [rid]);
+    const total = r.rows.reduce((s, l) => s + Number(l.valor || 0), 0);
+    res.json({ ok: true, total, pedidos: r.rows.length });
+  } catch (err) {
+    console.error('mf/reembolso/acertar:', err.message);
+    res.status(500).json({ error: 'Erro interno' });
+  }
+});
+
 // POST /api/game/patrimonio  { roblox_id, nome, bolso, banco, level, xp, emprego, carros, casas }
 // O jogo manda a foto financeira do jogador no PlayerLeaving. Upsert: sempre a mais recente.
 // Funciona com o jogador OFFLINE porque e a ultima foto salva, nao um dado ao vivo.

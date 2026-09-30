@@ -248,6 +248,25 @@ CREATE TABLE IF NOT EXISTS alertas_compra (
 CREATE INDEX IF NOT EXISTS idx_alertas_compra_estado ON alertas_compra(estado, id DESC);
 CREATE INDEX IF NOT EXISTS idx_alertas_compra_alvo ON alertas_compra(roblox_id, id DESC);
 
+-- ===== REEMBOLSO PENDENTE DO MERCADO FECHADO (30/09) =====
+-- O cliente paga o pedido NA HORA. Se ele desloga antes da entrega, o pedido
+-- morre e o jogo nao tem como devolver o dinheiro -- o perfil de quem saiu nao
+-- esta carregado. Ate aqui isso virava um warn no console e o cara perdia tudo.
+-- Mesmo caminho que a OLX ja usava pra pagar venda feita offline: o jogo grava
+-- aqui e acerta no proximo login, com o pago marcado na MESMA transacao da
+-- leitura, entao nao paga duas vezes.
+CREATE TABLE IF NOT EXISTS mf_reembolsos (
+  id SERIAL PRIMARY KEY,
+  roblox_id BIGINT NOT NULL,
+  nome VARCHAR(64),
+  valor INT NOT NULL CHECK (valor > 0),
+  pedido_id VARCHAR(40),
+  motivo VARCHAR(40),
+  criado_em TIMESTAMP DEFAULT NOW(),
+  pago_em TIMESTAMP
+);
+CREATE INDEX IF NOT EXISTS idx_mf_reembolsos_aberto ON mf_reembolsos(roblox_id) WHERE pago_em IS NULL;
+
 -- ===== CAIXA E ESTOQUE DA CORPORACAO (28/09) =====
 -- Julio: "o comandante controlar isso pelo site da corp, poder ver o stock, o
 -- lucro, oque a corp tem de dinheiro, quantos equipamentos perderam".
