@@ -331,11 +331,71 @@ CREATE INDEX IF NOT EXISTS idx_empresa_dep ON empresa_depositos(corporation_id, 
 
 `;
 
+// [30/09] EMPRESAS OFICIAIS — semeadas aqui dentro, e não num script solto, porque
+// o deploy do Railway roda a migração e mais nada. É idempotente (ON CONFLICT em
+// tudo), então roda a cada deploy sem duplicar. Se falhar, só avisa: uma empresa
+// que não semeou não pode impedir o site de subir.
+const EMPRESAS = [
+  {
+    slug: 'mercado-fechado',
+    name: 'Mercado Fechado',
+    cnpj: '34.627.847/0001-12',   // sobre o groupId 34627847, DV pelo algoritmo da Receita
+    color: '#22C55E',
+    description: 'Delivery de produtos. O cliente pede pelo app, o entregador retira no estoque e leva.',
+    // salary = ADICIONAL por cargo (o piso de R$ 500 vem do jogo e não sai do caixa).
+    // Começa tudo em 0 de propósito: quem decide quanto pagar é o dono, no painel.
+    cargos: [
+      { name: 'CEO ',                            level: 10, adicional: 0, gestor: true },
+      { name: 'Diretor Geral',                   level: 9,  adicional: 0, gestor: true },
+      { name: 'Gerente de Operações',            level: 8,  adicional: 0, gestor: true },
+      { name: 'Gerente de Recursos Humanos',     level: 7,  adicional: 0, gestor: true },
+      { name: 'Supervisor de Logística',         level: 6,  adicional: 0, gestor: false },
+      { name: 'Condutor de Carga Pesada',        level: 5,  adicional: 0, gestor: false },
+      { name: 'Segurança de Carga',              level: 4,  adicional: 0, gestor: false },
+      { name: 'Motorista de Logística',          level: 3,  adicional: 0, gestor: false },
+      { name: 'Atendente de Suporte ao Cliente', level: 2,  adicional: 0, gestor: false },
+      { name: 'Entregador Trainee',              level: 1,  adicional: 0, gestor: false },
+    ],
+  },
+];
+
+async function semearEmpresas(client) {
+  for (const e of EMPRESAS) {
+    const up = await client.query(
+      `INSERT INTO corporations (name, slug, description, color, tipo, cnpj)
+            VALUES ($1, $2, $3, $4, 'empresa', $5)
+       ON CONFLICT (slug) DO UPDATE
+          SET tipo = 'empresa', cnpj = EXCLUDED.cnpj, updated_at = NOW()
+       RETURNING id`, [e.name, e.slug, e.description, e.color, e.cnpj]);
+    const id = up.rows[0].id;
+    for (const g of e.cargos) {
+      // só o level e o poder de gestor são reafirmados. O `salary` (adicional) NÃO
+      // entra no UPDATE: se entrasse, todo deploy zeraria o que o dono configurou.
+      await client.query(
+        `INSERT INTO ranks (corporation_id, name, level, salary, permissions)
+              VALUES ($1, $2, $3, $4, $5)
+         ON CONFLICT (corporation_id, name) DO UPDATE
+            SET level = EXCLUDED.level, permissions = EXCLUDED.permissions`,
+        [id, g.name, g.level, g.adicional, JSON.stringify({ gestor: !!g.gestor })]);
+    }
+    await client.query(
+      `INSERT INTO corp_caixa (corporation_id, saldo) VALUES ($1, 0)
+       ON CONFLICT (corporation_id) DO NOTHING`, [id]);
+    console.log(`   ${e.name} — CNPJ ${e.cnpj} — ${e.cargos.length} cargos`);
+  }
+}
+
 async function run() {
   const client = await pool.connect();
   try {
     await client.query(migration);
     console.log('✅ Migração executada com sucesso!');
+    try {
+      await semearEmpresas(client);
+      console.log('✅ Empresas oficiais em dia.');
+    } catch (e2) {
+      console.error('⚠️  Empresas oficiais não semearam:', e2.message);
+    }
   } catch (err) {
     console.error('❌ Erro na migração:', err.message);
   } finally {

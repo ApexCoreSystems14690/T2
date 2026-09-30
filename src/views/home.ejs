@@ -23,6 +23,9 @@
     .card.adm { border-color: #ef444455; }
     .card.adm:hover { border-color: #ef4444; }
     .card.adm .t { color: #ef4444; }
+    .card.emp { border-color: #22c55e55; }
+    .card.emp:hover { border-color: #22c55e; }
+    .card.emp .t { color: #22c55e; }
     .card.fac { border-color: #e0533d55; }
     .card.fac:hover { border-color: #e0533d; }
     .card.fac .t { color: #e0533d; }
@@ -40,6 +43,12 @@
         <p>Olá, <strong><%= user.discord_username %></strong></p>
       </div>
       <div class="opcoes">
+        <%# [30/09, pedido do Julio] PRIMEIRO card: Empresas Oficiais (tipo = 'empresa') %>
+        <a class="card emp" href="/empresas">
+          <div class="ic">🏪</div>
+          <div class="t">Empresas Oficiais</div>
+          <div class="d">Caixa, estoque, cargos e CNPJ das empresas. Empresa não recebe repasse do governo.</div>
+        </a>
         <a class="card" href="/dashboard">
           <div class="ic">🏛️</div>
           <div class="t">Painel de Corporações</div>
