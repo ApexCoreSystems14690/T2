@@ -1,1 +1,1 @@
-web: node src/index.js
+web: node src/db/migrate.js && node src/index.js

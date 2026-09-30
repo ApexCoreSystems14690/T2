@@ -124,6 +124,12 @@ async function start() {
         [porId ? donosId : donos]);
       if (r.rowCount > 0) console.log('[migracao] ' + r.rowCount + ' "dono por banco" perderam o admin (so ' + donos.join(', ') + ' e Dono)');
     } catch (e) { console.error('migracao dono fixo:', e.message); }
+    // [30/09 Julio] "owner ainda nao me detecta". Resolve o nome do Dono pro
+    // discord_id de verdade (a conta mais antiga com aquele nome) e trava nele.
+    // A partir daqui o Dono e reconhecido pelo id mesmo que troque de nome, e o
+    // log imprime o id pra copiar pra DONO_DISCORD_ID no Railway.
+    try { await require('./permissoes').resolverDono(pool); }
+    catch (e) { console.error('resolver dono:', e.message); }
     // Painel admin: fila de comandos, logs do jogo, servidores online, auditoria
     await pool.query(`
       CREATE TABLE IF NOT EXISTS game_servers (
@@ -875,11 +881,15 @@ async function start() {
   app.use('/api/admin', require('./routes/admin-api'));
   app.use('/admin', require('./routes/admin'));
   app.use('/empresas', require('./routes/empresas'));   // [30/09] Empresas Oficiais
+  app.use('/organizacoes', require('./routes/organizacoes'));  // [30/09] vista de staff: corp + faccao + empresa
   app.use('/faccoes', require('./routes/faccoes'));
 
   // Home
   app.get('/', (req, res) => {
-    res.render('home', { user: req.user || null });
+    // [30/09] o card "Todas as Organizacoes" so aparece pro Diretor Geral+.
+    let ehDiretor = false;
+    try { ehDiretor = !!(req.user && require('./permissoes').ehDiretorOuMais(req.user)); } catch (_) {}
+    res.render('home', { user: req.user || null, ehDiretor });
   });
 
   // 404

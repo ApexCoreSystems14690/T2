@@ -52,6 +52,8 @@ router.get('/', async (req, res) => {
       faccoes: faccoes.rows,
       podeCorp: perm.pode(req.user, 'corp'),
       ehStaff: !!perm.cargoDe(req.user),
+      // [30/09] atalho pra vista de staff; so Diretor Geral (80) pra cima
+      ehDiretor: perm.ehDiretorOuMais(req.user),
     });
   } catch (err) {
     console.error('Faccoes error:', err.message, err.stack);

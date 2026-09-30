@@ -30,6 +30,9 @@
     .card.fac:hover { border-color: #e0533d; }
     .card.fac .t { color: #e0533d; }
     .card.off { opacity: .45; pointer-events: none; }
+    .card.tudo { border-color: #f59e0b55; }
+    .card.tudo:hover { border-color: #f59e0b; }
+    .card.tudo .t { color: #f59e0b; }
   </style>
 </head>
 <body>
@@ -43,6 +46,16 @@
         <p>Olá, <strong><%= user.discord_username %></strong></p>
       </div>
       <div class="opcoes">
+        <%# [30/09, pedido do Julio] "Adm deveria conseguir ver facilmente todas as
+            empresas, corporacoes (so para adm Diretor ou owner)". Este card e o
+            atalho, e so aparece pro Diretor Geral pra cima. %>
+        <% if (typeof ehDiretor !== 'undefined' && ehDiretor) { %>
+        <a class="card tudo" href="/organizacoes">
+          <div class="ic">🗂️</div>
+          <div class="t">Todas as Organizações</div>
+          <div class="d">Corporações, facções e empresas numa lista só, com dono, membros e caixa. Direto pra gerenciar qualquer uma.</div>
+        </a>
+        <% } %>
         <%# [30/09, pedido do Julio] PRIMEIRO card: Empresas Oficiais (tipo = 'empresa') %>
         <a class="card emp" href="/empresas">
           <div class="ic">🏪</div>

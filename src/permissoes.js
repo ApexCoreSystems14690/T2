@@ -35,8 +35,25 @@ const DONO_DISCORD = ['julio14690'];
 // Agora: se DONO_DISCORD_ID estiver no ambiente, ELE manda e o nome nao vale
 // mais nada. Enquanto a variavel nao existir, o comportamento e o de antes
 // (ninguem perde acesso no deploy), mas o site avisa no boot.
-const DONO_DISCORD_ID = String(process.env.DONO_DISCORD_ID || '')
+// [30/09 Julio] "owner ainda nao me detecta, era para mim estar com tudo full
+// liberado por id do discord julio14690 (que no caso ngm consegue 1 igual)".
+// O QUE QUEBROU: a variavel DONO_DISCORD_ID desliga o caminho do nome. Se ela
+// existir no ambiente com qualquer coisa que NAO seja o id numerico da conta
+// (por exemplo o proprio texto 'julio14690'), a comparacao e feita contra o
+// discord_id, que e um numero -- nunca bate, e o Dono some do site. Pior: como
+// ela "manda", o nome tambem deixa de valer, entao o sistema tranca.
+// AGORA cada entrada da variavel e classificada pelo formato: so digitos = ID,
+// qualquer outra coisa = NOME DE USUARIO. Nome errado na variavel nao tranca
+// mais ninguem pra fora, e o id continua sendo o caminho forte.
+const _ENV_DONO = String(process.env.DONO_DISCORD_ID || '')
   .split(',').map(s => s.trim()).filter(Boolean);
+const DONO_DISCORD_ID = _ENV_DONO.filter(v => /^\d+$/.test(v));
+const DONO_DISCORD_ENV_NOMES = _ENV_DONO.filter(v => !/^\d+$/.test(v)).map(v => v.toLowerCase());
+
+// Ids numericos descobertos no boot a partir dos nomes (ver resolverDono).
+// Servem pra travar o Dono no id de VERDADE: se um dia ele trocar de nome no
+// Discord e outra pessoa pegar o nome antigo, ela nao herda o poder.
+const DONO_IDS_RESOLVIDOS = new Set();
 
 // Escada. O 'nivel' é o que decide quem manda em quem.
 const CARGOS = {
@@ -126,12 +143,64 @@ function nivelDoCargo(cargo) {
 // É a conta Dono? Compara o usuário do Discord, sem caixa e sem espaço.
 function ehDono(user) {
   if (!user) return false;
-  // [FIX 23/09] id numerico manda. So cai no nome se ninguem configurou id.
-  if (DONO_DISCORD_ID.length > 0) {
-    return DONO_DISCORD_ID.includes(String(user.discord_id || '').trim());
-  }
+  const id = String(user.discord_id || '').trim();
+  // 1) id numerico: o caminho forte. Vale o da variavel de ambiente e o que o
+  //    boot resolveu a partir do nome.
+  if (id && (DONO_DISCORD_ID.includes(id) || DONO_IDS_RESOLVIDOS.has(id))) return true;
+  // 2) nome de usuario. O Julio pediu isso de volta em 30/09 -- nome de usuario
+  //    do Discord hoje e unico e nao tem como existir dois iguais ao mesmo
+  //    tempo. So que o nome PODE ser largado e reclamado por outra pessoa.
+  //    Por isso o nome so vale enquanto o boot AINDA NAO descobriu o id de
+  //    verdade: assim que `resolverDono` amarra o nome a um discord_id, esta
+  //    porta fecha e um homonimo futuro nao entra mais. Sem cadastro nenhum
+  //    resolvido (banco novo, conta ainda nao criada), o nome continua valendo
+  //    -- e o que impede o site de ficar sem Dono.
+  //    Tambem fecha quando alguem configurou id numerico na variavel de
+  //    ambiente de proposito -- ali a intencao ja foi declarada.
+  if (DONO_DISCORD_ID.length > 0 || DONO_IDS_RESOLVIDOS.size > 0) return false;
   const u = String(user.discord_username || '').trim().toLowerCase();
-  return u.length > 0 && DONO_DISCORD.includes(u);
+  if (!u) return false;
+  return DONO_DISCORD.includes(u) || DONO_DISCORD_ENV_NOMES.includes(u);
+}
+
+// Roda UMA vez no boot, com o pool do banco. Procura a conta mais ANTIGA de
+// cada nome da lista e guarda o discord_id dela. A partir dai o Dono e
+// reconhecido pelo id mesmo que troque de nome, e um homonimo futuro nao entra.
+// Loga o id pra poder ser copiado pra DONO_DISCORD_ID no Railway.
+async function resolverDono(pool) {
+  const nomes = [...DONO_DISCORD, ...DONO_DISCORD_ENV_NOMES];
+  if (nomes.length === 0) return [];
+  const achados = [];
+  try {
+    const r = await pool.query(
+      `SELECT DISTINCT ON (lower(discord_username)) discord_id, discord_username
+         FROM users
+        WHERE lower(discord_username) = ANY($1::text[])
+        ORDER BY lower(discord_username), id ASC`, [nomes]);
+    for (const row of r.rows) {
+      const did = String(row.discord_id || '').trim();
+      if (!did) continue;
+      DONO_IDS_RESOLVIDOS.add(did);
+      achados.push({ nome: row.discord_username, discord_id: did });
+      console.log(`[permissoes] DONO reconhecido: ${row.discord_username} -> discord_id ${did}`);
+    }
+    if (achados.length === 0) {
+      console.warn('[permissoes] nenhum dos nomes de Dono existe na tabela users ainda:', nomes.join(', '));
+    } else if (DONO_DISCORD_ID.length === 0) {
+      console.warn('[permissoes] dica: ponha DONO_DISCORD_ID=' +
+        achados.map(a => a.discord_id).join(',') + ' nas variaveis do Railway pra travar por id.');
+    }
+  } catch (e) {
+    console.error('[permissoes] resolverDono falhou (o nome continua valendo):', e.message);
+  }
+  return achados;
+}
+
+// Diretor Geral (80) pra cima. [30/09] E o portao do painel "Todas as
+// organizacoes": o Julio pediu que ver tudo e editar livre seja "so para adm
+// Diretor ou owner".
+function ehDiretorOuMais(user) {
+  return nivelDoCargo(cargoDe(user)) >= 80;
 }
 
 // O cargo efetivo de um usuário do site.
@@ -202,5 +271,6 @@ function matriz() {
 
 module.exports = {
   CARGOS, ORDEM, CARGOS_ATRIBUIVEIS, PODERES, PODER_DO_COMANDO, DONO_DISCORD, DONO_DISCORD_ID,
-  ehDono, cargoDe, pode, poderesDe, podeMexerEm, podeDarCargo, nivelDoCargo, matriz,
+  DONO_DISCORD_ENV_NOMES, DONO_IDS_RESOLVIDOS,
+  ehDono, resolverDono, ehDiretorOuMais, cargoDe, pode, poderesDe, podeMexerEm, podeDarCargo, nivelDoCargo, matriz,
 };

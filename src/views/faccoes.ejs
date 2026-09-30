@@ -49,6 +49,7 @@
     <div class="user">
       <a href="/empresas" style="color:#22c55e">Empresas Oficiais</a>
       <a href="/dashboard">Corporações</a>
+      <% if (typeof ehDiretor !== 'undefined' && ehDiretor) { %><a href="/organizacoes" style="color:#f59e0b">Todas</a><% } %>
       <% if (typeof ehStaff !== 'undefined' && ehStaff) { %><a href="/admin" style="color:#ef4444">Painel Admin</a><% } %>
       <span><%= user.discord_username %></span>
       <a href="/auth/logout">Sair</a>
@@ -69,7 +70,7 @@
     </div>
 
     <% if (faccoes.length === 0) { %>
-      <div class="empty">Você não faz parte de nenhuma facção.</div>
+      <div class="empty"><% if (typeof podeCorp !== 'undefined' && podeCorp) { %>Nenhuma facção cadastrada ainda.<% } else { %>Você não faz parte de nenhuma facção.<% } %></div>
     <% } else { %>
       <% faccoes.forEach(corp => { %>
         <div class="corp-card">

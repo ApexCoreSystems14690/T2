@@ -1,0 +1,148 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Todas as Organizações — Santa Fé</title>
+  <style>
+    * { margin: 0; padding: 0; box-sizing: border-box; }
+    body { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif; background: #0a0e17; color: #f0f4f8; min-height: 100vh; }
+    .topbar { background: #131a2b; border-bottom: 1px solid #1e2a40; padding: 0.75rem 1.5rem; display: flex; align-items: center; justify-content: space-between; flex-wrap: wrap; gap: 0.5rem; }
+    .topbar h1 { font-size: 1rem; color: #f59e0b; letter-spacing: 0.04em; }
+    .topbar .user { display: flex; align-items: center; gap: 0.75rem; font-size: 0.85rem; color: #7a8ba5; flex-wrap: wrap; }
+    .topbar a { color: #7a8ba5; text-decoration: none; font-size: 0.8rem; }
+    .topbar a:hover { color: #f59e0b; }
+    .main { max-width: 1040px; margin: 0 auto; padding: 2rem 1.25rem; }
+    .nota { background: #1e2a40; border: 1px solid #2d3a52; border-left: 3px solid #f59e0b; border-radius: 6px; padding: 0.9rem 1rem; margin-bottom: 1.25rem; font-size: 0.82rem; color: #9fb0c8; line-height: 1.5; }
+    .resumo { display: flex; gap: 0.5rem; flex-wrap: wrap; margin-bottom: 1.25rem; }
+    .pill { background: #131a2b; border: 1px solid #1e2a40; border-radius: 999px; padding: 0.35rem 0.85rem; font-size: 0.78rem; color: #9fb0c8; }
+    .pill strong { color: #f0f4f8; }
+    .ferramentas { display: flex; gap: 0.5rem; flex-wrap: wrap; align-items: center; margin-bottom: 1rem; }
+    .ferramentas input { flex: 1; min-width: 180px; background: #0a0e17; border: 1px solid #2d3a52; border-radius: 6px; padding: 0.5rem 0.7rem; color: #f0f4f8; font-size: 0.85rem; }
+    .ferramentas button { background: none; border: 1px solid #2d3a52; color: #7a8ba5; padding: 0.45rem 0.8rem; border-radius: 6px; font-size: 0.78rem; cursor: pointer; }
+    .ferramentas button.on { border-color: #f59e0b; color: #f59e0b; }
+    table { width: 100%; border-collapse: collapse; font-size: 0.85rem; }
+    thead th { text-align: left; color: #7a8ba5; font-size: 0.72rem; text-transform: uppercase; letter-spacing: 0.05em; padding: 0.5rem 0.6rem; border-bottom: 1px solid #1e2a40; white-space: nowrap; }
+    tbody tr { border-bottom: 1px solid #141c2c; }
+    tbody tr:hover { background: #10192a; }
+    td { padding: 0.65rem 0.6rem; vertical-align: middle; }
+    .nome { display: flex; align-items: center; gap: 0.6rem; font-weight: 600; }
+    .bolinha { width: 11px; height: 11px; border-radius: 3px; flex-shrink: 0; }
+    .ico { width: 26px; height: 26px; border-radius: 5px; object-fit: cover; background: #0a0e17; flex-shrink: 0; }
+    .sub { color: #64748b; font-size: 0.74rem; font-family: monospace; }
+    .tag { font-size: 0.7rem; padding: 0.15rem 0.5rem; border-radius: 999px; font-weight: 700; letter-spacing: 0.03em; white-space: nowrap; }
+    .t-empresa { background: #22c55e22; color: #22c55e; }
+    .t-corp    { background: #3b82f622; color: #60a5fa; }
+    .t-faccao  { background: #ef444422; color: #f87171; }
+    .btn { color: #f59e0b; text-decoration: none; font-size: 0.78rem; font-weight: 600; padding: 0.32rem 0.7rem; border: 1px solid #f59e0b33; border-radius: 4px; white-space: nowrap; }
+    .btn:hover { background: #f59e0b11; }
+    .vazio { color: #7a8ba5; text-align: center; padding: 2rem; font-size: 0.9rem; }
+    .num { text-align: right; font-variant-numeric: tabular-nums; white-space: nowrap; }
+    @media (max-width: 720px) { .esconde-mob { display: none; } }
+  </style>
+</head>
+<body>
+  <div class="topbar">
+    <div style="display:flex;align-items:center;gap:1rem">
+      <a href="/" title="Voltar ao início">&larr; Início</a>
+      <h1>SANTA FÉ — TODAS AS ORGANIZAÇÕES</h1>
+    </div>
+    <div class="user">
+      <a href="/dashboard">Corporações</a>
+      <a href="/faccoes">Facções</a>
+      <a href="/empresas">Empresas</a>
+      <a href="/admin" style="color:#ef4444">Painel Admin</a>
+      <span><%= user.discord_username %> · <%= cargo %></span>
+      <a href="/auth/logout">Sair</a>
+    </div>
+  </div>
+
+  <div class="main">
+    <div class="nota">
+      Lista completa: corporações, facções e empresas juntas, sem filtro de participação.
+      <strong>Gerenciar</strong> abre a mesma tela de sempre, e como você é
+      <strong>Diretor Geral ou Dono</strong> entra nela sem teto — dá pra trocar cargo,
+      entrar, sair e mexer em qualquer uma. Página restrita ao Diretor pra cima.
+    </div>
+
+    <div class="resumo">
+      <span class="pill"><strong><%= resumo.total %></strong> no total</span>
+      <span class="pill"><strong><%= resumo.empresa %></strong> empresas</span>
+      <span class="pill"><strong><%= resumo.corp %></strong> corporações</span>
+      <span class="pill"><strong><%= resumo.faccao %></strong> facções</span>
+    </div>
+
+    <div class="ferramentas">
+      <input id="busca" placeholder="buscar por nome, slug, dono ou CNPJ..." oninput="filtrar()">
+      <button class="on" data-t="" onclick="tipo(this,'')">Tudo</button>
+      <button data-t="empresa" onclick="tipo(this,'empresa')">Empresas</button>
+      <button data-t="corp" onclick="tipo(this,'corp')">Corporações</button>
+      <button data-t="faccao" onclick="tipo(this,'faccao')">Facções</button>
+    </div>
+
+    <% if (orgs.length === 0) { %>
+      <div class="vazio">Não existe nenhuma organização cadastrada ainda.</div>
+    <% } else { %>
+    <table>
+      <thead>
+        <tr>
+          <th>Organização</th>
+          <th>Tipo</th>
+          <th class="esconde-mob">Dono</th>
+          <th class="num">Membros</th>
+          <th class="num esconde-mob">Cargos</th>
+          <th class="num">Caixa</th>
+          <th></th>
+        </tr>
+      </thead>
+      <tbody id="corpo">
+        <% orgs.forEach(o => { %>
+        <tr data-tipo="<%= o.tipo %>" data-busca="<%= (o.name + ' ' + o.slug + ' ' + (o.dono_nome || '') + ' ' + (o.cnpj || '')).toLowerCase() %>">
+          <td>
+            <div class="nome">
+              <% if (o.has_icon_file) { %><img src="/api/corps/<%= o.id %>/icon" class="ico" alt="">
+              <% } else if (o.icon_url) { %><img src="<%= o.icon_url %>" class="ico" alt="">
+              <% } else { %><span class="bolinha" style="background:<%= o.color %>"></span><% } %>
+              <span><%= o.name %><% if (o.is_active === false) { %> <span style="color:#ef4444;font-size:0.72rem">(inativa)</span><% } %></span>
+            </div>
+            <div class="sub"><%= o.slug %><% if (o.cnpj) { %> · CNPJ <%= o.cnpj %><% } %></div>
+          </td>
+          <td><span class="tag t-<%= o.tipo %>"><%= o.rotulo %></span></td>
+          <td class="esconde-mob"><%= o.dono_nome || '—' %></td>
+          <td class="num"><%= o.membros %></td>
+          <td class="num esconde-mob"><%= o.cargos %></td>
+          <td class="num" style="color:<%= Number(o.saldo) > 0 ? '#22c55e' : '#64748b' %>">R$ <%= Number(o.saldo).toLocaleString('pt-BR') %></td>
+          <td><a class="btn" href="/dashboard/corp/<%= o.id %>">Gerenciar</a></td>
+        </tr>
+        <% }) %>
+      </tbody>
+    </table>
+    <div class="vazio" id="semResultado" style="display:none">Nada bateu com a busca.</div>
+    <% } %>
+  </div>
+
+  <script>
+    var filtroTipo = '';
+    function tipo(btn, t) {
+      filtroTipo = t;
+      document.querySelectorAll('.ferramentas button').forEach(function (b) { b.classList.remove('on'); });
+      btn.classList.add('on');
+      filtrar();
+    }
+    function filtrar() {
+      var q = (document.getElementById('busca').value || '').trim().toLowerCase();
+      var linhas = document.querySelectorAll('#corpo tr');
+      var vistos = 0;
+      linhas.forEach(function (tr) {
+        var okT = !filtroTipo || tr.dataset.tipo === filtroTipo;
+        var okQ = !q || (tr.dataset.busca || '').indexOf(q) !== -1;
+        var mostra = okT && okQ;
+        tr.style.display = mostra ? '' : 'none';
+        if (mostra) vistos++;
+      });
+      var sem = document.getElementById('semResultado');
+      if (sem) sem.style.display = vistos === 0 ? '' : 'none';
+    }
+  </script>
+</body>
+</html>
