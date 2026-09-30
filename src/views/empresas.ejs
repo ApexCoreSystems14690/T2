@@ -100,7 +100,7 @@
           </div>
           <div style="display:flex;gap:0.5rem;align-items:center">
             <% if (corp.pode_gerenciar) { %>
-            <a href="/dashboard/corp/<%= corp.id %>" class="corp-btn">Gerenciar</a>
+            <a href="/empresas/<%= corp.id %>" class="corp-btn">Gerenciar</a>
             <% } %>
             <% if ((corp.sou_membro || corp.sou_gerente) && !corp.sou_dono) { %>
             <button class="corp-btn" style="color:#f59e0b;border-color:#f59e0b33;cursor:pointer;background:none" onclick="sairCorp(<%= corp.id %>, '<%= corp.name.replace(/'/g, "\\'") %>')">Sair</button>

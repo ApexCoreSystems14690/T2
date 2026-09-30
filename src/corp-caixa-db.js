@@ -270,9 +270,25 @@ async function registrarAtividade(corpId, tipo, quem, cliente) {
 // pelo UNIQUE(corporation_id, periodo) — dois servidores tentando ao mesmo tempo, um
 // leva o conflito e sai sem pagar. Chamar à vontade, de qualquer lugar.
 // Devolve { pagou, periodo, valor?, motivo? }.
+// [30/09 Julio] EMPRESA NUNCA RECEBE REPASSE DO GOVERNO.
+// "e ja começam com 40 mil, o caixa deveria ser so oque a empresa ganha, ou oque
+//  o cara depositar no banco pelo cnpj da empresa".
+// O QUE ACONTECIA: `ORC.BASE_POR_CORP` não tem linha pra 'mercado-fechado', então
+// ela caía na BASE_PADRAO (R$ 40.000/semana) — e o repasse é pago no instante em
+// que alguém ABRE o painel, por isso o caixa "nascia" com 40 mil sozinho.
+// A trava é por TIPO, não por slug: empresa nova criada amanhã já nasce barrada,
+// sem ninguém precisar lembrar de adicionar o slug em lugar nenhum.
+async function ehEmpresa(corpId) {
+  try {
+    const r = await pool.query(`SELECT tipo FROM corporations WHERE id = $1`, [corpId]);
+    return r.rows[0] ? String(r.rows[0].tipo) === 'empresa' : false;
+  } catch (_) { return false; }   // na dúvida não barra: erro de leitura não pode travar o repasse de uma corp de verdade
+}
+
 async function pagarOrcamentoSePendente(corpId, slug, agoraMs) {
   const agora = Number.isFinite(Number(agoraMs)) ? Number(agoraMs) : Date.now();
   const periodo = ORC.periodoDe(agora);
+  if (await ehEmpresa(corpId)) return { pagou: false, periodo, motivo: 'empresa não recebe do governo' };
 
   const ja = await pool.query(
     `SELECT periodo FROM corp_orcamento_pago
@@ -334,6 +350,9 @@ async function pagarOrcamentoSePendente(corpId, slug, agoraMs) {
 async function resumoOrcamento(corpId, slug, agoraMs) {
   const agora = Number.isFinite(Number(agoraMs)) ? Number(agoraMs) : Date.now();
   const periodo = ORC.periodoDe(agora);
+  // empresa não tem repasse, então não tem resumo de repasse pra mostrar --
+  // devolver `previsto` aqui seria prometer no painel um dinheiro que não vem.
+  if (await ehEmpresa(corpId)) return null;
   const inicio = new Date(periodo * ORC.DIA * ORC.ORC.DIAS);
   const [ult, at] = await Promise.all([
     pool.query(
@@ -359,4 +378,4 @@ async function resumoOrcamento(corpId, slug, agoraMs) {
   };
 }
 
-module.exports = { movDinheiro, movEstoque, comprar, painel, precos, catalogo, registrarAtividade, pagarOrcamentoSePendente, resumoOrcamento, ORC };
+module.exports = { movDinheiro, movEstoque, comprar, painel, precos, catalogo, registrarAtividade, pagarOrcamentoSePendente, resumoOrcamento, ehEmpresa, ORC };

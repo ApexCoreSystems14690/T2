@@ -1,0 +1,445 @@
+<%#
+  [30/09/2026, pedido do Julio] PAINEL DA EMPRESA — tela própria, não a da corp.
+  "sem o nome corporação nem policiais, em inventario" + "Tbm deveria ter la o cnpj".
+  Usa a MESMA API de sempre (/api/corps/:id/*, que é genérica e chaveia por id);
+  o que muda é a língua: mercadoria em vez de vestiário, funcionário em vez de
+  policial, adicional em vez de salário, e o CNPJ no topo.
+  Fica de fora de propósito: repasse do governo (empresa não recebe), perdas de
+  equipamento por dia, co-gerentes e qualquer coisa de arma.
+%>
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title><%= empresa.name %> — Empresa</title>
+  <style>
+    * { margin:0; padding:0; box-sizing:border-box; }
+    body { font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif; background:#0a0e17; color:#f0f4f8; min-height:100vh; }
+    .topbar { background:#131a2b; border-bottom:1px solid #1e2a40; padding:.75rem 1.5rem; display:flex; align-items:center; justify-content:space-between; flex-wrap:wrap; gap:.5rem; }
+    .topbar h1 { font-size:1rem; color:#22c55e; letter-spacing:.04em; }
+    .topbar .user { display:flex; align-items:center; gap:.75rem; font-size:.85rem; color:#7a8ba5; flex-wrap:wrap; }
+    .topbar a { color:#7a8ba5; text-decoration:none; font-size:.8rem; }
+    .topbar a:hover { color:#22c55e; }
+    .main { max-width:1000px; margin:0 auto; padding:1.5rem 1.25rem 3rem; }
+    .cabeca { display:flex; align-items:center; gap:1rem; flex-wrap:wrap; background:#131a2b; border:1px solid #1e2a40; border-radius:10px; padding:1rem 1.25rem; margin-bottom:1rem; }
+    .cabeca .marca { width:44px; height:44px; border-radius:9px; object-fit:cover; background:#0a0e17; flex-shrink:0; }
+    .cabeca .cor { width:14px; height:44px; border-radius:4px; flex-shrink:0; }
+    .cabeca h2 { font-size:1.15rem; }
+    .cnpj { font-family:ui-monospace,Menlo,Consolas,monospace; font-size:.85rem; color:#9fb0c8; background:#0a0e17; border:1px solid #2d3a52; border-radius:6px; padding:.2rem .55rem; display:inline-block; margin-top:.3rem; }
+    .cnpj b { color:#22c55e; }
+    .caixa-topo { margin-left:auto; text-align:right; }
+    .caixa-topo .rot { font-size:.72rem; color:#7a8ba5; text-transform:uppercase; letter-spacing:.05em; }
+    .caixa-topo .val { font-size:1.5rem; font-weight:800; font-variant-numeric:tabular-nums; }
+    .nota { background:#1e2a40; border:1px solid #2d3a52; border-left:3px solid #22c55e; border-radius:6px; padding:.75rem .9rem; margin-bottom:1rem; font-size:.8rem; color:#9fb0c8; line-height:1.5; }
+    .abas { display:flex; gap:.4rem; flex-wrap:wrap; margin-bottom:1rem; }
+    .abas button { background:#131a2b; border:1px solid #1e2a40; color:#7a8ba5; padding:.45rem .9rem; border-radius:7px; font-size:.82rem; cursor:pointer; }
+    .abas button.on { border-color:#22c55e; color:#22c55e; background:#22c55e11; }
+    .painel { display:none; }
+    .painel.on { display:block; }
+    .cartao { background:#131a2b; border:1px solid #1e2a40; border-radius:10px; padding:1rem 1.25rem; margin-bottom:1rem; }
+    .cartao h3 { font-size:.95rem; margin-bottom:.75rem; }
+    table { width:100%; border-collapse:collapse; font-size:.85rem; }
+    thead th { text-align:left; color:#7a8ba5; font-size:.7rem; text-transform:uppercase; letter-spacing:.05em; padding:.45rem .5rem; border-bottom:1px solid #1e2a40; white-space:nowrap; }
+    tbody tr { border-bottom:1px solid #141c2c; }
+    td { padding:.55rem .5rem; vertical-align:middle; }
+    .num { text-align:right; font-variant-numeric:tabular-nums; white-space:nowrap; }
+    .vazio { color:#7a8ba5; text-align:center; padding:1.5rem; font-size:.85rem; }
+    input, select { background:#0a0e17; border:1px solid #2d3a52; border-radius:6px; padding:.45rem .55rem; color:#f0f4f8; font-size:.85rem; }
+    input[type=number] { width:90px; }
+    .btn { background:#22c55e; color:#0a0e17; border:none; padding:.45rem .9rem; border-radius:6px; font-size:.8rem; font-weight:700; cursor:pointer; }
+    .btn:hover { background:#16a34a; }
+    .btn-sm { background:none; border:1px solid #2d3a52; color:#9fb0c8; padding:.3rem .6rem; border-radius:5px; font-size:.75rem; cursor:pointer; }
+    .btn-sm:hover { border-color:#3d4a62; color:#f0f4f8; }
+    .btn-sm.danger { border-color:#ef444455; color:#ef4444; }
+    .linha-form { display:flex; gap:.5rem; align-items:center; flex-wrap:wrap; }
+    .pos { color:#22c55e; } .neg { color:#ef4444; }
+    .aviso { display:none; padding:.6rem .8rem; border-radius:7px; font-size:.82rem; margin-bottom:.75rem; }
+    .aviso.ok { display:block; background:#22c55e22; color:#22c55e; }
+    .aviso.err { display:block; background:#ef444422; color:#ef4444; }
+    @media (max-width:700px) { .esconde-mob { display:none; } }
+  </style>
+</head>
+<body>
+  <div class="topbar">
+    <div style="display:flex;align-items:center;gap:1rem">
+      <a href="/empresas">&larr; Empresas</a>
+      <h1>SANTA FÉ — EMPRESA</h1>
+    </div>
+    <div class="user">
+      <% if (typeof ehDiretor !== 'undefined' && ehDiretor) { %><a href="/organizacoes" style="color:#f59e0b">Todas</a><% } %>
+      <% if (typeof ehStaff !== 'undefined' && ehStaff) { %><a href="/admin" style="color:#ef4444">Painel Admin</a><% } %>
+      <span><%= user.discord_username %></span>
+      <a href="/auth/logout">Sair</a>
+    </div>
+  </div>
+
+  <div class="main">
+    <div id="aviso" class="aviso"></div>
+
+    <div class="cabeca">
+      <% if (empresa.has_icon_file) { %><img class="marca" src="/api/corps/<%= empresa.id %>/icon" alt="">
+      <% } else if (empresa.icon_url) { %><img class="marca" src="<%= empresa.icon_url %>" alt="">
+      <% } else { %><span class="cor" style="background:<%= empresa.color %>"></span><% } %>
+      <div>
+        <h2><%= empresa.name %></h2>
+        <% if (empresa.cnpj) { %>
+          <span class="cnpj">CNPJ <b><%= empresa.cnpj %></b></span>
+        <% } else { %>
+          <span class="cnpj" style="color:#ef4444">sem CNPJ cadastrado</span>
+        <% } %>
+        <div style="color:#7a8ba5;font-size:.75rem;margin-top:.35rem">
+          você entra aqui como <strong style="color:#22c55e"><%= papel %></strong>
+        </div>
+      </div>
+      <div class="caixa-topo">
+        <div class="rot">Caixa da empresa</div>
+        <div class="val" id="cx-saldo">R$ —</div>
+      </div>
+    </div>
+
+    <div class="nota">
+      Este caixa é <strong>só o que a empresa ganhou</strong>: as vendas entregues no jogo e o
+      dinheiro que um sócio depositar pelo CNPJ, no celular. <strong>Empresa não recebe repasse
+      do governo.</strong> No salário, os primeiros R$ 500 são fixos e vêm do jogo — o valor do
+      cargo é o <strong>adicional</strong>, e esse sai daqui.
+    </div>
+
+    <div class="abas">
+      <button class="on" data-p="mercadoria" onclick="aba(this,'mercadoria')">Mercadoria</button>
+      <button data-p="funcionarios" onclick="aba(this,'funcionarios')">Funcionários</button>
+      <button data-p="cargos" onclick="aba(this,'cargos')">Cargos e adicional</button>
+      <button data-p="extrato" onclick="aba(this,'extrato')">Extrato</button>
+    </div>
+
+    <!-- ================= MERCADORIA ================= -->
+    <div class="painel on" id="p-mercadoria">
+      <div class="cartao">
+        <h3>Comprar mercadoria</h3>
+        <p style="color:#7a8ba5;font-size:.8rem;margin-bottom:.75rem">
+          O que você compra aqui é o que o entregador retira no estoque e leva pro cliente.
+          Sem isso na prateleira, <strong>nenhum pedido sai</strong>.
+        </p>
+        <div class="linha-form">
+          <select id="cp-item"><option value="">carregando...</option></select>
+          <input type="number" id="cp-qtd" min="1" value="10">
+          <button class="btn" onclick="comprar()">Comprar</button>
+          <span id="cp-custo" style="color:#7a8ba5;font-size:.82rem"></span>
+        </div>
+      </div>
+
+      <div class="cartao">
+        <h3>Estoque</h3>
+        <table>
+          <thead><tr><th>Item</th><th class="num">Na prateleira</th><th class="num">Com entregador</th><th class="num esconde-mob">Perdido</th><th></th></tr></thead>
+          <tbody id="cx-itens"><tr><td colspan="5" class="vazio">carregando...</td></tr></tbody>
+        </table>
+      </div>
+
+      <div class="cartao">
+        <h3>Quem está com mercadoria agora</h3>
+        <p style="color:#7a8ba5;font-size:.78rem;margin-bottom:.6rem">
+          Saiu do estoque e ainda não foi entregue. Some daqui quando a entrega é concluída,
+          quando a carga volta pro estoque, ou quando o funcionário some com ela.
+        </p>
+        <table>
+          <thead><tr><th>Funcionário</th><th>Item</th><th class="num">Qtd</th><th class="esconde-mob">Desde</th></tr></thead>
+          <tbody id="cx-rua"><tr><td colspan="4" class="vazio">ninguém</td></tr></tbody>
+        </table>
+      </div>
+    </div>
+
+    <!-- ================= FUNCIONÁRIOS ================= -->
+    <div class="painel" id="p-funcionarios">
+      <div class="cartao">
+        <h3>Contratar</h3>
+        <div class="linha-form">
+          <select id="fn-user"><option value="">carregando...</option></select>
+          <select id="fn-cargo">
+            <option value="">Sem cargo</option>
+            <% cargos.forEach(c => { %><option value="<%= c.id %>"><%= c.name %> (Nv.<%= c.level %>)</option><% }) %>
+          </select>
+          <button class="btn" onclick="contratar()">Contratar</button>
+        </div>
+      </div>
+      <div class="cartao">
+        <h3><%= funcionarios.length %> funcionário(s)</h3>
+        <table>
+          <thead><tr><th>Nome</th><th class="esconde-mob">Roblox ID</th><th>Cargo</th><th class="num">Adicional</th><th class="esconde-mob">Desde</th><th></th></tr></thead>
+          <tbody>
+            <% if (funcionarios.length === 0) { %>
+              <tr><td colspan="6" class="vazio">Ninguém contratado ainda.</td></tr>
+            <% } %>
+            <% funcionarios.forEach(m => {
+                 var EHALTO = (typeof ehStaffAlto !== 'undefined') && ehStaffAlto;
+                 var travado = !poderes.gerir_membros || (!EHALTO && (
+                   m.eh_dono_da_corp || m.sou_eu ||
+                   (meuNivel !== null && m.rank_level !== null && m.rank_level !== undefined && Number(m.rank_level) >= Number(meuNivel)))); %>
+            <tr>
+              <td>
+                <%= m.roblox_username || m.discord_username || '—' %>
+                <% if (m.eh_dono_da_corp) { %><span style="color:#f59e0b;font-size:.7rem"> · dono</span><% } %>
+                <% if (m.sou_eu) { %><span style="color:#7a8ba5;font-size:.7rem"> · você</span><% } %>
+              </td>
+              <td class="esconde-mob" style="color:#7a8ba5"><%= m.roblox_id || '—' %></td>
+              <td>
+                <select <%= travado ? 'disabled' : '' %> onchange="mudarCargo(<%= m.id %>, this.value)">
+                  <option value="" <%= !m.rank_id ? 'selected' : '' %>>Sem cargo</option>
+                  <% cargos.forEach(c => { %><option value="<%= c.id %>" <%= m.rank_id === c.id ? 'selected' : '' %>><%= c.name %> (Nv.<%= c.level %>)</option><% }) %>
+                </select>
+              </td>
+              <td class="num">R$ 500 + <strong class="<%= Number(m.adicional) > 0 ? 'pos' : '' %>"><%= Number(m.adicional).toLocaleString('pt-BR') %></strong></td>
+              <td class="esconde-mob" style="color:#7a8ba5"><%= new Date(m.joined_at).toLocaleDateString('pt-BR') %></td>
+              <td>
+                <% if (!travado) { %><button class="btn-sm danger" onclick="demitir(<%= m.id %>)">Demitir</button><% } %>
+                <% if (poderes.excluir_corp && !m.eh_dono_da_corp) { %>
+                  <button class="btn-sm" onclick="tornarDono(<%= m.user_id %>, '<%= String(m.roblox_username || m.discord_username || 'essa pessoa').replace(/'/g, "\\'") %>')">Tornar dono</button>
+                <% } %>
+              </td>
+            </tr>
+            <% }) %>
+          </tbody>
+        </table>
+      </div>
+    </div>
+
+    <!-- ================= CARGOS ================= -->
+    <div class="painel" id="p-cargos">
+      <div class="cartao">
+        <h3>Cargos</h3>
+        <p style="color:#7a8ba5;font-size:.8rem;margin-bottom:.75rem">
+          O <strong>adicional</strong> é o que a empresa paga por cima dos R$ 500 de piso, e sai do caixa.
+          Deixe em 0 e o funcionário recebe só o piso.
+        </p>
+        <table>
+          <thead><tr><th>Cargo</th><th class="num">Nível</th><th class="num">Adicional (R$)</th><th></th></tr></thead>
+          <tbody>
+            <% if (cargos.length === 0) { %><tr><td colspan="4" class="vazio">Nenhum cargo.</td></tr><% } %>
+            <% cargos.forEach(c => { %>
+            <tr>
+              <td><%= c.name %></td>
+              <td class="num" style="color:#7a8ba5"><%= c.level %></td>
+              <td class="num">
+                <% if (poderes.gerir_cargos) { %>
+                  <input type="number" min="0" value="<%= Number(c.salary || 0) %>" id="ad-<%= c.id %>" style="width:110px;text-align:right">
+                <% } else { %><%= Number(c.salary || 0).toLocaleString('pt-BR') %><% } %>
+              </td>
+              <td>
+                <% if (poderes.gerir_cargos) { %>
+                  <button class="btn-sm" onclick="salvarAdicional(<%= c.id %>, '<%= String(c.name).replace(/'/g, "\\'") %>', <%= c.level %>)">Salvar</button>
+                <% } %>
+              </td>
+            </tr>
+            <% }) %>
+          </tbody>
+        </table>
+      </div>
+    </div>
+
+    <!-- ================= EXTRATO ================= -->
+    <div class="painel" id="p-extrato">
+      <div class="cartao">
+        <h3>Extrato do caixa</h3>
+        <table>
+          <thead><tr><th>Quando</th><th>O quê</th><th class="esconde-mob">Quem</th><th class="num">Valor</th><th class="num esconde-mob">Saldo</th></tr></thead>
+          <tbody id="cx-extrato"><tr><td colspan="5" class="vazio">carregando...</td></tr></tbody>
+        </table>
+      </div>
+      <div class="cartao">
+        <h3>Depósitos de sócio (pelo CNPJ, no jogo)</h3>
+        <table>
+          <thead><tr><th>Quem</th><th class="esconde-mob">Roblox ID</th><th class="num">Valor</th><th class="num">Quando</th></tr></thead>
+          <tbody>
+            <% if (depositos.length === 0) { %>
+              <tr><td colspan="4" class="vazio">Ninguém depositou ainda.</td></tr>
+            <% } %>
+            <% depositos.forEach(d => { %>
+            <tr>
+              <td><%= d.quem || '—' %></td>
+              <td class="esconde-mob" style="color:#7a8ba5"><%= d.roblox_id || '—' %></td>
+              <td class="num pos">+ R$ <%= Number(d.valor).toLocaleString('pt-BR') %></td>
+              <td class="num" style="color:#7a8ba5"><%= new Date(d.em).toLocaleString('pt-BR') %></td>
+            </tr>
+            <% }) %>
+          </tbody>
+        </table>
+      </div>
+    </div>
+  </div>
+
+<script>
+  var ID = '<%= empresa.id %>';
+  var PODE_ESTOQUE = <%= poderes.gerir_estoque ? 'true' : 'false' %>;
+  var PRECOS = {};
+
+  function diz(txt, erro) {
+    var a = document.getElementById('aviso');
+    a.textContent = txt; a.className = 'aviso ' + (erro ? 'err' : 'ok');
+    if (!erro) setTimeout(function () { a.className = 'aviso'; }, 4000);
+  }
+  function aba(btn, nome) {
+    document.querySelectorAll('.abas button').forEach(function (b) { b.classList.remove('on'); });
+    btn.classList.add('on');
+    document.querySelectorAll('.painel').forEach(function (p) { p.classList.remove('on'); });
+    document.getElementById('p-' + nome).classList.add('on');
+  }
+  // as rotas de /api/corps são genéricas (chaveadas por id), então servem igual pra empresa
+  async function api(metodo, caminho, corpo) {
+    var opts = { method: metodo, headers: { 'Content-Type': 'application/json' } };
+    if (corpo) opts.body = JSON.stringify(corpo);
+    var res = await fetch('/api/corps/' + ID + caminho, opts);
+    var d = await res.json().catch(function () { return {}; });
+    if (!res.ok || d.error) { diz(d.error || 'Não deu certo', true); return null; }
+    return d;
+  }
+  function reais(n) { return 'R$ ' + Number(n || 0).toLocaleString('pt-BR'); }
+
+  async function carregarCaixa() {
+    var res = await fetch('/api/corps/' + ID + '/caixa');
+    if (!res.ok) { diz('Não consegui ler o caixa', true); return; }
+    var d = await res.json();
+    document.getElementById('cx-saldo').textContent = reais(d.saldo);
+    document.getElementById('cx-saldo').className = 'val ' + (Number(d.saldo) > 0 ? 'pos' : '');
+
+    // estoque
+    var tb = document.getElementById('cx-itens');
+    tb.innerHTML = '';
+    if (!d.itens || d.itens.length === 0) {
+      tb.innerHTML = '<tr><td colspan="5" class="vazio">Prateleira vazia — compre mercadoria acima.</td></tr>';
+    } else {
+      d.itens.forEach(function (i) {
+        var tr = document.createElement('tr');
+        tr.innerHTML = '<td>' + i.item + '</td>' +
+          '<td class="num' + (Number(i.prateleira) === 0 ? ' neg' : '') + '">' + i.prateleira + '</td>' +
+          '<td class="num">' + i.rua + '</td>' +
+          '<td class="num esconde-mob" style="color:#7a8ba5">' + i.perdido + '</td>' +
+          '<td>' + (PODE_ESTOQUE ? '<button class="btn-sm danger" onclick="darBaixa(\'' + i.item.replace(/'/g, "\\'") + '\')">Baixa</button>' : '') + '</td>';
+        tb.appendChild(tr);
+      });
+    }
+
+    // com quem está
+    var tr2 = document.getElementById('cx-rua');
+    tr2.innerHTML = '';
+    if (!d.emprestimos || d.emprestimos.length === 0) {
+      tr2.innerHTML = '<tr><td colspan="4" class="vazio">ninguém</td></tr>';
+    } else {
+      d.emprestimos.forEach(function (e) {
+        var tr = document.createElement('tr');
+        tr.innerHTML = '<td>' + e.nome + '</td><td>' + e.item + '</td><td class="num">' + e.qtd + '</td>' +
+          '<td class="esconde-mob" style="color:#7a8ba5">' + new Date(e.pego_em).toLocaleString('pt-BR') + '</td>';
+        tr2.appendChild(tr);
+      });
+    }
+
+    // extrato
+    var te = document.getElementById('cx-extrato');
+    te.innerHTML = '';
+    if (!d.extrato || d.extrato.length === 0) {
+      te.innerHTML = '<tr><td colspan="5" class="vazio">Nada ainda.</td></tr>';
+    } else {
+      d.extrato.forEach(function (l) {
+        var tr = document.createElement('tr');
+        var v = Number(l.valor);
+        tr.innerHTML = '<td style="color:#7a8ba5">' + new Date(l.criado_em).toLocaleString('pt-BR') + '</td>' +
+          '<td>' + (l.rotulo || l.tipo) + '</td>' +
+          '<td class="esconde-mob" style="color:#7a8ba5">' + (l.quem || '—') + '</td>' +
+          '<td class="num ' + (v >= 0 ? 'pos' : 'neg') + '">' + (v >= 0 ? '+ ' : '− ') + reais(Math.abs(v)) + '</td>' +
+          '<td class="num esconde-mob" style="color:#7a8ba5">' + (l.saldo_depois === null ? '—' : reais(l.saldo_depois)) + '</td>';
+        te.appendChild(tr);
+      });
+    }
+
+    // seletor de compra
+    PRECOS = d.precos || {};
+    var sel = document.getElementById('cp-item');
+    sel.innerHTML = '';
+    var nomes = Object.keys(PRECOS).sort();
+    if (nomes.length === 0) {
+      sel.innerHTML = '<option value="">' +
+        (d.catalogo_publicado === false
+          ? 'o jogo ainda não publicou a lista — suba um servidor'
+          : 'esta empresa não compra nada') + '</option>';
+    } else {
+      nomes.forEach(function (n) {
+        var o = document.createElement('option');
+        o.value = n; o.textContent = n + ' — ' + reais(PRECOS[n]) + ' cada';
+        sel.appendChild(o);
+      });
+    }
+    custo();
+  }
+
+  function custo() {
+    var i = document.getElementById('cp-item').value;
+    var q = parseInt(document.getElementById('cp-qtd').value) || 0;
+    var el = document.getElementById('cp-custo');
+    el.textContent = (i && PRECOS[i] && q > 0) ? ('= ' + reais(PRECOS[i] * q)) : '';
+  }
+  document.getElementById('cp-qtd').addEventListener('input', custo);
+  document.getElementById('cp-item').addEventListener('change', custo);
+
+  async function comprar() {
+    var item = document.getElementById('cp-item').value;
+    var qtd = parseInt(document.getElementById('cp-qtd').value) || 0;
+    if (!item || qtd <= 0) { diz('Escolha o item e a quantidade', true); return; }
+    var d = await api('POST', '/caixa/comprar', { item: item, qtd: qtd });
+    if (d) { diz('Comprado: ' + qtd + 'x ' + item); carregarCaixa(); }
+  }
+  async function darBaixa(item) {
+    if (!confirm('Dar baixa em 1 unidade de ' + item + '?\n\nUse pra corrigir contagem — a unidade some do estoque.')) return;
+    var d = await api('POST', '/caixa/baixa', { item: item });
+    if (d) { diz('Baixa dada em ' + item); carregarCaixa(); }
+  }
+
+  async function contratar() {
+    var uid = document.getElementById('fn-user').value;
+    var cargo = document.getElementById('fn-cargo').value;
+    if (!uid) { diz('Escolha a pessoa', true); return; }
+    var d = await api('POST', '/members', { user_id: uid, rank_id: cargo || null });
+    if (d) location.reload();
+  }
+  async function mudarCargo(memberId, rankId) {
+    var d = await api('PUT', '/members/' + memberId, { rank_id: rankId || null });
+    if (d) diz('Cargo atualizado');
+  }
+  async function demitir(memberId) {
+    if (!confirm('Demitir este funcionário?')) return;
+    var d = await api('DELETE', '/members/' + memberId);
+    if (d) location.reload();
+  }
+  async function tornarDono(userId, nome) {
+    if (!confirm('Passar a posse da empresa para ' + nome + '?')) return;
+    var d = await api('POST', '/dono', { user_id: userId });
+    if (d) location.reload();
+  }
+  async function salvarAdicional(rankId, nome, nivel) {
+    var v = parseInt(document.getElementById('ad-' + rankId).value);
+    if (!(v >= 0)) { diz('Valor inválido', true); return; }
+    var d = await api('PUT', '/ranks/' + rankId, { name: nome, level: nivel, salary: v });
+    if (d) diz('Adicional de ' + nome + ' salvo: ' + reais(v));
+  }
+
+  async function carregarPessoas() {
+    try {
+      var res = await fetch('/api/corps/' + ID + '/users/list');
+      if (!res.ok) { document.getElementById('fn-user').innerHTML = '<option value="">sem permissão pra listar</option>'; return; }
+      var d = await res.json();
+      var lista = d.users || d || [];
+      var sel = document.getElementById('fn-user');
+      sel.innerHTML = '<option value="">escolha a pessoa...</option>';
+      lista.forEach(function (u) {
+        var o = document.createElement('option');
+        o.value = u.id;
+        o.textContent = (u.roblox_username || u.discord_username || ('#' + u.id)) +
+          (u.roblox_id ? (' · ' + u.roblox_id) : '');
+        sel.appendChild(o);
+      });
+    } catch (e) { /* sem lista, contrata pelo painel geral */ }
+  }
+
+  carregarCaixa();
+  carregarPessoas();
+</script>
+</body>
+</html>

@@ -112,7 +112,7 @@
           <td class="num"><%= o.membros %></td>
           <td class="num esconde-mob"><%= o.cargos %></td>
           <td class="num" style="color:<%= Number(o.saldo) > 0 ? '#22c55e' : '#64748b' %>">R$ <%= Number(o.saldo).toLocaleString('pt-BR') %></td>
-          <td><a class="btn" href="/dashboard/corp/<%= o.id %>">Gerenciar</a></td>
+          <td><a class="btn" href="<%= o.tipo === 'empresa' ? ('/empresas/' + o.id) : ('/dashboard/corp/' + o.id) %>">Gerenciar</a></td>
         </tr>
         <% }) %>
       </tbody>
