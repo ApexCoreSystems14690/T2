@@ -12,7 +12,7 @@ function t(nome, cond, extra) {
 // ---------------------------------------------------------------- 1. espelho do Luau
 // A lista de motivos TEM que bater com ReplicatedStorage.Shared.Regras.Estoque.
 // Se alguém mexer num lado só, este teste quebra — é o ponto.
-const ESPERADO_LUAU = ['baixa', 'comprou', 'devolveu', 'morreu', 'retirou', 'roubada', 'saiu'];
+const ESPERADO_LUAU = ['abasteceu', 'baixa', 'comprou', 'devolveu', 'morreu', 'recuperou', 'retirou', 'roubada', 'saiu'];
 t('motivos batem com o Luau', JSON.stringify(Object.keys(C.ESTOQUE).sort()) === JSON.stringify(ESPERADO_LUAU), Object.keys(C.ESTOQUE).sort());
 t('roubada nao credita a prateleira', C.ESTOQUE.roubada.estoque === 0 && C.ESTOQUE.roubada.perda === true);
 t('morreu nao credita a prateleira', C.ESTOQUE.morreu.estoque === 0 && C.ESTOQUE.morreu.perda === true);
@@ -20,6 +20,7 @@ t('morreu nao credita a prateleira', C.ESTOQUE.morreu.estoque === 0 && C.ESTOQUE
 // entra como `roubada`, igual a quem foi assaltado. O comandante tem que
 // descobrir. Este teste existe pra ninguem "consertar" isso achando que faltou.
 t('contrabando NAO tem motivo proprio', C.ESTOQUE.desviada === undefined);
+t('abasteceu tira da prateleira sem emprestar (consumo da maleta)', C.ESTOQUE.abasteceu.estoque === -1 && C.ESTOQUE.abasteceu.emprestado === 0 && C.ESTOQUE.abasteceu.perda === false);
 t('saiu de servico credita', C.ESTOQUE.saiu.estoque === 1 && C.ESTOQUE.saiu.perda === false);
 
 // ---------------------------------------------------------------- 2. rateio

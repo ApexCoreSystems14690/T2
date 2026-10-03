@@ -78,6 +78,10 @@ const ESTOQUE = {
   // nunca dropou devolveria a arma e CONTINUARIA constando com ela -- peça
   // duplicada na prateleira toda vez.
   recuperou:{ estoque: +1, emprestado:  0, perda: false, rotulo: 'Recuperada e devolvida no armário' },
+  // [03/10 SAMU] CONSUMO: 1 unidade sai da prateleira pra dentro da maleta da SAMU
+  // (gaze, tala...). Não fica "com a pessoa": é gasto, não empréstimo. O que sobra na
+  // maleta volta por `recuperou`. MESMA linha no Luau (Regras.Estoque.MOTIVOS).
+  abasteceu:{ estoque: -1, emprestado:  0, perda: false, rotulo: 'Abasteceu a maleta' },
   comprou:  { estoque: +1, emprestado:  0, perda: false, rotulo: 'Comprada pelo comando' },
   baixa:    { estoque: -1, emprestado:  0, perda: true,  rotulo: 'Baixa dada pelo comando' },
 };

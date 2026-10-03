@@ -1224,7 +1224,7 @@ router.post('/empresa/deposito', async (req, res) => {
 });
 
 // POST /api/game/corp/estoque  { corp, motivo, quem, roblox_id, item }
-// motivo: retirou | devolveu | saiu | roubada | morreu | recuperou
+// motivo: retirou | devolveu | saiu | roubada | morreu | recuperou | abasteceu (03/10 SAMU: consumo da maleta)
 // O vestiário pergunta ANTES de entregar; se vier `sem_estoque`, não entrega.
 router.post('/corp/estoque', async (req, res) => {
   try {
@@ -1232,7 +1232,7 @@ router.post('/corp/estoque', async (req, res) => {
     const m = String(motivo || '');
     // `comprou` e `baixa` são do COMANDO, pelo painel — o jogo não cria peça.
     // [30/09] `recuperou` entra aqui: e o armario de devolucao, disparado pelo jogo.
-    if (!['retirou', 'devolveu', 'saiu', 'roubada', 'morreu', 'recuperou'].includes(m)) {
+    if (!['retirou', 'devolveu', 'saiu', 'roubada', 'morreu', 'recuperou', 'abasteceu'].includes(m)) {
       return res.status(400).json({ error: 'motivo inválido' });
     }
     const c = await corpPorSlug(corp);
