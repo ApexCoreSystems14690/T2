@@ -457,7 +457,7 @@
         $('ssu-reabrir').style.display  = a.reabrir  ? '' : 'none';
         $('ssu-estender').style.display = a.estender ? '' : 'none';
         if (a.estender) $('ssu-estender').textContent = '⏱️ Estender até '
-          + String(a.estenderAte).padStart(2, '0') + ':00';
+          + String(a.estenderAte % 24).padStart(2, '0') + ':00';
       } catch (err) {}
     }
     async function ssuAcao(acao) {

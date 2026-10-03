@@ -21,6 +21,10 @@ const GRADE = {
   6: { abre: 19, fecha: 24 },                   // sábado
   0: { abre: 19, fecha: 22 },                   // domingo
 };
+// [03/10] Julio: "todo dia ter opcao de aumentar uma hora, infinitamente". Qualquer dia
+// da grade estica de 1 em 1 hora. O unico limite e tecnico: a sessao vigente e procurada
+// ate 2 dias pra tras, entao o fim maximo e 71 (23:00 de dois dias depois do inicio).
+const EXTENSAO_MAX = 71;
 const NOME_DIA = ['domingo', 'segunda', 'terça', 'quarta', 'quinta', 'sexta', 'sábado'];
 
 function calendario(epoch) {
@@ -47,9 +51,9 @@ function sessaoDoDia(epoch, ajustes) {
   const base = meiaNoiteDe(epoch);
   const chave = chaveDia(epoch);
   let fecha = g.fecha;
-  if (ajustes && ajustes.sessao === chave && Number.isFinite(Number(ajustes.estendidaAte)) && g.tetoExtensao) {
+  if (ajustes && ajustes.sessao === chave && Number.isFinite(Number(ajustes.estendidaAte))) {
     const nova = Number(ajustes.estendidaAte);
-    if (nova > fecha && nova <= g.tetoExtensao) fecha = nova;
+    if (nova > fecha && nova <= EXTENSAO_MAX) fecha = nova;
   }
   // [27/09] INICIO ANTECIPADO — espelho do Regras.SSU do jogo (o comentario longo esta la).
   // O diretor aperta "Iniciar SSU agora" e a sessao DE HOJE comeca na hora do clique.
@@ -71,7 +75,7 @@ function sessaoDoDia(epoch, ajustes) {
   };
 }
 function sessaoVigente(epoch, ajustes) {
-  for (const recuo of [0, 86400]) {
+  for (const recuo of [0, 86400, 172800]) {
     const s = sessaoDoDia(epoch - recuo, ajustes);
     if (s && epoch >= s.inicio && epoch < s.fim) return s;
   }
@@ -105,9 +109,10 @@ function acoesPossiveis(epoch, ajustes) {
     const encerrada = (ajustes.sessao === s.chave && ajustes.encerrada === true);
     acoes.encerrar = !encerrada;
     acoes.reabrir = encerrada;
-    if (s.tetoExtensao && s.fechaHora < s.tetoExtensao && !encerrada) {
+    // [03/10] qualquer dia estica +1h por clique, sem teto (ver EXTENSAO_MAX)
+    if (!encerrada && s.fechaHora < EXTENSAO_MAX) {
       acoes.estender = true;
-      acoes.estenderAte = s.tetoExtensao;
+      acoes.estenderAte = s.fechaHora + 1;
     }
   }
   // [27/09] INICIAR AGORA olha a sessao DO DIA, nao a vigente: o sentido do botao e
@@ -119,7 +124,7 @@ function acoesPossiveis(epoch, ajustes) {
   }
   return acoes;
 }
-function horaTexto(h) { return h >= 24 ? '00:00' : `${String(h).padStart(2, '0')}:00`; }
+function horaTexto(h) { return `${String(((Number(h) % 24) + 24) % 24).padStart(2, '0')}:00`; }
 function hhmm(seg) {
   seg = Math.max(0, Math.floor(Number(seg) || 0));
   const h = Math.floor(seg / 3600), m = Math.floor((seg % 3600) / 60);
@@ -129,10 +134,9 @@ function gradeTexto() {
   return [3, 5, 6, 0].map(w => {
     const g = GRADE[w];
     let l = `${NOME_DIA[w]}: ${horaTexto(g.abre)} às ${horaTexto(g.fecha)}`;
-    if (g.tetoExtensao) l += ` (pode esticar até ${horaTexto(g.tetoExtensao)})`;
     return l;
   });
 }
 
-module.exports = { FUSO, GRADE, NOME_DIA, calendario, chaveDia, sessaoDoDia, sessaoVigente,
+module.exports = { FUSO, GRADE, EXTENSAO_MAX, NOME_DIA, calendario, chaveDia, sessaoDoDia, sessaoVigente,
   proximaSessao, estado, acoesPossiveis, horaTexto, hhmm, gradeTexto };
