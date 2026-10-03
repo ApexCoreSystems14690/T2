@@ -114,6 +114,11 @@
 
     <!-- ================= MERCADORIA ================= -->
     <div class="painel on" id="p-mercadoria">
+      <%# [03/10] So quem tem `gerir_estoque` (dono/co-gerente/staff) compra. O chefe
+          da empresa abre o painel e via este formulario, mas o POST /caixa/comprar
+          sempre recusava ele -- botao fantasma. Regra da casa: o front esconde, o
+          BACK barra; aqui faltava a metade do front. %>
+      <% if (poderes.gerir_estoque) { %>
       <div class="cartao">
         <h3>Comprar mercadoria</h3>
         <p style="color:#7a8ba5;font-size:.8rem;margin-bottom:.75rem">
@@ -127,6 +132,15 @@
           <span id="cp-custo" style="color:#7a8ba5;font-size:.82rem"></span>
         </div>
       </div>
+      <% } else { %>
+      <div class="cartao">
+        <h3>Comprar mercadoria</h3>
+        <p style="color:#7a8ba5;font-size:.8rem;margin:0">
+          Quem compra mercadoria é o <strong>dono</strong> da empresa (ou um co-gerente).
+          Você vê o estoque pra tocar a operação, mas a compra sai do caixa e não passa por aqui.
+        </p>
+      </div>
+      <% } %>
 
       <div class="cartao">
         <h3>Estoque</h3>
@@ -357,9 +371,10 @@
       });
     }
 
-    // seletor de compra
+    // seletor de compra (so existe pra quem pode comprar)
     PRECOS = d.precos || {};
     var sel = document.getElementById('cp-item');
+    if (sel) {
     sel.innerHTML = '';
     var nomes = Object.keys(PRECOS).sort();
     if (nomes.length === 0) {
@@ -375,20 +390,26 @@
       });
     }
     custo();
+    }
   }
 
   function custo() {
-    var i = document.getElementById('cp-item').value;
-    var q = parseInt(document.getElementById('cp-qtd').value) || 0;
+    var selI = document.getElementById('cp-item');
+    var selQ = document.getElementById('cp-qtd');
     var el = document.getElementById('cp-custo');
+    if (!selI || !selQ || !el) return;
+    var i = selI.value;
+    var q = parseInt(selQ.value) || 0;
     el.textContent = (i && PRECOS[i] && q > 0) ? ('= ' + reais(PRECOS[i] * q)) : '';
   }
-  document.getElementById('cp-qtd').addEventListener('input', custo);
-  document.getElementById('cp-item').addEventListener('change', custo);
+  if (document.getElementById('cp-qtd')) document.getElementById('cp-qtd').addEventListener('input', custo);
+  if (document.getElementById('cp-item')) document.getElementById('cp-item').addEventListener('change', custo);
 
   async function comprar() {
-    var item = document.getElementById('cp-item').value;
-    var qtd = parseInt(document.getElementById('cp-qtd').value) || 0;
+    var selI = document.getElementById('cp-item'), selQ = document.getElementById('cp-qtd');
+    if (!selI || !selQ) return;
+    var item = selI.value;
+    var qtd = parseInt(selQ.value) || 0;
     if (!item || qtd <= 0) { diz('Escolha o item e a quantidade', true); return; }
     var d = await api('POST', '/caixa/comprar', { item: item, qtd: qtd });
     if (d) { diz('Comprado: ' + qtd + 'x ' + item); carregarCaixa(); }
