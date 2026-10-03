@@ -1368,4 +1368,201 @@ router.get('/patrimonio/ids', async (req, res) => {
   }
 });
 
+// ===========================================================================
+// OLX (03/10) — o lado do SITE que faltava.
+// O jogo chama estas rotas desde 20/09 (SiteCelular.olx*) e elas NUNCA existiram:
+// tudo dava 404 e a OLX do cll / o "anunciar" do Meu Patrimonio nao faziam nada.
+// REGRAS: 5 anuncios ativos por vendedor (409), vence em 7 dias, quem RESERVA a
+// compra e o UPDATE ... WHERE status='ativo' (dois compradores, so um passa).
+// Item volta pro dono SO por /olx/devolver, que marca devolvido_em na mesma query
+// em que le — nao devolve duas vezes.
+// ===========================================================================
+const OLX_LIMITE = 5;
+const olxId = (v) => { const n = Number(v); return Number.isFinite(n) && n > 0 ? Math.floor(n) : null; };
+
+// GET /api/game/olx/feed?limit=60
+router.get('/olx/feed', async (req, res) => {
+  try {
+    const lim = Math.min(150, Math.max(1, parseInt(req.query.limit) || 60));
+    const r = await pool.query(
+      `SELECT id, vendedor_id, vendedor_nome, vendedor_numero, item, qtd, preco,
+              GREATEST(0, EXTRACT(EPOCH FROM (expira_em - NOW())))::int AS expira_seg
+         FROM olx_anuncios
+        WHERE status = 'ativo' AND expira_em > NOW()
+        ORDER BY id DESC LIMIT $1`, [lim]);
+    res.json({ ok: true, anuncios: r.rows });
+  } catch (err) {
+    console.error('olx/feed:', err.message);
+    res.status(500).json({ error: 'Erro interno' });
+  }
+});
+
+// GET /api/game/olx/meus?roblox_id=
+router.get('/olx/meus', async (req, res) => {
+  try {
+    const rid = olxId(req.query.roblox_id);
+    if (!rid) return res.status(400).json({ error: 'roblox_id invalido' });
+    const r = await pool.query(
+      `SELECT id, vendedor_id, vendedor_nome, item, qtd, preco,
+              GREATEST(0, EXTRACT(EPOCH FROM (expira_em - NOW())))::int AS expira_seg
+         FROM olx_anuncios
+        WHERE vendedor_id = $1 AND status = 'ativo' AND expira_em > NOW()
+        ORDER BY id DESC`, [rid]);
+    res.json({ ok: true, anuncios: r.rows });
+  } catch (err) {
+    console.error('olx/meus:', err.message);
+    res.status(500).json({ error: 'Erro interno' });
+  }
+});
+
+// POST /api/game/olx/anunciar { vendedor_id, vendedor_nome, vendedor_numero, item, qtd, preco }
+router.post('/olx/anunciar', async (req, res) => {
+  const b = req.body || {};
+  const rid = olxId(b.vendedor_id);
+  const item = String(b.item || '').trim().slice(0, 80);
+  const qtd = Math.min(99, Math.max(1, Math.floor(Number(b.qtd) || 1)));
+  const preco = Math.floor(Number(b.preco) || 0);
+  if (!rid) return res.status(400).json({ error: 'vendedor invalido' });
+  if (item.length < 1) return res.status(400).json({ error: 'item invalido' });
+  if (preco < 1 || preco > 100000000) return res.status(400).json({ error: 'preco invalido' });
+  const client = await pool.connect();
+  try {
+    await client.query('BEGIN');
+    // trava por vendedor: dois anuncios simultaneos nao furam o limite
+    await client.query('SELECT pg_advisory_xact_lock($1)', [rid]);
+    const c = await client.query(
+      `SELECT COUNT(*)::int AS n FROM olx_anuncios
+        WHERE vendedor_id = $1 AND status = 'ativo' AND expira_em > NOW()`, [rid]);
+    if (c.rows[0].n >= OLX_LIMITE) {
+      await client.query('ROLLBACK');
+      return res.status(409).json({ ok: false, erro: 'limite' });
+    }
+    const r = await client.query(
+      `INSERT INTO olx_anuncios (vendedor_id, vendedor_nome, vendedor_numero, item, qtd, preco)
+       VALUES ($1,$2,$3,$4,$5,$6) RETURNING id`,
+      [rid, b.vendedor_nome ? String(b.vendedor_nome).slice(0, 64) : null,
+       b.vendedor_numero ? String(b.vendedor_numero).slice(0, 24) : null, item, qtd, preco]);
+    await client.query('COMMIT');
+    res.json({ ok: true, id: r.rows[0].id });
+  } catch (err) {
+    await client.query('ROLLBACK').catch(() => {});
+    console.error('olx/anunciar:', err.message);
+    res.status(500).json({ error: 'Erro interno' });
+  } finally {
+    client.release();
+  }
+});
+
+// POST /api/game/olx/comprar { anuncio_id, comprador_id, comprador_nome }
+router.post('/olx/comprar', async (req, res) => {
+  const b = req.body || {};
+  const id = olxId(b.anuncio_id);
+  const cid = olxId(b.comprador_id);
+  if (!id || !cid) return res.status(400).json({ error: 'dados invalidos' });
+  const client = await pool.connect();
+  try {
+    await client.query('BEGIN');
+    const r = await client.query(
+      `UPDATE olx_anuncios SET status = 'vendido', fechado_em = NOW()
+        WHERE id = $1 AND status = 'ativo' AND expira_em > NOW() AND vendedor_id <> $2
+        RETURNING id, vendedor_id, vendedor_nome, item, qtd, preco`, [id, cid]);
+    if (!r.rows.length) {
+      await client.query('ROLLBACK');
+      return res.status(409).json({ ok: false, erro: 'indisponivel' });
+    }
+    const a = r.rows[0];
+    await client.query(
+      `INSERT INTO olx_vendas (anuncio_id, vendedor_id, comprador_id, comprador_nome, item, qtd, valor)
+       VALUES ($1,$2,$3,$4,$5,$6,$7)`,
+      [a.id, a.vendedor_id, cid, b.comprador_nome ? String(b.comprador_nome).slice(0, 64) : null,
+       a.item, a.qtd, a.preco]);
+    await client.query('COMMIT');
+    res.json({ ok: true, id: a.id, item: a.item, qtd: a.qtd, preco: Number(a.preco),
+               vendedor_id: Number(a.vendedor_id), vendedor_nome: a.vendedor_nome });
+  } catch (err) {
+    await client.query('ROLLBACK').catch(() => {});
+    console.error('olx/comprar:', err.message);
+    res.status(500).json({ error: 'Erro interno' });
+  } finally {
+    client.release();
+  }
+});
+
+// POST /api/game/olx/cancelar { anuncio_id, vendedor_id }
+// Dois usos: (1) o VENDEDOR tira o anuncio ativo; (2) o jogo DESFAZ uma compra que
+// nao fechou (comprador sem saldo, vendedor offline...) mandando o id do COMPRADOR:
+// a venda ainda nao paga some e o anuncio volta pro dono como cancelado (o item
+// dele volta pelo /olx/devolver).
+router.post('/olx/cancelar', async (req, res) => {
+  const b = req.body || {};
+  const id = olxId(b.anuncio_id);
+  const quem = olxId(b.vendedor_id);
+  if (!id || !quem) return res.status(400).json({ error: 'dados invalidos' });
+  const client = await pool.connect();
+  try {
+    await client.query('BEGIN');
+    let r = await client.query(
+      `UPDATE olx_anuncios SET status = 'cancelado', fechado_em = NOW()
+        WHERE id = $1 AND vendedor_id = $2 AND status = 'ativo' RETURNING id`, [id, quem]);
+    if (!r.rows.length) {
+      const v = await client.query(
+        `DELETE FROM olx_vendas WHERE anuncio_id = $1 AND comprador_id = $2 AND pago_em IS NULL RETURNING id`,
+        [id, quem]);
+      if (v.rows.length) {
+        r = await client.query(
+          `UPDATE olx_anuncios SET status = 'cancelado', fechado_em = NOW()
+            WHERE id = $1 AND status = 'vendido' RETURNING id`, [id]);
+      }
+    }
+    if (!r.rows.length) {
+      await client.query('ROLLBACK');
+      return res.status(409).json({ ok: false, erro: 'indisponivel' });
+    }
+    await client.query('COMMIT');
+    res.json({ ok: true, id });
+  } catch (err) {
+    await client.query('ROLLBACK').catch(() => {});
+    console.error('olx/cancelar:', err.message);
+    res.status(500).json({ error: 'Erro interno' });
+  } finally {
+    client.release();
+  }
+});
+
+// POST /api/game/olx/devolver { roblox_id } -> itens cancelados/vencidos que ainda nao voltaram
+router.post('/olx/devolver', async (req, res) => {
+  try {
+    const rid = olxId((req.body || {}).roblox_id);
+    if (!rid) return res.status(400).json({ error: 'roblox_id invalido' });
+    const r = await pool.query(
+      `UPDATE olx_anuncios
+          SET devolvido_em = NOW(),
+              status = CASE WHEN status = 'ativo' THEN 'vencido' ELSE status END,
+              fechado_em = COALESCE(fechado_em, NOW())
+        WHERE vendedor_id = $1 AND devolvido_em IS NULL
+          AND (status = 'cancelado' OR (status = 'ativo' AND expira_em <= NOW()))
+        RETURNING id, item, qtd`, [rid]);
+    res.json({ ok: true, itens: r.rows });
+  } catch (err) {
+    console.error('olx/devolver:', err.message);
+    res.status(500).json({ error: 'Erro interno' });
+  }
+});
+
+// POST /api/game/olx/creditos { roblox_id } -> dinheiro de venda ainda nao pago ao vendedor
+router.post('/olx/creditos', async (req, res) => {
+  try {
+    const rid = olxId((req.body || {}).roblox_id);
+    if (!rid) return res.status(400).json({ error: 'roblox_id invalido' });
+    const r = await pool.query(
+      `UPDATE olx_vendas SET pago_em = NOW()
+        WHERE vendedor_id = $1 AND pago_em IS NULL RETURNING valor`, [rid]);
+    const total = r.rows.reduce((s, l) => s + Number(l.valor || 0), 0);
+    res.json({ ok: true, total, vendas: r.rows.length });
+  } catch (err) {
+    console.error('olx/creditos:', err.message);
+    res.status(500).json({ error: 'Erro interno' });
+  }
+});
+
 module.exports = router;

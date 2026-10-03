@@ -311,6 +311,42 @@ async function start() {
       );
       CREATE INDEX IF NOT EXISTS idx_mf_reembolsos_aberto ON mf_reembolsos(roblox_id) WHERE pago_em IS NULL;
 
+      -- ===== OLX (03/10) =====
+      -- O jogo (SiteCelular.olx*) chamava /olx/* desde 20/09 e o site NUNCA teve essas
+      -- rotas nem tabelas: toda chamada dava 404, entao a OLX do cll e o "anunciar" do
+      -- Meu Patrimonio nao faziam nada. O anuncio mora aqui; o item sai do inventario
+      -- quando anuncia e so volta por /olx/devolver (cancelado ou vencido em 7 dias).
+      CREATE TABLE IF NOT EXISTS olx_anuncios (
+        id SERIAL PRIMARY KEY,
+        vendedor_id BIGINT NOT NULL,
+        vendedor_nome VARCHAR(64),
+        vendedor_numero VARCHAR(24),
+        item VARCHAR(80) NOT NULL,
+        qtd INT NOT NULL DEFAULT 1 CHECK (qtd > 0),
+        preco BIGINT NOT NULL CHECK (preco > 0),
+        status VARCHAR(12) NOT NULL DEFAULT 'ativo',
+        criado_em TIMESTAMP DEFAULT NOW(),
+        expira_em TIMESTAMP NOT NULL DEFAULT (NOW() + INTERVAL '7 days'),
+        fechado_em TIMESTAMP,
+        devolvido_em TIMESTAMP
+      );
+      CREATE INDEX IF NOT EXISTS idx_olx_ativos ON olx_anuncios(expira_em) WHERE status = 'ativo';
+      CREATE INDEX IF NOT EXISTS idx_olx_vendedor ON olx_anuncios(vendedor_id);
+      CREATE TABLE IF NOT EXISTS olx_vendas (
+        id SERIAL PRIMARY KEY,
+        anuncio_id INT NOT NULL REFERENCES olx_anuncios(id) ON DELETE CASCADE,
+        vendedor_id BIGINT NOT NULL,
+        comprador_id BIGINT NOT NULL,
+        comprador_nome VARCHAR(64),
+        item VARCHAR(80),
+        qtd INT,
+        valor BIGINT NOT NULL CHECK (valor > 0),
+        criado_em TIMESTAMP DEFAULT NOW(),
+        pago_em TIMESTAMP
+      );
+      CREATE INDEX IF NOT EXISTS idx_olx_vendas_aberto ON olx_vendas(vendedor_id) WHERE pago_em IS NULL;
+
+
       -- ===== CELULAR (Aparelho com uid) =====
       -- [fix 17/09] Estas tabelas só existiam em src/db/migrate.js, que roda com
       -- 'npm run db:migrate'. O Procfile e 'node src/index.js', entao no Railway
