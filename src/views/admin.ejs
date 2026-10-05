@@ -679,7 +679,7 @@
     async function desbanir(id) {
       if (!confirm('DESBANIR o Roblox ID ' + id + '?\n\nIsso apaga o banimento no Roblox. Precisa de um servidor online pra executar.')) return;
       try {
-        const d = await api('POST', '/command', { tipo: 'unban', roblox_id: id });
+        const d = await api('POST', '/command', { tipo: 'unban', payload: { roblox_id: id } });
         alert(d && d.error ? ('Não deu: ' + d.error) : 'Desbanido. O servidor executa em alguns segundos.');
       } catch (err) { alert('Não deu: ' + (err.message || 'erro')); }
       loadBans();
