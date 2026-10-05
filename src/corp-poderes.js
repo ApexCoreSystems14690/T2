@@ -55,9 +55,16 @@ const MATRIZ = {
   // quem move dinheiro e compra arma e quem ja responde por salario
   // (dono/co-gerente), pelo mesmo motivo do `gerir_cargos`. E o registro de
   // quem gastou e o que torna o desvio acusavel em vez de invisivel.
+  //
+  // [05/10] [stated] Julio: "O comandante da pm nao consegue comprar armas
+  // ( coronel )". O desenho de 28/09 ja dizia que quem controla o caixa e o
+  // COMANDANTE ("o ideal e o comandante etc controlar isso pelo site da corp
+  // ... comprando cada uma") -- o chefe so-ver contrariava isso. Agora o cargo
+  // do topo COMPRA e paga BONUS. Continua sem mexer em cargo/salario
+  // (gerir_cargos) e sem aporte (so staff).
   ver_caixa:      { staff: 1, dono: 1, gerente: 1, chefe: 1 },
-  gastar_caixa:   { staff: 1, dono: 1, gerente: 1 },
-  gerir_estoque:  { staff: 1, dono: 1, gerente: 1 },
+  gastar_caixa:   { staff: 1, dono: 1, gerente: 1, chefe: 1 },
+  gerir_estoque:  { staff: 1, dono: 1, gerente: 1, chefe: 1 },
   // [29/09] APORTE = dinheiro criado DO NADA no caixa da corp; não sai da
   // carteira de ninguém. [stated] Julio: "a corp ja tem 50 mil ja e ele pode
   // usar para comprar os itens, aporte/depositar e para quem etc oq?" -- ele
