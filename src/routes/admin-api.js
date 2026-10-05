@@ -667,15 +667,38 @@ async function lerAjustes() {
   return (r.rows[0] && r.rows[0].value) || {};
 }
 
+// [05/10] os dois passos finais viraram funcao porque a acao `abrir` tambem precisa
+// deles — eram codigo solto no fim do POST e seriam copiados e colados.
+async function salvarAjustes(novo) {
+  await pool.query(
+    `INSERT INTO game_config (key, value, updated_at) VALUES ('ssu', $1, NOW())
+     ON CONFLICT (key) DO UPDATE SET value = EXCLUDED.value, updated_at = NOW()`,
+    [JSON.stringify(novo)]);
+}
+// avisa quem esta online AGORA: o jogo nao precisa esperar o heartbeat
+async function empurrarPraServidores(novo, req) {
+  const servers = await pool.query(
+    `SELECT job_id FROM game_servers WHERE updated_at > NOW() - INTERVAL '90 seconds'`);
+  for (const sv of servers.rows) {
+    await pool.query(
+      'INSERT INTO game_commands (tipo, payload, job_id, created_by) VALUES ($1,$2,$3,$4)',
+      ['ssu_refresh', JSON.stringify(novo), sv.job_id, req.user.id]);
+  }
+  return servers.rows.length;
+}
+
 router.get('/ssu', requirePoder('ssu'), async (req, res) => {
   try {
     const agora = Math.floor(Date.now() / 1000);
     const ajustes = await lerAjustes();
+    // [05/10] abrir SSU fora da grade e SO do DONO. Portao local, como a pagina
+    // /organizacoes: inventar poder novo mexeria na matriz de todo mundo.
+    const ehDono = perm.ehDono(req.user);
     res.json({
-      ok: true, agora,
+      ok: true, agora, souDono: ehDono,
       grade: SSU.gradeTexto(),
       estado: SSU.estado(agora, ajustes),
-      acoes: SSU.acoesPossiveis(agora, ajustes),
+      acoes: SSU.acoesPossiveis(agora, ajustes, ehDono),
       ajustes,
     });
   } catch (err) { console.error('ssu/get:', err.message); res.status(500).json({ error: 'Erro interno' }); }
@@ -686,7 +709,25 @@ router.post('/ssu', requirePoder('ssu'), async (req, res) => {
     const acao = String((req.body && req.body.acao) || '');
     const agora = Math.floor(Date.now() / 1000);
     const ajustes = await lerAjustes();
-    const podem = SSU.acoesPossiveis(agora, ajustes);
+    const ehDono = perm.ehDono(req.user);
+    const podem = SSU.acoesPossiveis(agora, ajustes, ehDono);
+
+    // [05/10] ABRIR = sessao AVULSA, fora da grade, SO pro dono. Sai cedo porque e a
+    // unica acao que NAO depende de haver sessao -- o sentido dela e que nao ha nenhuma.
+    if (acao === 'abrir') {
+      if (!ehDono) return res.status(403).json({ error: 'So o Dono abre SSU fora da grade' });
+      if (!podem.abrirAgora) return res.status(400).json({ error: 'Ja tem SSU acontecendo agora' });
+      const novoAv = {
+        por: req.user.discord_username || ('user#' + req.user.id), em: agora,
+        avulsa: { inicio: agora, fim: podem.abrirAte, por: req.user.discord_username || ('user#' + req.user.id) },
+      };
+      await salvarAjustes(novoAv);
+      await audit(req, 'ssu:abrir', { ajustes: novoAv });
+      const n = await empurrarPraServidores(novoAv, req);
+      return res.json({ ok: true, acao, servidores: n,
+        estado: SSU.estado(agora, novoAv), acoes: SSU.acoesPossiveis(agora, novoAv, ehDono) });
+    }
+
     // [27/09] 'iniciar' e o unico que age ANTES de a sessao comecar, entao ele olha a
     // sessao DO DIA; os outros tres continuam exigindo uma sessao acontecendo agora.
     const sessao = (acao === 'iniciar')
@@ -696,6 +737,23 @@ router.post('/ssu', requirePoder('ssu'), async (req, res) => {
       error: acao === 'iniciar' ? 'Hoje nao tem SSU na grade' : 'Nao ha SSU acontecendo agora' });
     if (!podem[acao === 'iniciar' ? 'iniciarAgora' : acao]) {
       return res.status(400).json({ error: 'Essa acao nao cabe agora' });
+    }
+
+    // [05/10] a sessao vigente e a AVULSA: encerrar APAGA ela (nao existe `encerrada`
+    // de avulsa), estender empurra o FIM em epoch. Nenhum dos dois toca na grade.
+    if (sessao.avulsa) {
+      const novoAv = { por: req.user.discord_username || ('user#' + req.user.id), em: agora };
+      if (acao === 'estender') {
+        novoAv.avulsa = { inicio: sessao.inicio, fim: podem.estenderAvulsaAte, por: (ajustes.avulsa || {}).por };
+      } else if (acao !== 'encerrar') {
+        return res.status(400).json({ error: 'Essa acao nao cabe numa SSU avulsa' });
+      }
+      // encerrar: `novoAv` sai SEM o campo `avulsa` -- e isso que fecha.
+      await salvarAjustes(novoAv);
+      await audit(req, 'ssu:' + acao + ':avulsa', { ajustes: novoAv });
+      const n = await empurrarPraServidores(novoAv, req);
+      return res.json({ ok: true, acao, servidores: n,
+        estado: SSU.estado(agora, novoAv), acoes: SSU.acoesPossiveis(agora, novoAv, ehDono) });
     }
 
     const novo = { sessao: sessao.chave, por: req.user.discord_username || ('user#' + req.user.id), em: agora };
@@ -719,23 +777,12 @@ router.post('/ssu', requirePoder('ssu'), async (req, res) => {
       novo.iniciadaAs = agora;
     }
 
-    await pool.query(
-      `INSERT INTO game_config (key, value, updated_at) VALUES ('ssu', $1, NOW())
-       ON CONFLICT (key) DO UPDATE SET value = EXCLUDED.value, updated_at = NOW()`,
-      [JSON.stringify(novo)]);
+    await salvarAjustes(novo);
     await audit(req, 'ssu:' + acao, { sessao: sessao.chave, ajustes: novo });
+    const nServers = await empurrarPraServidores(novo, req);
 
-    // avisa quem esta online AGORA: o jogo nao precisa esperar o heartbeat
-    const servers = await pool.query(
-      `SELECT job_id FROM game_servers WHERE updated_at > NOW() - INTERVAL '90 seconds'`);
-    for (const sv of servers.rows) {
-      await pool.query(
-        'INSERT INTO game_commands (tipo, payload, job_id, created_by) VALUES ($1,$2,$3,$4)',
-        ['ssu_refresh', JSON.stringify(novo), sv.job_id, req.user.id]);
-    }
-
-    res.json({ ok: true, acao, servidores: servers.rows.length,
-      estado: SSU.estado(agora, novo), acoes: SSU.acoesPossiveis(agora, novo) });
+    res.json({ ok: true, acao, servidores: nServers,
+      estado: SSU.estado(agora, novo), acoes: SSU.acoesPossiveis(agora, novo, ehDono) });
   } catch (err) { console.error('ssu/post:', err.message); res.status(500).json({ error: 'Erro interno' }); }
 });
 

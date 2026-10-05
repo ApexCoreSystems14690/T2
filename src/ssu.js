@@ -25,6 +25,13 @@ const GRADE = {
 // da grade estica de 1 em 1 hora. O unico limite e tecnico: a sessao vigente e procurada
 // ate 2 dias pra tras, entao o fim maximo e 71 (23:00 de dois dias depois do inicio).
 const EXTENSAO_MAX = 71;
+// [05/10] SESSAO AVULSA — Julio: "o dono, cargo dono na administracao, deveria poder
+// abrir ssu a qualquer hora". E a UNICA coisa no sistema que CRIA sessao fora da grade,
+// e por isso e exclusiva do DONO (quem barra e a rota; aqui so mora a regra).
+// Nao toca na grade: e uma sessao paralela, com inicio e fim proprios em epoch.
+const AVULSA_HORAS = 3;        // duracao padrao = a menor sessao da grade
+const AVULSA_MAX = 71 * 3600;  // mesmo teto tecnico da extensao
+
 const NOME_DIA = ['domingo', 'segunda', 'terça', 'quarta', 'quinta', 'sexta', 'sábado'];
 
 function calendario(epoch) {
@@ -74,7 +81,33 @@ function sessaoDoDia(epoch, ajustes) {
     abreHora: g.abre, fechaHora: fecha, fechaPadrao: g.fecha, tetoExtensao: g.tetoExtensao || null,
   };
 }
+// [05/10] A sessao AVULSA que o dono abriu, se estiver valendo AGORA.
+// Vive em `ajustes.avulsa = { inicio, fim }` (epoch) e NAO usa `ajustes.sessao`:
+// ela pode comecar 23h de uma segunda e acabar 02h da terca, entao amarrar numa
+// chave de dia so daria errado na virada.
+function sessaoAvulsa(epoch, ajustes) {
+  if (!ajustes || typeof ajustes !== 'object') return null;
+  const a = ajustes.avulsa;
+  if (!a || typeof a !== 'object') return null;
+  const inicio = Number(a.inicio), fim = Number(a.fim);
+  if (!Number.isFinite(inicio) || !Number.isFinite(fim)) return null;
+  if (fim <= inicio) return null;                   // fim antes do comeco: lixo
+  if ((fim - inicio) > AVULSA_MAX) return null;     // sessao eterna por bug nao vale
+  if (epoch < inicio || epoch >= fim) return null;  // ja passou ou ainda nao comecou
+  const c = calendario(inicio);
+  return {
+    chave: chaveDia(inicio), avulsa: true,
+    wday: c.wday, dia: NOME_DIA[c.wday],
+    inicio, antecipada: false, inicioGrade: inicio, fim,
+    abreHora: c.hora, fechaHora: calendario(fim).hora, fechaPadrao: calendario(fim).hora,
+    tetoExtensao: null,
+  };
+}
+
+// [05/10] A AVULSA GANHA da grade: ela foi aberta na mao, agora, de proposito.
 function sessaoVigente(epoch, ajustes) {
+  const av = sessaoAvulsa(epoch, ajustes);
+  if (av) return av;
   for (const recuo of [0, 86400, 172800]) {
     const s = sessaoDoDia(epoch - recuo, ajustes);
     if (s && epoch >= s.inicio && epoch < s.fim) return s;
@@ -92,25 +125,47 @@ function estado(epoch, ajustes) {
   ajustes = (ajustes && typeof ajustes === 'object') ? ajustes : {};
   const s = sessaoVigente(epoch, ajustes);
   if (s) {
-    if (ajustes.sessao === s.chave && ajustes.encerrada === true) {
+    // [05/10] `encerrada` e ajuste da SESSAO DA GRADE daquela noite; nao pode apagar
+    // uma avulsa aberta depois (quem fecha a avulsa e apagar a propria `avulsa`).
+    if (!s.avulsa && ajustes.sessao === s.chave && ajustes.encerrada === true) {
       const p = proximaSessao(epoch, ajustes);
       return { aberto: false, motivo: 'encerrada', sessao: s, proxima: p, abreEm: p ? p.inicio - epoch : null };
     }
-    return { aberto: true, motivo: 'na_grade', sessao: s, fechaEm: s.fim - epoch, estendida: s.fechaHora > s.fechaPadrao };
+    return { aberto: true, motivo: s.avulsa ? 'avulsa' : 'na_grade', sessao: s,
+      fechaEm: s.fim - epoch, estendida: s.avulsa ? false : (s.fechaHora > s.fechaPadrao) };
   }
   const p = proximaSessao(epoch, ajustes);
   return { aberto: false, motivo: 'fora_da_grade', proxima: p, abreEm: p ? p.inicio - epoch : null };
 }
-function acoesPossiveis(epoch, ajustes) {
+// [05/10] `ehDono` e o 3o argumento e vale SO pro `abrirAgora`. Quem nao passa nada
+// recebe exatamente o que recebia antes.
+function acoesPossiveis(epoch, ajustes, ehDono) {
   ajustes = (ajustes && typeof ajustes === 'object') ? ajustes : {};
   const s = sessaoVigente(epoch, ajustes);
-  const acoes = { encerrar: false, reabrir: false, estender: false, estenderAte: null, iniciarAgora: false };
+  const acoes = { encerrar: false, reabrir: false, estender: false, estenderAte: null,
+                  iniciarAgora: false, abrirAgora: false, abrirAte: null, estenderAvulsaAte: null };
+
+  // ABRIR AGORA: so o DONO, e so quando NAO tem nada acontecendo.
+  const e = estado(epoch, ajustes);
+  if (ehDono === true && !e.aberto) {
+    acoes.abrirAgora = true;
+    acoes.abrirAte = epoch + AVULSA_HORAS * 3600;
+  }
+
   if (s) {
     const encerrada = (ajustes.sessao === s.chave && ajustes.encerrada === true);
     acoes.encerrar = !encerrada;
     acoes.reabrir = encerrada;
-    // [03/10] qualquer dia estica +1h por clique, sem teto (ver EXTENSAO_MAX)
-    if (!encerrada && s.fechaHora < EXTENSAO_MAX) {
+    if (s.avulsa) {
+      // na avulsa nao existe "hora da grade": estica o FIM em epoch, +1h por clique.
+      acoes.encerrar = true;
+      acoes.reabrir = false;
+      if ((s.fim + 3600 - s.inicio) <= AVULSA_MAX) {
+        acoes.estender = true;
+        acoes.estenderAvulsaAte = s.fim + 3600;
+      }
+    } else if (!encerrada && s.fechaHora < EXTENSAO_MAX) {
+      // [03/10] qualquer dia estica +1h por clique, sem teto (ver EXTENSAO_MAX)
       acoes.estender = true;
       acoes.estenderAte = s.fechaHora + 1;
     }
@@ -138,5 +193,5 @@ function gradeTexto() {
   });
 }
 
-module.exports = { FUSO, GRADE, EXTENSAO_MAX, NOME_DIA, calendario, chaveDia, sessaoDoDia, sessaoVigente,
+module.exports = { FUSO, GRADE, EXTENSAO_MAX, AVULSA_HORAS, AVULSA_MAX, NOME_DIA, calendario, chaveDia, sessaoDoDia, sessaoAvulsa, sessaoVigente,
   proximaSessao, estado, acoesPossiveis, horaTexto, hhmm, gradeTexto };

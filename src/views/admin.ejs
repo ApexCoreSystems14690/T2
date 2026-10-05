@@ -208,6 +208,7 @@
         <div id="ssu-estado" style="font-size:1.05rem;font-weight:600;margin:.35rem 0 .15rem">–</div>
         <div id="ssu-quando" class="muted" style="font-size:.82rem">–</div>
         <div class="clock" style="margin-top:.7rem">
+          <button class="btn" id="ssu-abrir" onclick="ssuAcao('abrir')">🔓 Abrir SSU agora</button>
           <button class="btn" id="ssu-iniciar" onclick="ssuAcao('iniciar')">🚀 Iniciar SSU agora</button>
           <button class="btn danger" id="ssu-encerrar" onclick="ssuAcao('encerrar')">⏹️ Encerrar agora</button>
           <button class="btn" id="ssu-reabrir" onclick="ssuAcao('reabrir')">▶️ Reabrir</button>
@@ -427,6 +428,13 @@
     // ---------------------------------------------------------------- SSU
     // O painel NAO decide nada: pergunta ao site o estado e quais acoes cabem
     // agora, e desenha so essas. Assim nunca aparece botao que o back recusa.
+    // [05/10] hora de Brasilia (UTC-3 fixo) a partir de um epoch. A SSU avulsa termina
+    // num INSTANTE, nao numa hora da grade, entao os dois lugares que mostram o fim dela
+    // precisam disso -- e repetir a conta em dois lugares e como nasce divergencia.
+    function ssuHoraBRT(epoch) {
+      const d = new Date((Number(epoch) - 3 * 3600) * 1000);
+      return String(d.getUTCHours()).padStart(2, '0') + ':' + String(d.getUTCMinutes()).padStart(2, '0');
+    }
     async function ssuCarrega() {
       const card = document.querySelector('[data-poder="ssu"]');
       if (!card || card.style.display === 'none') return;
@@ -440,7 +448,10 @@
           + (e.aberto ? '● ABERTO' : '● FECHADO') + '</span>'
           + (e.estendida ? ' <span class="muted" style="font-size:.8rem">(estendido)</span>' : '');
         let quando = '';
-        if (e.aberto && e.sessao) {
+        if (e.aberto && e.sessao && e.sessao.avulsa) {
+          // [05/10] SSU avulsa: o fim nao e hora de grade, e um instante. Mostro a hora dele.
+          quando = 'SSU aberta pelo Dono · fecha às ' + ssuHoraBRT(e.sessao.fim);
+        } else if (e.aberto && e.sessao) {
           quando = 'SSU de ' + e.sessao.dia + ' · fecha às '
             + (e.sessao.fechaHora >= 24 ? '00:00' : String(e.sessao.fechaHora).padStart(2, '0') + ':00');
         } else if (e.motivo === 'encerrada') {
@@ -452,17 +463,28 @@
         $('ssu-quando').textContent = quando;
         $('ssu-grade').innerHTML = (d.grade || []).map(l => '• ' + l).join('<br>');
         const a = d.acoes || {};
+        // [05/10] 'Abrir SSU agora' so existe pro DONO -- o back tambem barra (403).
+        $('ssu-abrir').style.display    = a.abrirAgora ? '' : 'none';
         $('ssu-iniciar').style.display  = a.iniciarAgora ? '' : 'none';
         $('ssu-encerrar').style.display = a.encerrar ? '' : 'none';
         $('ssu-reabrir').style.display  = a.reabrir  ? '' : 'none';
         $('ssu-estender').style.display = a.estender ? '' : 'none';
-        if (a.estender) $('ssu-estender').textContent = '⏱️ Estender até '
-          + String(a.estenderAte % 24).padStart(2, '0') + ':00';
+        if (a.estender && a.estenderAvulsaAte) {
+          // avulsa: o fim e epoch, nao hora de grade
+          $('ssu-estender').textContent = '⏱️ Estender até ' + ssuHoraBRT(a.estenderAvulsaAte);
+        } else if (a.estender) {
+          $('ssu-estender').textContent = '⏱️ Estender até '
+            + String(a.estenderAte % 24).padStart(2, '0') + ':00';
+        }
       } catch (err) {}
     }
     async function ssuAcao(acao) {
-      const nomes = { encerrar: 'ENCERRAR o SSU agora', reabrir: 'REABRIR o SSU', estender: 'ESTENDER o SSU', iniciar: 'INICIAR o SSU de hoje AGORA' };
-      if (!confirm(nomes[acao] + '?\n\nIsso vale só pra sessão de hoje. A grade não muda.')) return;
+      const nomes = { encerrar: 'ENCERRAR o SSU agora', reabrir: 'REABRIR o SSU', estender: 'ESTENDER o SSU',
+                      iniciar: 'INICIAR o SSU de hoje AGORA', abrir: 'ABRIR o SSU AGORA, fora da grade' };
+      const aviso = acao === 'abrir'
+        ? '?\n\nAbre o servidor por 3 horas a partir de agora, em qualquer dia. A grade não muda — dá pra estender de 1 em 1 hora ou encerrar quando quiser.'
+        : '?\n\nIsso vale só pra sessão de hoje. A grade não muda.';
+      if (!confirm(nomes[acao] + aviso)) return;
       $('ssu-msg').textContent = 'mandando…';
       try {
         const r = await fetch('/api/admin/ssu', {
