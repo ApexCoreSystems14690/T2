@@ -148,46 +148,33 @@ router.post('/link-roblox', async (req, res) => {
     await client.query('BEGIN');
 
     // Existe outro usuário com esse Roblox ID?
-    const outro = await client.query('SELECT * FROM users WHERE roblox_id = $1 AND id <> $2', [rid, req.user.id]);
+    const outro = await client.query(
+      'SELECT id, discord_id, discord_username FROM users WHERE roblox_id = $1 AND id <> $2',
+      [rid, req.user.id]);
     if (outro.rows.length > 0) {
-      const ph = outro.rows[0];
-      if (!String(ph.discord_id).startsWith('roblox_')) {
-        // Conta real de outra pessoa já usa esse ID
-        await client.query('ROLLBACK');
-        return res.redirect('/dashboard/link-roblox?error=already_linked');
-      }
-      // É um "placeholder" criado quando alguém te adicionou por Roblox ID:
-      // transfere tudo dele pra tua conta e apaga o placeholder.
+      // =====================================================================
+      // [05/10 INCIDENTE] AQUI O SITE APAGAVA CONTA DE JOGADOR.
       //
-      // [FIX 23/09 arquitetura] AQUI MORAVA O PIOR FURO DO SITE. Vincular um
-      // Roblox NAO exige provar posse: basta digitar o nome do jogador e o site
-      // resolve o id na API do Roblox. Como o bloco abaixo tambem passava
-      // `corporations.owner_id` do placeholder pra quem vinculou, dava pra
-      // DIGITAR O NOME DE OUTRA PESSOA e virar DONO da corporacao dela.
-      // Cargo e filiacao continuam migrando (dano baixo e reversivel pelo dono).
-      // A POSSE nao migra mais sozinha: ela vira um pedido que um admin com o
-      // poder 'corp' confirma, ou o proprio dono transfere pelo painel.
-      await client.query(
-        `UPDATE members SET user_id = $1 WHERE user_id = $2
-         AND corporation_id NOT IN (SELECT corporation_id FROM members WHERE user_id = $1)`,
-        [req.user.id, ph.id]);
-      await client.query('DELETE FROM members WHERE user_id = $1', [ph.id]);
-      await client.query(
-        `UPDATE corp_managers SET user_id = $1 WHERE user_id = $2
-         AND corporation_id NOT IN (SELECT corporation_id FROM corp_managers WHERE user_id = $1)`,
-        [req.user.id, ph.id]);
-      await client.query('DELETE FROM corp_managers WHERE user_id = $1', [ph.id]);
-      const donas = await client.query('SELECT id, name FROM corporations WHERE owner_id = $1', [ph.id]);
-      if (donas.rows.length > 0) {
-        // a corporacao fica SEM dono em vez de trocar de mao sozinha; o painel
-        // (poder 'corp') resolve. Nao perde nada: os dados continuam todos la.
-        await client.query('UPDATE corporations SET owner_id = NULL WHERE owner_id = $1', [ph.id]);
-        console.warn('[seguranca] link-roblox: ' + donas.rows.length +
-          ' corporacao(oes) ficaram sem dono ao vincular o roblox_id ' + rid +
-          ' (antes a posse passava automaticamente pra quem vinculasse): ' +
-          donas.rows.map(c => c.name).join(', '));
-      }
-      await client.query('DELETE FROM users WHERE id = $1', [ph.id]);
+      // O bloco antigo: se a linha achada fosse um "placeholder" (discord_id
+      // comecando com 'roblox_'), ele migrava members/corp_managers pra quem
+      // estava vinculando, zerava o owner_id da corp dela e dava
+      // DELETE FROM users nessa linha.
+      //
+      // Vincular Roblox NUNCA exigiu provar posse: basta digitar o NOME do
+      // jogador e o site resolve o id na API da Roblox. Juntando as duas
+      // coisas, QUALQUER pessoa logada apagava a conta de QUALQUER jogador,
+      // uma por uma, e ainda herdava as filiacoes dela. Foi exatamente isso
+      // que usaram pra "apagar as contas do website" em 05/10.
+      //
+      // Agora: NAO migra, NAO apaga, NAO mexe em corp. Recusa e loga.
+      // Fundir placeholder virou tarefa de admin.
+      // =====================================================================
+      await client.query('ROLLBACK');
+      console.warn('[seguranca] link-roblox RECUSADO: user ' + req.user.id +
+        ' (' + (req.user.discord_username || '?') + ') tentou vincular roblox_id ' + rid +
+        ' que ja pertence ao user ' + outro.rows[0].id +
+        ' (' + outro.rows[0].discord_id + ' / ' + (outro.rows[0].discord_username || '?') + ')');
+      return res.redirect('/dashboard/link-roblox?error=already_linked');
     }
 
     await client.query(
