@@ -53,7 +53,7 @@ const BASE_POR_CORP = {
   'bope':            45000,   // ~4,3 kits
   'rotam':           40000,   // ~4,5 kits
   'governo':         20000,   // ~5,2 kits · kit barato, corp administrativa
-  'samu':            50000,   // [04/10 Julio] "a samu ta recebendo mt pouco caixa, e gasta mt dinheiro, aumente" (era 15000)
+  'samu':            100000,  // [05/10 Julio] "samu deve ganhar mais, pq samu torra dinheiro" (era 50000; antes 15000). Maleta cheia = 44 itens ~R$ 10.160
   'jornal':          10000,   // não tem vestiário: o caixa dela é só pra bônus
   // Sem repasse: não são corporação do Estado.
   'pavuna':          0,

@@ -27,7 +27,8 @@ t('proximo repasse em ate 7 dias', prox - t0 <= SEMANA);
 // [29/09] cada corp tem base propria (rebalanceado pelo custo do KIT dela).
 const SAMU = O.BASE_POR_CORP['samu'];
 t('PM tem base propria, nao a padrao', O.baseDe('policia-militar') === 55000);
-t('SAMU recebe MENOS que a PM', O.baseDe('samu') < O.baseDe('policia-militar'));
+// [05/10] Julio inverteu a decisao antiga: a SAMU gasta MAIS (maleta consome item a cada atendimento)
+t('SAMU recebe MAIS que a PM', O.baseDe('samu') > O.baseDe('policia-militar'));
 t('jornal é o menor dos que recebem', O.baseDe('jornal') < O.baseDe('samu'));
 t('corp desconhecida cai no padrao', O.baseDe('corp-que-nao-existe') === O.ORC.BASE_PADRAO);
 t('slug com espaco/maiuscula normaliza', O.baseDe('  SAMU ') === SAMU);

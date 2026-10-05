@@ -1340,6 +1340,36 @@ router.post('/corp/estoque/lote', async (req, res) => {
 
 // GET /api/game/corp/:slug/estoque — o que o vestiário tem pra entregar agora.
 // O jogo lê isto no boot e guarda; a entrega em si confirma no POST acima.
+// [05/10] GET /api/game/corp/:slug/movimentos?horas=6&limite=300 -- AUDITORIA do estoque.
+// Julio: "so tinha um cara em servico, com 1 maleta" e mesmo assim 10 colares sumiram da
+// prateleira em minutos. O painel NAO mostra movimento de equipamento (de proposito, ver
+// painel()), entao nao havia como saber QUEM puxou. Isto e so leitura, protegido pela
+// x-api-key do jogo como o resto do router: devolve cada abasteceu/recuperou/retirou... com
+// quem, item, quantidade e hora. Agregado por pessoa+motivo+item no fim, pra ler rapido.
+router.get('/corp/:slug/movimentos', async (req, res) => {
+  try {
+    const c = await corpPorSlug(req.params.slug);
+    if (!c) return res.status(404).json({ error: 'corporação não encontrada' });
+    const horas = Math.max(1, Math.min(72, parseInt(req.query.horas) || 6));
+    const limite = Math.max(1, Math.min(1000, parseInt(req.query.limite) || 300));
+    const r = await pool.query(
+      `SELECT criado_em, motivo, item, qtd, quem, por, valor, tipo
+         FROM corp_lancamentos
+        WHERE corporation_id = $1 AND criado_em > NOW() - make_interval(hours => $2::int)
+        ORDER BY id DESC LIMIT $3`, [c.id, horas, limite]);
+    const resumo = {};
+    for (const l of r.rows) {
+      if (l.tipo !== 'estoque') continue;
+      const k = `${l.quem || '?'}|${l.motivo}|${l.item}`;
+      resumo[k] = (resumo[k] || 0) + (Number(l.qtd) || 1);
+    }
+    res.json({ ok: true, corp: c.slug, horas, linhas: r.rows, resumo });
+  } catch (err) {
+    console.error('corp/movimentos:', err.message);
+    res.status(500).json({ error: 'Erro interno' });
+  }
+});
+
 router.get('/corp/:slug/estoque', async (req, res) => {
   try {
     const c = await corpPorSlug(req.params.slug);
