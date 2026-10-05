@@ -191,9 +191,67 @@ router.post('/command', async (req, res) => {
       'INSERT INTO game_commands (tipo, target_roblox_id, target_name, payload, job_id, created_by) VALUES ($1, $2, $3, $4, $5, $6) RETURNING id',
       [tipo, alvoId, alvoNome, JSON.stringify(dados), jobId, req.user.id]);
     await audit(req, 'comando:' + tipo, { alvo: alvoNome || alvoId, payload: dados });
+
+    // [05/10] ESPELHO DOS BANIDOS. O ban vive no DataStore do Roblox e o site nao le aquilo,
+    // entao sem isto o painel nunca saberia QUEM esta banido -- e nao daria pra desbanir
+    // ninguem sem decorar o id. Registro aqui, onde o site ja sabe tudo do comando.
+    try {
+      const quem = req.user.discord_username || ('user#' + req.user.id);
+      if (tipo === 'ban') {
+        const ate = dados.horas > 0 ? Math.floor(Date.now() / 1000) + dados.horas * 3600 : 0;
+        await pool.query(
+          `INSERT INTO game_bans (roblox_id, nome, motivo, ate, banido_por, banido_em, origem, desfeito_em, desfeito_por)
+           VALUES ($1,$2,$3,$4,$5, NOW(), 'painel', NULL, NULL)
+           ON CONFLICT (roblox_id) DO UPDATE SET
+             nome = COALESCE(EXCLUDED.nome, game_bans.nome), motivo = EXCLUDED.motivo,
+             ate = EXCLUDED.ate, banido_por = EXCLUDED.banido_por, banido_em = NOW(),
+             origem = 'painel', desfeito_em = NULL, desfeito_por = NULL`,
+          [alvoId, alvoNome || null, dados.motivo || null, ate, quem]);
+      } else if (tipo === 'unban') {
+        await pool.query(
+          `UPDATE game_bans SET desfeito_em = NOW(), desfeito_por = $2 WHERE roblox_id = $1`,
+          [alvoId, quem]);
+      }
+    } catch (e) {
+      // o espelho nunca pode derrubar o comando: o ban de verdade e o do jogo.
+      console.error('game_bans:', e.message);
+    }
+
     res.json({ ok: true, id: r.rows[0].id });
   } catch (err) {
     console.error('command:', err.message);
+    res.status(500).json({ error: 'Erro interno' });
+  }
+});
+
+// ------------------------------------------------------------
+// [05/10] BANIDOS — lista pro painel. Fonte: a tabela game_bans (espelho).
+// `vencido` e calculado AQUI, pelo relogio do site: ban temporario que passou da hora
+// ja nao vale no jogo (o DataHandler apaga a chave na proxima entrada do cara), entao
+// mostrar ele como "banido" seria mentira.
+// ------------------------------------------------------------
+router.get('/bans', requirePoder('banir'), async (req, res) => {
+  try {
+    const hist = String(req.query.historico || '') === '1';
+    const r = await pool.query(
+      `SELECT b.roblox_id, b.nome, b.motivo, b.ate, b.banido_por, b.banido_em, b.origem,
+              b.desfeito_em, b.desfeito_por,
+              (SELECT p.nome FROM game_players p WHERE p.roblox_id = b.roblox_id LIMIT 1) AS nome_registro
+         FROM game_bans b
+        ${hist ? '' : 'WHERE b.desfeito_em IS NULL'}
+        ORDER BY b.banido_em DESC LIMIT 500`);
+    const agora = Math.floor(Date.now() / 1000);
+    const bans = r.rows.map(b => ({
+      ...b,
+      nome: b.nome || b.nome_registro || null,
+      permanente: !b.ate || Number(b.ate) <= 0,
+      vencido: !!(b.ate && Number(b.ate) > 0 && Number(b.ate) <= agora),
+      falta: (b.ate && Number(b.ate) > agora) ? Number(b.ate) - agora : 0,
+    }));
+    res.json({ ok: true, agora, bans,
+      ativos: bans.filter(b => !b.desfeito_em && !b.vencido).length });
+  } catch (err) {
+    console.error('bans:', err.message);
     res.status(500).json({ error: 'Erro interno' });
   }
 });

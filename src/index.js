@@ -229,6 +229,25 @@ async function start() {
       );
       CREATE INDEX IF NOT EXISTS idx_game_patrimonio_atualizado ON game_patrimonio(atualizado_em DESC);
 
+      -- ===== BANIDOS (05/10) =====
+      -- O ban DE VERDADE mora no DataStore do Roblox (BanidosDB, chave <id>_Banido) e o
+      -- site NAO alcanca aquilo. Esta tabela e o ESPELHO, pra o painel poder LISTAR e
+      -- oferecer o Desbanir. Quem escreve: o proprio /command quando bane ou desbane, e
+      -- o jogo (ban feito in-game + a varredura do DataStore no boot).
+      -- ate = epoch do fim; 0 ou NULL = permanente. desfeito_em preenchido = desbanido.
+      CREATE TABLE IF NOT EXISTS game_bans (
+        roblox_id BIGINT PRIMARY KEY,
+        nome VARCHAR(64),
+        motivo TEXT,
+        ate BIGINT DEFAULT 0,
+        banido_por VARCHAR(64),
+        banido_em TIMESTAMP DEFAULT NOW(),
+        origem VARCHAR(16) DEFAULT 'painel',
+        desfeito_em TIMESTAMP,
+        desfeito_por VARCHAR(64)
+      );
+      CREATE INDEX IF NOT EXISTS idx_game_bans_ativo ON game_bans(desfeito_em, banido_em DESC);
+
       -- ===== PROCURADOS (26/09) =====
       -- A policia marca alguem A MAO. Nao confundir com a aba "Procurados" antiga
       -- da Ficha, que e DERIVADA (quem deve dinheiro). Esta aqui e a lista de

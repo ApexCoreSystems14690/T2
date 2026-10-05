@@ -943,6 +943,55 @@ router.post('/mf/reembolso/acertar', async (req, res) => {
 // POST /api/game/patrimonio  { roblox_id, nome, bolso, banco, level, xp, emprego, carros, casas }
 // O jogo manda a foto financeira do jogador no PlayerLeaving. Upsert: sempre a mais recente.
 // Funciona com o jogador OFFLINE porque e a ultima foto salva, nao um dado ao vivo.
+// [05/10] O jogo empurra os BANS pro site: os feitos in-game (comando/admin dentro do
+// servidor) e a varredura do DataStore no boot (os que ja existiam antes do espelho).
+// Sem isto a lista do painel so teria os bans dados PELO painel -- ou seja, nasceria vazia.
+// Aceita um lote: { bans: [ { roblox_id, nome, motivo, ate, origem } ] }.
+// NAO sobrescreve um ban que o painel acabou de dar (origem 'painel' ganha do backfill),
+// e NAO ressuscita um ban ja desfeito, a nao ser que venha de novo como ban fresco do jogo.
+router.post('/bans', async (req, res) => {
+  try {
+    const b = req.body || {};
+    const lote = Array.isArray(b.bans) ? b.bans : (b.roblox_id ? [b] : []);
+    if (lote.length === 0) return res.json({ ok: true, gravados: 0 });
+    if (lote.length > 200) return res.status(400).json({ error: 'lote grande demais' });
+    let n = 0;
+    for (const it of lote) {
+      const rid = Number(it.roblox_id);
+      if (!Number.isFinite(rid) || rid <= 0) continue;
+      const ate = Number.isFinite(Number(it.ate)) ? Math.max(0, Math.floor(Number(it.ate))) : 0;
+      const origem = (it.origem === 'jogo' || it.origem === 'backfill') ? it.origem : 'jogo';
+      await pool.query(
+        `INSERT INTO game_bans (roblox_id, nome, motivo, ate, banido_por, banido_em, origem, desfeito_em, desfeito_por)
+         VALUES ($1,$2,$3,$4,$5, NOW(), $6, NULL, NULL)
+         ON CONFLICT (roblox_id) DO UPDATE SET
+           nome = COALESCE(EXCLUDED.nome, game_bans.nome),
+           motivo = COALESCE(EXCLUDED.motivo, game_bans.motivo),
+           ate = EXCLUDED.ate,
+           origem = EXCLUDED.origem,
+           desfeito_em = NULL, desfeito_por = NULL
+         WHERE game_bans.desfeito_em IS NOT NULL OR $6 <> 'backfill'`,
+        [rid, it.nome != null ? String(it.nome).slice(0, 64) : null,
+         it.motivo != null ? String(it.motivo).slice(0, 500) : null,
+         ate, it.banido_por != null ? String(it.banido_por).slice(0, 64) : null, origem]);
+      n++;
+    }
+    res.json({ ok: true, gravados: n });
+  } catch (err) {
+    console.error('game/bans:', err.message);
+    res.status(500).json({ error: 'Erro interno' });
+  }
+});
+
+// [05/10] quais ids o site AINDA NAO tem -- o jogo usa pra nao reenviar o mundo todo
+// a cada boot (mesmo padrao do backfill do patrimonio).
+router.get('/bans/faltando', async (req, res) => {
+  try {
+    const r = await pool.query(`SELECT roblox_id FROM game_bans`);
+    res.json({ ok: true, ids: r.rows.map(x => Number(x.roblox_id)) });
+  } catch (err) { res.status(500).json({ error: 'Erro interno' }); }
+});
+
 router.post('/patrimonio', async (req, res) => {
   try {
     const b = req.body || {};
@@ -1244,6 +1293,47 @@ router.post('/corp/estoque', async (req, res) => {
     res.json({ ok: true, lancamento: r.lancamento });
   } catch (err) {
     console.error('corp/estoque:', err.message);
+    res.status(500).json({ error: 'Erro interno' });
+  }
+});
+
+// [05/10] POST /api/game/corp/estoque/lote  { corp, motivo, quem, roblox_id, itens: { item: qtd } }
+// Julio: "foto da minha maleta, tudo zerado, compare com o caixa". A maleta da SAMU
+// enchia/devolvia UMA unidade por POST: 11 itens x 4 = 44 requisicoes seguidas (~18 s)
+// pra encher, e 44 pra devolver quando ela some. Com varios medicos, isso comia o
+// teto de HTTP do servidor (400/min) e o que passava do teto simplesmente nao
+// voltava pra prateleira -- sobretudo no fechamento do servidor.
+// Aqui e 1 requisicao por maleta. Cada unidade continua passando pelo MESMO
+// movEstoque (lock, nucleo, lancamento) -- nada de regra nova, so menos viagens.
+// motivo: abasteceu (para no 1o sem_estoque de cada item) | recuperou.
+// Devolve { ok, itens: { item: quantas_passaram }, erros: { item: erro } }.
+const LOTE_MOTIVOS = ['abasteceu', 'recuperou'];
+const LOTE_MAX = 120;   // trava de sanidade: maleta cheia sao 44
+router.post('/corp/estoque/lote', async (req, res) => {
+  try {
+    const { corp, motivo, quem, roblox_id, itens } = req.body || {};
+    const m = String(motivo || '');
+    if (!LOTE_MOTIVOS.includes(m)) return res.status(400).json({ error: 'motivo inválido' });
+    if (!itens || typeof itens !== 'object') return res.status(400).json({ error: 'itens' });
+    const c = await corpPorSlug(corp);
+    if (!c) return res.status(404).json({ error: 'corporação não encontrada' });
+    const nome = String(quem || '').slice(0, 64);
+    const extra = { roblox_id: parseInt(roblox_id) || null, por: nome };
+    const feitos = {}, erros = {};
+    let total = 0;
+    for (const [itemBruto, qBruta] of Object.entries(itens)) {
+      const item = String(itemBruto).slice(0, 64);
+      const q = Math.max(0, Math.min(20, parseInt(qBruta) || 0));
+      feitos[item] = 0;
+      for (let i = 0; i < q && total < LOTE_MAX; i++) {
+        const r = await caixa.movEstoque(c.id, m, nome, item, extra);
+        if (!r.ok) { erros[item] = r.erro; break; }
+        feitos[item] += 1; total += 1;
+      }
+    }
+    res.json({ ok: true, itens: feitos, erros });
+  } catch (err) {
+    console.error('corp/estoque/lote:', err.message);
     res.status(500).json({ error: 'Erro interno' });
   }
 });

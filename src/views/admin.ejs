@@ -107,6 +107,7 @@
       <div class="tab" data-tab="usuarios">Usuários</div>
       <div class="tab" data-tab="historico">Histórico</div>
       <div class="tab" data-tab="analise">Análise</div>
+      <div class="tab" data-tab="banidos">Banidos</div>
     </div>
 
     <!-- JOGADORES -->
@@ -298,6 +299,28 @@
     </div>
 
     <!-- ANÁLISE -->
+    <div class="panel" id="panel-banidos">
+      <div class="row" style="margin-bottom:.6rem;align-items:center;gap:.6rem;flex-wrap:wrap">
+        <b id="bn-conta">—</b>
+        <span class="muted" style="font-size:.8rem;flex:1">O ban de verdade fica no Roblox; esta lista é o registro do painel. Desbanir precisa de um servidor online pra executar.</span>
+        <label class="muted" style="font-size:.8rem"><input type="checkbox" id="bn-hist" onclick="loadBans()"> ver desbanidos também</label>
+        <button class="btn sec" onclick="loadBans()">↻ Atualizar</button>
+      </div>
+      <div class="row" style="gap:.5rem;flex-wrap:wrap;background:rgba(255,255,255,.03);padding:.5rem;border-radius:8px;align-items:flex-end;margin-bottom:.6rem">
+        <div class="fg" style="max-width:190px"><label>Desbanir por Roblox ID</label><input id="bn-id" placeholder="123456789" autocomplete="off"></div>
+        <button class="btn" onclick="desbanirPorId()">🔓 Desbanir</button>
+        <span class="muted" style="font-size:.76rem">pra quem foi banido antes deste registro existir</span>
+      </div>
+      <div style="overflow-x:auto">
+        <table>
+          <thead><tr>
+            <th>Jogador</th><th>Roblox ID</th><th>Motivo</th><th>Até</th><th>Quem baniu</th><th>Quando</th><th>Ações</th>
+          </tr></thead>
+          <tbody id="bn-body"><tr><td colspan="7" class="empty">Carregando…</td></tr></tbody>
+        </table>
+      </div>
+    </div>
+
     <div class="panel" id="panel-analise">
       <div class="row" style="margin-bottom:.5rem">
         <span class="muted" style="font-size:.8rem;flex:1">Média de jogadores, pico, mínimo e crescimento por noite (SSU). Coletado a cada ~2 min enquanto o servidor está de pé.</span>
@@ -400,7 +423,7 @@
     const btnSe = (tipo, html) => podeCmd(tipo) ? html : '';
 
     // Painéis e abas por poder. Aba sem nenhum poder some do topo.
-    const PODER_DA_ABA = { jogadores: null, registro: 'ver_registro', servidor: 'servidor', logs: 'ver_registro', cargos: 'corp', usuarios: 'admins', historico: 'admins', analise: 'ver_registro' };
+    const PODER_DA_ABA = { jogadores: null, registro: 'ver_registro', servidor: 'servidor', logs: 'ver_registro', cargos: 'corp', usuarios: 'admins', historico: 'admins', analise: 'ver_registro', banidos: 'banir' };
 
     async function carregarEu() {
       EU = await api('GET', '/eu');
@@ -609,6 +632,64 @@
         || '<tr><td colspan="5" class="empty">—</td></tr>';
     }
 
+    // ---------------------------------------------------------------- BANIDOS
+    // [05/10] O ban mora no DataStore do Roblox e o site nao le aquilo: esta tela mostra
+    // o ESPELHO (game_bans). Por isso existe tambem o campo de Roblox ID solto -- pra
+    // desbanir alguem que foi banido antes do espelho existir e por isso nao esta na lista.
+    function bnFalta(seg) {
+      seg = Math.max(0, Math.floor(Number(seg) || 0));
+      if (seg >= 86400) return Math.floor(seg / 86400) + 'd ' + Math.floor((seg % 86400) / 3600) + 'h';
+      if (seg >= 3600) return Math.floor(seg / 3600) + 'h ' + Math.floor((seg % 3600) / 60) + 'min';
+      return Math.max(1, Math.ceil(seg / 60)) + 'min';
+    }
+    async function loadBans() {
+      const hist = $('bn-hist') && $('bn-hist').checked ? '?historico=1' : '';
+      const body = $('bn-body');
+      try {
+        const d = await api('GET', '/bans' + hist);
+        const bans = d.bans || [];
+        $('bn-conta').textContent = d.ativos + (d.ativos === 1 ? ' banido ativo' : ' banidos ativos');
+        if (bans.length === 0) {
+          body.innerHTML = '<tr><td colspan="7" class="empty">Ninguém banido por aqui ainda. Bans antigos (de antes deste registro) não aparecem — use o campo de Roblox ID acima.</td></tr>';
+          return;
+        }
+        body.innerHTML = bans.map(b => {
+          let ate, cor = '';
+          if (b.desfeito_em) { ate = 'desbanido'; cor = 'color:#8a8a8a'; }
+          else if (b.permanente) { ate = 'PERMANENTE'; cor = 'color:#ff8a80'; }
+          else if (b.vencido) { ate = 'já venceu'; cor = 'color:#8a8a8a'; }
+          else { ate = 'falta ' + bnFalta(b.falta); cor = 'color:#ffb74d'; }
+          const quando = b.banido_em ? new Date(b.banido_em).toLocaleString('pt-BR') : '—';
+          const acao = (!b.desfeito_em && podeP('banir'))
+            ? '<button onclick="desbanir(' + b.roblox_id + ')">🔓 Desbanir</button>'
+            : (b.desfeito_em ? '<span class="muted" style="font-size:.75rem">por ' + (b.desfeito_por || '—') + '</span>' : '');
+          return '<tr' + (b.desfeito_em ? ' style="opacity:.55"' : '') + '>'
+            + '<td>' + (b.nome || '<span class="muted">—</span>') + '</td>'
+            + '<td class="muted">' + b.roblox_id + '</td>'
+            + '<td>' + (b.motivo || '<span class="muted">—</span>') + '</td>'
+            + '<td style="' + cor + '">' + ate + '</td>'
+            + '<td class="muted">' + (b.banido_por || b.origem || '—') + '</td>'
+            + '<td class="muted">' + quando + '</td>'
+            + '<td>' + acao + '</td></tr>';
+        }).join('');
+      } catch (err) {
+        body.innerHTML = '<tr><td colspan="7" class="empty">Não deu pra carregar.</td></tr>';
+      }
+    }
+    async function desbanir(id) {
+      if (!confirm('DESBANIR o Roblox ID ' + id + '?\n\nIsso apaga o banimento no Roblox. Precisa de um servidor online pra executar.')) return;
+      try {
+        const d = await api('POST', '/command', { tipo: 'unban', roblox_id: id });
+        alert(d && d.error ? ('Não deu: ' + d.error) : 'Desbanido. O servidor executa em alguns segundos.');
+      } catch (err) { alert('Não deu: ' + (err.message || 'erro')); }
+      loadBans();
+    }
+    function desbanirPorId() {
+      const v = parseInt(($('bn-id').value || '').trim(), 10);
+      if (!v || v <= 0) return alert('Põe um Roblox ID válido.');
+      desbanir(v);
+    }
+
     document.querySelectorAll('.tab').forEach(tab => tab.addEventListener('click', () => {
       document.querySelectorAll('.tab').forEach(t => t.classList.remove('active'));
       document.querySelectorAll('.panel').forEach(p => p.classList.remove('active'));
@@ -619,6 +700,7 @@
       if (tab.dataset.tab === 'historico') loadHist();
       if (tab.dataset.tab === 'cargos') loadCargos();
       if (tab.dataset.tab === 'analise') loadAnalise();
+      if (tab.dataset.tab === 'banidos') loadBans();
     }));
 
     // ---------- estado ao vivo ----------
