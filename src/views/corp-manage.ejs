@@ -144,8 +144,12 @@
                 <span class="rank-level">Nv.<%= rank.level %></span>
                 <span class="rank-name"><%= rank.name %></span>
                 <span class="rank-salary">R$<%= rank.salary %></span>
+                <% var gmOn = rank.permissions && rank.permissions.gerir_membros === true; %>
+                <% if (gmOn) { %><span style="color:#00d4ff;font-size:0.75rem" title="Pode adicionar, remover e trocar o cargo de quem está ABAIXO deste cargo">✓ gere membros abaixo</span><% } %>
               </div>
               <div class="rank-actions">
+                <%# [06/10] liga/desliga "gere membros abaixo" no cargo (ranks.permissions.gerir_membros) %>
+                <% if (P.gerir_cargos) { %><button class="btn-sm" onclick="toggleGerir(<%= rank.id %>, <%= gmOn ? 'null' : 'true' %>)"><%= gmOn ? 'Tirar gestão de membros' : 'Dar gestão de membros' %></button><% } %>
                 <% if (P.gerir_cargos) { %><button class="btn-sm danger" onclick="deleteRank(<%= rank.id %>)">Remover</button><% } %>
               </div>
             </div>
@@ -157,7 +161,9 @@
     <!-- MEMBROS -->
     <div class="panel" id="panel-membros">
       <div class="form-row">
-        <div class="form-group" style="flex:2">
+        <%# [06/10] chefe/cargo-gestor não lê a base de usuários (users/list é só dono/co-gerente/staff): pra ele, adiciona por Roblox ID %>
+        <% var SO_ID = ((MEU_PAPEL === 'chefe' || MEU_PAPEL === 'gestor') && !EH_STAFF_ALTO); %>
+        <div class="form-group" style="flex:2<%= SO_ID ? ';display:none' : '' %>">
           <label>Usuário registrado na plataforma</label>
           <div class="picker" id="member-picker">
             <input type="text" id="member-search" placeholder="Digite pra buscar por Discord, Roblox ou ID…" autocomplete="off">
@@ -169,16 +175,16 @@
           <label>Cargo</label>
           <select id="member-rank">
             <option value="">Sem cargo</option>
-            <% ranks.forEach(rank => { %>
+            <% ranks.forEach(rank => { if (SO_ID && MEU_NIVEL !== null && Number(rank.level) >= Number(MEU_NIVEL)) return; %>
               <option value="<%= rank.id %>"><%= rank.name %> (Nv.<%= rank.level %>)</option>
             <% }) %>
           </select>
         </div>
-        <div class="form-group" style="max-width:120px;justify-content:flex-end">
+        <div class="form-group" style="max-width:120px;justify-content:flex-end<%= SO_ID ? ';display:none' : '' %>">
           <button class="btn" onclick="addMember()">Adicionar</button>
         </div>
       </div>
-      <details class="fallback">
+      <details class="fallback" <%= SO_ID ? 'open' : '' %>>
         <summary>O jogador ainda não entrou no site? Adicionar pelo Roblox ID</summary>
         <div class="form-row">
           <div class="form-group">
@@ -223,8 +229,8 @@
                   <td>
                     <select class="rank-select" <%= travado ? 'disabled' : '' %> onchange="changeRank(<%= m.id %>, this.value, this)">
                       <option value="" <%= !m.rank_id ? 'selected' : '' %>>Sem cargo</option>
-                      <% ranks.forEach(rank => { %>
-                        <option value="<%= rank.id %>" <%= m.rank_id === rank.id ? 'selected' : '' %>><%= rank.name %> (Nv.<%= rank.level %>)</option>
+                      <% ranks.forEach(rank => { var acima = SO_ID && !travado && MEU_NIVEL !== null && Number(rank.level) >= Number(MEU_NIVEL); %>
+                        <option value="<%= rank.id %>" <%= m.rank_id === rank.id ? 'selected' : '' %> <%= acima ? 'disabled' : '' %>><%= rank.name %> (Nv.<%= rank.level %>)</option>
                       <% }) %>
                     </select>
                   </td>
@@ -488,6 +494,13 @@
       const data = await api('POST', '/ranks', { name, level, salary: salary || 0 });
       if (data.error) return showAlert(data.error, 'error');
       showAlert('Cargo criado!', 'success');
+      setTimeout(() => location.reload(), 500);
+    }
+
+    async function toggleGerir(rankId, valor) {
+      const data = await api('PUT', '/ranks/' + rankId, { gerir_membros: valor });
+      if (data && data.error) return showAlert(data.error, 'error');
+      showAlert(valor ? 'Esse cargo agora gere os membros abaixo dele' : 'Gestão de membros retirada', 'success');
       setTimeout(() => location.reload(), 500);
     }
 

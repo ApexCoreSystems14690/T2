@@ -38,9 +38,13 @@
 
 // poder -> papéis que o exercem
 const MATRIZ = {
-  ver_painel:     { staff: 1, dono: 1, gerente: 1, chefe: 1 },
-  ver_membros:    { staff: 1, dono: 1, gerente: 1, chefe: 1 },
-  gerir_membros:  { staff: 1, dono: 1, gerente: 1, chefe: 1 },
+  // [06/10] `gestor` = cargo que NÃO é o topo mas foi ligado no painel com
+  // "Dar gestão de membros" (ranks.permissions.gerir_membros = true). Julio:
+  // "qualquer membro com o cargo do dudu ... possa setar membros com cargos
+  // (abaixo do dele)". Só membro -- nada de caixa, compra ou bônus.
+  ver_painel:     { staff: 1, dono: 1, gerente: 1, chefe: 1, gestor: 1 },
+  ver_membros:    { staff: 1, dono: 1, gerente: 1, chefe: 1, gestor: 1 },
+  gerir_membros:  { staff: 1, dono: 1, gerente: 1, chefe: 1, gestor: 1 },
   // mexer em cargo é mexer em SALÁRIO, ou seja, na economia do jogo. E era o
   // caminho de escalada (editar o próprio nível). Fica com dono/co-gerente.
   gerir_cargos:   { staff: 1, dono: 1, gerente: 1 },
@@ -88,7 +92,7 @@ const ROTULO = {
   aportar_caixa:  'Depositar dinheiro no caixa (só staff)',
 };
 
-const PAPEIS = ['staff', 'dono', 'gerente', 'chefe', 'membro'];
+const PAPEIS = ['staff', 'dono', 'gerente', 'chefe', 'gestor', 'membro'];
 
 // ---------------------------------------------------------------------------
 // ehChefe — o cargo do topo, ou o que o próprio cargo declarar.
@@ -113,7 +117,13 @@ function papelDe(ctx = {}) {
   if (ctx.ehStaffCorp) return 'staff';
   if (ctx.ehDono) return 'dono';
   if (ctx.ehGerente) return 'gerente';
-  if (ehChefe(ctx)) return 'chefe';
+  if (ehChefe(ctx)) {
+    // topo de verdade (ou o topo com a permissão ligada) = chefe, com caixa.
+    // Cargo abaixo do topo ligado à mão = gestor, só membros.
+    const topo = ctx.meuNivel !== null && ctx.meuNivel !== undefined
+      && (ctx.qtdNiveis >= 2) && Number(ctx.meuNivel) === Number(ctx.nivelMax);
+    return topo ? 'chefe' : 'gestor';
+  }
   return 'membro';
 }
 

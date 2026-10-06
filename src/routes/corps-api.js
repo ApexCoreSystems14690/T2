@@ -217,6 +217,28 @@ router.post('/:corpId/ranks', requireCorpOwner, requireCorpPoder('gerir_cargos')
 router.put('/:corpId/ranks/:rankId', requireCorpOwner, requireCorpPoder('gerir_cargos'), async (req, res) => {
   try {
     const { name, level, salary } = req.body;
+    // [06/10 Julio] "Permita que qualquer membro com o cargo do dudu no site possa
+    // setar membros com cargos (abaixo do dele)". O núcleo (corp-poderes.ehChefe)
+    // já lia `ranks.permissions.gerir_membros`, mas não existia jeito de LIGAR
+    // isso fora do SQL. Agora o dono/co-gerente/staff liga por cargo. O teto
+    // continua valendo: quem ganha isso só mexe em cargo ABAIXO do seu
+    // (podeMexerEmMembro / podeDarCargo) e não mexe em cargo/salário.
+    let gm = req.body.gerir_membros;
+    if (gm !== undefined && gm !== null && gm !== true && gm !== false) {
+      return res.status(400).json({ error: 'gerir_membros deve ser true, false ou null' });
+    }
+    if (gm !== undefined) {
+      const r0 = await pool.query(
+        gm === null
+          ? `UPDATE ranks SET permissions = COALESCE(permissions, '{}'::jsonb) - 'gerir_membros'
+              WHERE id = $1 AND corporation_id = $2 RETURNING *`
+          : `UPDATE ranks SET permissions = COALESCE(permissions, '{}'::jsonb) || jsonb_build_object('gerir_membros', $3::boolean)
+              WHERE id = $1 AND corporation_id = $2 RETURNING *`,
+        gm === null ? [req.params.rankId, req.params.corpId] : [req.params.rankId, req.params.corpId, gm]
+      );
+      if (r0.rows.length === 0) return res.status(404).json({ error: 'Cargo não encontrado' });
+      if (name === undefined && level === undefined && salary === undefined) return res.json({ rank: r0.rows[0] });
+    }
     const result = await pool.query(
       `UPDATE ranks SET name = COALESCE($1, name), level = COALESCE($2, level),
        salary = COALESCE($3, salary) WHERE id = $4 AND corporation_id = $5 RETURNING *`,
