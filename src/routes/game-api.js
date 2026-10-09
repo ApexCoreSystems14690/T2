@@ -1622,6 +1622,73 @@ router.post('/precos', async (req, res) => {
   }
 });
 
+// ---------------------------------------------------------------------------
+// GET /api/game/dossie/:nome
+// [09/10 PD] A ficha de UMA pessoa, pra Policia Civil abrir no PC da Ficha
+// mesmo com o jogador OFFLINE.
+//
+// [stated] Julio: "no pc da policial civil adicione que deve dar para abrir as
+// fichas vendo direitinho dados da pessoa, imoveis, patrimonio, se trabalhar em
+// alguma corp ou empresa, salario medio, ( para comparar etc )".
+//
+// O que da pra entregar aqui e o que o ESPELHO tem (game_patrimonio) mais o
+// vinculo de corp e o estado de procurado. LIMITE HONESTO: a ficha criminal
+// (Prisoes) mora so no perfil do jogo e nao e espelhada -- com o jogador
+// offline, o jogo nao manda `prisoes` e o selo nao da pra calcular. O jogo
+// sabe disso e escreve na tela.
+// ---------------------------------------------------------------------------
+router.get('/dossie/:nome', async (req, res) => {
+  const nome = String(req.params.nome || '').slice(0, 64);
+  if (!nome) return res.status(400).json({ error: 'nome invalido' });
+  try {
+    const pa = await pool.query(
+      `SELECT roblox_id, nome, bolso, banco, level, xp, emprego, carros, casas, atualizado_em
+         FROM game_patrimonio WHERE LOWER(nome) = LOWER($1) LIMIT 1`, [nome]);
+    if (pa.rows.length === 0) return res.json({ ok: false, erro: 'nao_achei' });
+    const p = pa.rows[0];
+    const rid = Number(p.roblox_id);
+
+    // corp/empresa e cargo
+    let corp = null, cargo = null;
+    const u = await pool.query('SELECT id FROM users WHERE roblox_id = $1', [rid]);
+    if (u.rows[0]) {
+      const m = await pool.query(
+        `SELECT c.slug, c.nome AS corp_nome, m.cargo
+           FROM members m JOIN corporations c ON c.id = m.corporation_id
+          WHERE m.user_id = $1 LIMIT 1`, [u.rows[0].id]);
+      if (m.rows[0]) { corp = m.rows[0].corp_nome || m.rows[0].slug; cargo = m.rows[0].cargo; }
+    }
+
+    // procurado ativo?
+    const pr = await pool.query(
+      `SELECT motivo FROM procurados WHERE roblox_id = $1 AND estado = 'ativo' LIMIT 1`, [rid]);
+
+    // ja levou PD alguma vez?
+    const fe = await pool.query(
+      `SELECT COUNT(*)::int AS n FROM fichas_encerradas WHERE roblox_id = $1`, [rid]);
+
+    res.json({
+      ok: true,
+      pessoa: {
+        roblox_id: rid, nome: p.nome,
+        bolso: Number(p.bolso) || 0, banco: Number(p.banco) || 0,
+        level: Number(p.level) || 1, xp: Number(p.xp) || 0,
+        emprego: p.emprego || '',
+        carros: p.carros || {}, casas: p.casas || [],
+        corp, cargo,
+        procurado: pr.rows[0] ? (pr.rows[0].motivo || 'sim') : null,
+        pds_anteriores: fe.rows[0] ? fe.rows[0].n : 0,
+        // o espelho nao tem a ficha criminal: o jogo mostra isso como lacuna
+        prisoes: null,
+        atualizado_em: p.atualizado_em,
+      },
+    });
+  } catch (err) {
+    console.error('game/dossie:', err.message);
+    res.status(500).json({ error: 'Erro interno' });
+  }
+});
+
 // GET /api/game/patrimonio/ids -> roblox_ids do registro que AINDA NAO tem patrimonio.
 // O jogo usa isso pra fazer backfill (ViewProfileAsync read-only) sem esperar o cara sair.
 router.get('/patrimonio/ids', async (req, res) => {

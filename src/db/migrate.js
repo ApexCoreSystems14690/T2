@@ -442,6 +442,26 @@ CREATE TABLE IF NOT EXISTS fichas_encerradas (
 );
 CREATE INDEX IF NOT EXISTS idx_fichas_enc ON fichas_encerradas(roblox_id, id DESC);
 
+--- [09/10] game_patrimonio -- o ESPELHO do perfil de cada jogador.
+--- ACHADO em 09/10: o game-api ja fazia INSERT nela desde 28/09 e ela NUNCA foi
+--- criada aqui. Em producao ou foi feita a mao, ou todo POST /patrimonio vinha
+--- falhando em silencio (a chamada do jogo e fire-and-forget, ninguem veria).
+--- IF NOT EXISTS: se ja existe, isto nao faz nada.
+--- E o que permite a Policia Civil abrir a ficha de quem esta OFFLINE.
+CREATE TABLE IF NOT EXISTS game_patrimonio (
+  roblox_id BIGINT PRIMARY KEY,
+  nome VARCHAR(64),
+  bolso BIGINT NOT NULL DEFAULT 0,
+  banco BIGINT NOT NULL DEFAULT 0,
+  level INTEGER NOT NULL DEFAULT 1,
+  xp INTEGER NOT NULL DEFAULT 0,
+  emprego VARCHAR(64),
+  carros JSONB NOT NULL DEFAULT '{}'::jsonb,
+  casas JSONB NOT NULL DEFAULT '[]'::jsonb,
+  atualizado_em TIMESTAMP DEFAULT NOW()
+);
+CREATE INDEX IF NOT EXISTS idx_patrimonio_nome ON game_patrimonio(LOWER(nome));
+
 
 
 `;
