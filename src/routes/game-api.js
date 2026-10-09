@@ -154,6 +154,126 @@ router.get('/player/:robloxId/corp/:corpSlug', async (req, res) => {
   }
 });
 
+// ---------------------------------------------------------------------------
+// POST /api/game/player/:robloxId/encerrar-personagem
+// [09/10 PD] O FIM DE UM PERSONAGEM, num lugar só.
+//
+// [stated] Julio: "o cara não consegue voltar a jogar, tem que ser PERDA DE
+// PERSONAGEM, RESET WIPE MESMO, com o pressuposto de que o personagem antigo foi
+// preso, ele é um novo morador" + "emprego no site ele deve ser retirado (o jogo
+// vai enviar um sinal pro site tirar ele) (SOMENTE NO WIPE DE JOGADOR INDIVIDUAL)".
+//
+// O reset do perfil acontece no JOGO (DataHandler, ordem 'resetar'). O que o jogo
+// NÃO alcança é o estado que mora aqui: vínculo de corporação, co-gerência e a
+// lista de procurados. Sem esta rota o "novo morador" nascia ainda registrado como
+// policial e ainda procurado pela própria polícia.
+//
+// NÃO É O WIPE GERAL. O wipe geral é temporada (GET /temporada) e não passa aqui.
+//
+// O que NÃO mexo de propósito: `corporations.owner_id`. Apagar o dono de uma corp
+// pelo jogo deixaria a corporação órfã, sem ninguém pra administrar o caixa. Se o
+// condenado for dono de alguma, devolvo a lista em `dono_de` e a decisão é humana.
+//
+// Idempotente pela coluna `chave`: a ponte do jogo repete requisição quando a
+// resposta não chega, e um PD não pode virar dois registros.
+// ---------------------------------------------------------------------------
+router.post('/player/:robloxId/encerrar-personagem', async (req, res) => {
+  const rid = Number(req.params.robloxId);
+  if (!Number.isFinite(rid) || rid <= 0) return res.status(400).json({ error: 'roblox_id inválido' });
+
+  const b = req.body || {};
+  const txt = (v, n) => (v != null ? String(v).slice(0, n) : null);
+  const lista = (v) => (Array.isArray(v) ? v : []);
+  const chave = txt(b.chave, 80) || (rid + ':' + Math.floor(Date.now() / 1000));
+
+  const cli = await pool.connect();
+  try {
+    await cli.query('BEGIN');
+
+    const u = await cli.query('SELECT id FROM users WHERE roblox_id = $1', [rid]);
+    const userId = u.rows[0] && u.rows[0].id;
+
+    // 1) arquiva a ficha. Vai PRIMEIRO: se o resto falhar, o histórico já está salvo.
+    const f = await cli.query(
+      `INSERT INTO fichas_encerradas
+         (chave, roblox_id, nome, estado, motivo, por_nome, corp, prisoes, dividas, resumo)
+       VALUES ($1,$2,$3,'preso_permanente',$4,$5,$6,$7,$8,$9)
+       ON CONFLICT (chave) DO NOTHING
+       RETURNING id`,
+      [chave, rid, txt(b.nome, 64), txt(b.motivo, 300), txt(b.por_nome, 64), txt(b.corp, 64),
+       JSON.stringify(lista(b.prisoes)), JSON.stringify(lista(b.dividas)),
+       b.resumo && typeof b.resumo === 'object' ? JSON.stringify(b.resumo) : null]);
+
+    if (f.rows.length === 0) {
+      // já tinha chegado antes: não repete o desvínculo nem o encerramento
+      await cli.query('COMMIT');
+      return res.json({ ok: true, repetido: true });
+    }
+
+    let saiuDe = [], gerencias = 0, donoDe = [], procEncerrados = 0;
+
+    if (userId) {
+      // 2) tira de TODAS as corporações
+      const m = await cli.query(
+        `DELETE FROM members m USING corporations c
+          WHERE m.corporation_id = c.id AND m.user_id = $1
+          RETURNING c.slug`, [userId]);
+      saiuDe = m.rows.map(r => r.slug);
+
+      // 3) tira a co-gerência
+      const g = await cli.query('DELETE FROM corp_managers WHERE user_id = $1', [userId]);
+      gerencias = g.rowCount || 0;
+
+      // 4) só AVISA se ele era dono — não mexo
+      const d = await cli.query('SELECT slug FROM corporations WHERE owner_id = $1', [userId]);
+      donoDe = d.rows.map(r => r.slug);
+    }
+
+    // 5) procurado some da lista: ele não está foragido, está preso pra sempre
+    const pr = await cli.query(
+      `UPDATE procurados
+          SET estado = 'encerrado', encerrado_em = NOW(), encerrado_por = $2,
+              atualizado_em = NOW()
+        WHERE roblox_id = $1 AND estado = 'ativo'`,
+      [rid, txt(b.por_nome, 64) || 'PD']);
+    procEncerrados = pr.rowCount || 0;
+
+    await cli.query('COMMIT');
+    res.json({
+      ok: true,
+      ficha_id: f.rows[0].id,
+      saiu_de: saiuDe,
+      gerencias_removidas: gerencias,
+      dono_de: donoDe,
+      procurados_encerrados: procEncerrados,
+    });
+  } catch (err) {
+    await cli.query('ROLLBACK').catch(() => {});
+    console.error('game/encerrar-personagem:', err.message);
+    res.status(500).json({ error: 'Erro interno' });
+  } finally {
+    cli.release();
+  }
+});
+
+// ---------------------------------------------------------------------------
+// GET /api/game/player/:robloxId/fichas-encerradas
+// A Polícia Civil consultando o arquivo: quem já levou PD, e por quê.
+// ---------------------------------------------------------------------------
+router.get('/player/:robloxId/fichas-encerradas', async (req, res) => {
+  const rid = Number(req.params.robloxId);
+  if (!Number.isFinite(rid) || rid <= 0) return res.status(400).json({ error: 'roblox_id inválido' });
+  try {
+    const r = await pool.query(
+      `SELECT id, nome, estado, motivo, por_nome, corp, prisoes, resumo, encerrado_em
+         FROM fichas_encerradas WHERE roblox_id = $1 ORDER BY id DESC LIMIT 20`, [rid]);
+    res.json({ ok: true, fichas: r.rows });
+  } catch (err) {
+    console.error('game/fichas-encerradas:', err.message);
+    res.status(500).json({ error: 'Erro interno' });
+  }
+});
+
 // GET /api/game/corp/:corpSlug/members
 // Lista todos os membros de uma corporação (para ranking boards, etc.)
 router.get('/corp/:corpSlug/members', async (req, res) => {

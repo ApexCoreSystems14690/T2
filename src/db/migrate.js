@@ -414,6 +414,34 @@ CREATE TABLE IF NOT EXISTS empresa_depositos (
 );
 CREATE INDEX IF NOT EXISTS idx_empresa_dep ON empresa_depositos(corporation_id, id DESC);
 
+-- [09/10 PD] FICHA ENCERRADA — o arquivo do personagem que levou PD.
+-- O PD (perda de personagem) RESETA o perfil do jogador no jogo, e o perfil é
+-- exatamente onde a ficha criminal mora (plrData.Prisoes). Sem esta tabela a
+-- ficha evaporava junto com o reset e a cidade esquecia quem foi condenado.
+-- [stated] Julio: "a ficha a gente mantém como (encerrado/preso permanente) para
+-- o novo jogador poder ter sua ficha separada etc".
+-- Guarda o histórico do personagem ANTIGO, como estava no segundo antes do reset.
+-- O personagem novo nasce com a ficha vazia no jogo; a Polícia Civil continua
+-- conseguindo consultar esta aqui.
+-- Sem UNIQUE em roblox_id de propósito: nada impede um segundo PD anos depois.
+-- A idempotência vem da coluna chave (o jogo manda "<robloxId>:<os.time>"), porque a
+-- ponte do jogo repete requisição quando a resposta não chega.
+CREATE TABLE IF NOT EXISTS fichas_encerradas (
+  id SERIAL PRIMARY KEY,
+  chave VARCHAR(80) UNIQUE,
+  roblox_id BIGINT NOT NULL,
+  nome VARCHAR(64),
+  estado VARCHAR(32) NOT NULL DEFAULT 'preso_permanente',
+  motivo VARCHAR(300),
+  por_nome VARCHAR(64),
+  corp VARCHAR(64),
+  prisoes JSONB NOT NULL DEFAULT '[]'::jsonb,
+  dividas JSONB NOT NULL DEFAULT '[]'::jsonb,
+  resumo JSONB,
+  encerrado_em TIMESTAMP DEFAULT NOW()
+);
+CREATE INDEX IF NOT EXISTS idx_fichas_enc ON fichas_encerradas(roblox_id, id DESC);
+
 
 
 `;
