@@ -1309,6 +1309,10 @@ router.post('/corp/estoque', async (req, res) => {
 // Devolve { ok, itens: { item: quantas_passaram }, erros: { item: erro } }.
 const LOTE_MOTIVOS = ['abasteceu', 'recuperou'];
 const LOTE_MAX = 120;   // trava de sanidade: maleta cheia sao 44
+// [09/10] reposicao automatica por corp: abaixo de `min` na prateleira, compra `itens[x]`.
+const REPOR = {
+  samu: { min: 10, itens: { 'Fio de sutura': 20, 'Gesso': 20, 'Colar cervical': 20, 'Adrenalina': 20 } },
+};
 router.post('/corp/estoque/lote', async (req, res) => {
   try {
     const { corp, motivo, quem, roblox_id, itens } = req.body || {};
@@ -1331,7 +1335,34 @@ router.post('/corp/estoque/lote', async (req, res) => {
         feitos[item] += 1; total += 1;
       }
     }
-    res.json({ ok: true, itens: feitos, erros });
+    // [09/10] REPOSICAO AUTOMATICA. Julio: "eles tem muito pouco, gasta rapido, toda
+    // hora para acao para comprar mais". Na maleta nova so 4 itens gastam estoque
+    // (o basico e infinito e bisturi/desfib sao equipamento). Quando um deles cai
+    // abaixo do minimo, o site compra sozinho com o caixa da corp -- mesma funcao
+    // `comprar` do painel (dinheiro e estoque na mesma transacao), registrada como
+    // "Reposição automática" no extrato. Caixa sem saldo = nao compra, segue a vida.
+    const repostos = {};
+    const regra = REPOR[c.slug];
+    if (regra && m === 'abasteceu') {
+      try {
+        const tabela = await caixa.precos(c.slug);
+        for (const item of Object.keys(regra.itens)) {
+          const q = await pool.query(
+            `SELECT qtd FROM corp_estoque WHERE corporation_id = $1 AND item = $2`, [c.id, item]);
+          const tem = q.rows[0] ? Number(q.rows[0].qtd) : 0;
+          if (tem >= regra.min) continue;
+          const r = await caixa.comprar(c.id, item, regra.itens[item], tabela, { por: 'Reposição automática' });
+          if (r && r.ok) repostos[item] = regra.itens[item];
+        }
+      } catch (e) { console.error('reposicao automatica:', e.message); }
+    }
+    // a prateleira como ficou, pro jogo atualizar o que a maleta mostra
+    const prateleira = {};
+    try {
+      const est = await pool.query(`SELECT item, qtd FROM corp_estoque WHERE corporation_id = $1`, [c.id]);
+      for (const r of est.rows) prateleira[r.item] = Number(r.qtd);
+    } catch (e) {}
+    res.json({ ok: true, itens: feitos, erros, repostos, prateleira });
   } catch (err) {
     console.error('corp/estoque/lote:', err.message);
     res.status(500).json({ error: 'Erro interno' });
