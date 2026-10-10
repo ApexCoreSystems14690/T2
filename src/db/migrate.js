@@ -470,6 +470,26 @@ ALTER TABLE game_patrimonio ADD COLUMN IF NOT EXISTS dividas JSONB NOT NULL DEFA
 ALTER TABLE game_patrimonio ADD COLUMN IF NOT EXISTS divida_estado VARCHAR(16) DEFAULT 'Pagando';
 ALTER TABLE game_patrimonio ADD COLUMN IF NOT EXISTS divida_recusas INTEGER NOT NULL DEFAULT 0;
 ALTER TABLE game_patrimonio ADD COLUMN IF NOT EXISTS preso INTEGER NOT NULL DEFAULT 0;
+--- [10/10] PC da Policia Civil: Devendo detalhado + historico de corp (espelho do index.js)
+ALTER TABLE game_patrimonio ADD COLUMN IF NOT EXISTS financiamentos JSONB NOT NULL DEFAULT '[]'::jsonb;
+ALTER TABLE game_patrimonio ADD COLUMN IF NOT EXISTS versao INTEGER NOT NULL DEFAULT 1;
+CREATE TABLE IF NOT EXISTS corp_vinculos_hist (
+  id SERIAL PRIMARY KEY,
+  user_id INTEGER,
+  corporation_id INTEGER,
+  cargo VARCHAR(64),
+  entrou_em TIMESTAMP,
+  saiu_em TIMESTAMP DEFAULT NOW()
+);
+CREATE INDEX IF NOT EXISTS idx_corp_vinc_hist_user ON corp_vinculos_hist(user_id, saiu_em DESC);
+CREATE OR REPLACE FUNCTION fn_members_saida() RETURNS trigger AS $fn$
+BEGIN
+  INSERT INTO corp_vinculos_hist (user_id, corporation_id, cargo, entrou_em)
+  VALUES (OLD.user_id, OLD.corporation_id, (SELECT name FROM ranks WHERE id = OLD.rank_id), OLD.joined_at);
+  RETURN OLD;
+END $fn$ LANGUAGE plpgsql;
+DROP TRIGGER IF EXISTS trg_members_saida ON members;
+CREATE TRIGGER trg_members_saida AFTER DELETE ON members FOR EACH ROW EXECUTE FUNCTION fn_members_saida();
 
 
 

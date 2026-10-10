@@ -874,6 +874,46 @@ async function start() {
         END $$;
       `);
     } catch (e) { console.error('migração carreira PC:', e.message); }
+    // ===== [10/10] PC DA POLICIA CIVIL — ficha identica online/offline =====
+    // (1) As colunas da FICHA no espelho so existiam no migrate.js -- que nao roda no
+    //     Railway (o Procfile e `node src/index.js`). Sem elas o POST /patrimonio
+    //     falhava em producao e o PC so via quem estava no servidor.
+    // (2) financiamentos + versao: a ficha detalha "Devendo" (cada parcela).
+    //     versao < 2 faz o backfill do jogo reenviar a foto desses perfis.
+    // (3) corp_vinculos_hist: TODA saida de corp vira linha aqui por TRIGGER no
+    //     DELETE de members -- pega qualquer rota que tire alguem, sem caçar uma por uma.
+    //     A PC ve "entrou em X, saiu em Y".
+    try {
+      await pool.query(`
+        ALTER TABLE game_patrimonio ADD COLUMN IF NOT EXISTS prisoes JSONB NOT NULL DEFAULT '[]'::jsonb;
+        ALTER TABLE game_patrimonio ADD COLUMN IF NOT EXISTS dividas JSONB NOT NULL DEFAULT '[]'::jsonb;
+        ALTER TABLE game_patrimonio ADD COLUMN IF NOT EXISTS divida_estado VARCHAR(16) DEFAULT 'Pagando';
+        ALTER TABLE game_patrimonio ADD COLUMN IF NOT EXISTS divida_recusas INTEGER NOT NULL DEFAULT 0;
+        ALTER TABLE game_patrimonio ADD COLUMN IF NOT EXISTS preso INTEGER NOT NULL DEFAULT 0;
+        ALTER TABLE game_patrimonio ADD COLUMN IF NOT EXISTS financiamentos JSONB NOT NULL DEFAULT '[]'::jsonb;
+        ALTER TABLE game_patrimonio ADD COLUMN IF NOT EXISTS versao INTEGER NOT NULL DEFAULT 1;
+        CREATE INDEX IF NOT EXISTS idx_game_patrimonio_nome ON game_patrimonio(LOWER(nome));
+        CREATE TABLE IF NOT EXISTS corp_vinculos_hist (
+          id SERIAL PRIMARY KEY,
+          user_id INTEGER,
+          corporation_id INTEGER,
+          cargo VARCHAR(64),
+          entrou_em TIMESTAMP,
+          saiu_em TIMESTAMP DEFAULT NOW()
+        );
+        CREATE INDEX IF NOT EXISTS idx_corp_vinc_hist_user ON corp_vinculos_hist(user_id, saiu_em DESC);
+        CREATE OR REPLACE FUNCTION fn_members_saida() RETURNS trigger AS $$
+        BEGIN
+          INSERT INTO corp_vinculos_hist (user_id, corporation_id, cargo, entrou_em)
+          VALUES (OLD.user_id, OLD.corporation_id,
+                  (SELECT name FROM ranks WHERE id = OLD.rank_id), OLD.joined_at);
+          RETURN OLD;
+        END $$ LANGUAGE plpgsql;
+        DROP TRIGGER IF EXISTS trg_members_saida ON members;
+        CREATE TRIGGER trg_members_saida AFTER DELETE ON members
+          FOR EACH ROW EXECUTE FUNCTION fn_members_saida();
+      `);
+    } catch (e) { console.error('migração ficha PC:', e.message); }
     console.log('✅ Banco migrado');
   } catch (err) {
     console.error('❌ Migração falhou:', err.message);

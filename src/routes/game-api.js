@@ -1122,8 +1122,9 @@ router.post('/patrimonio', async (req, res) => {
     const arr = (v) => Array.isArray(v) ? v : [];
     await pool.query(
       `INSERT INTO game_patrimonio (roblox_id, nome, bolso, banco, level, xp, emprego, carros, casas,
-                                    prisoes, dividas, divida_estado, divida_recusas, preso, atualizado_em)
-       VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14, NOW())
+                                    prisoes, dividas, divida_estado, divida_recusas, preso,
+                                    financiamentos, versao, atualizado_em)
+       VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15,$16, NOW())
        ON CONFLICT (roblox_id) DO UPDATE SET
          nome = COALESCE(EXCLUDED.nome, game_patrimonio.nome),
          bolso = EXCLUDED.bolso, banco = EXCLUDED.banco,
@@ -1132,6 +1133,7 @@ router.post('/patrimonio', async (req, res) => {
          prisoes = EXCLUDED.prisoes, dividas = EXCLUDED.dividas,
          divida_estado = EXCLUDED.divida_estado, divida_recusas = EXCLUDED.divida_recusas,
          preso = EXCLUDED.preso,
+         financiamentos = EXCLUDED.financiamentos, versao = EXCLUDED.versao,
          atualizado_em = NOW()`,
       [rid, b.nome != null ? String(b.nome).slice(0, 64) : null,
        num(b.bolso), num(b.banco), num(b.level) || 1, num(b.xp),
@@ -1140,7 +1142,9 @@ router.post('/patrimonio', async (req, res) => {
        // [09/10 PD] a ficha. Vem como ARRAY do jogo (Prisoes/Dividas sao listas).
        JSON.stringify(arr(b.prisoes)), JSON.stringify(arr(b.dividas)),
        b.divida_estado != null ? String(b.divida_estado).slice(0, 16) : 'Pagando',
-       num(b.divida_recusas), num(b.preso)]);
+       num(b.divida_recusas), num(b.preso),
+       // [10/10] Devendo detalhado no PC da PC (cada parcela, igual online ou offline)
+       JSON.stringify(arr(b.financiamentos)), num(b.versao) || 1]);
     res.json({ ok: true });
   } catch (err) {
     console.error('patrimonio:', err.message);
@@ -1651,21 +1655,43 @@ router.get('/dossie/:nome', async (req, res) => {
   try {
     const pa = await pool.query(
       `SELECT roblox_id, nome, bolso, banco, level, xp, emprego, carros, casas,
-              prisoes, dividas, divida_estado, divida_recusas, preso, atualizado_em
+              prisoes, dividas, divida_estado, divida_recusas, preso, financiamentos, atualizado_em
          FROM game_patrimonio WHERE LOWER(nome) = LOWER($1) LIMIT 1`, [nome]);
     if (pa.rows.length === 0) return res.json({ ok: false, erro: 'nao_achei' });
     const p = pa.rows[0];
     const rid = Number(p.roblox_id);
 
-    // corp/empresa e cargo
-    let corp = null, cargo = null;
+    // [10/10] corp/empresa, cargo, salario do cargo, quando entrou -- e o HISTORICO
+    // de quem ja saiu. A versao anterior pedia c.nome e m.cargo, colunas que NAO
+    // existem (corporations.name / members.rank_id): a query estourava e TODA ficha
+    // de quem estava fora da cidade voltava 500 -> "Nenhum registro".
+    let corp = null, cargo = null, corpSlug = null, corpTipo = null, salario = null, entrou = null;
+    let historico = [];
     const u = await pool.query('SELECT id FROM users WHERE roblox_id = $1', [rid]);
     if (u.rows[0]) {
+      const uid = u.rows[0].id;
       const m = await pool.query(
-        `SELECT c.slug, c.nome AS corp_nome, m.cargo
-           FROM members m JOIN corporations c ON c.id = m.corporation_id
-          WHERE m.user_id = $1 LIMIT 1`, [u.rows[0].id]);
-      if (m.rows[0]) { corp = m.rows[0].corp_nome || m.rows[0].slug; cargo = m.rows[0].cargo; }
+        `SELECT c.slug, c.name AS corp_nome, c.tipo, r.name AS cargo, r.salary, m.joined_at
+           FROM members m
+           JOIN corporations c ON c.id = m.corporation_id
+           LEFT JOIN ranks r ON r.id = m.rank_id
+          WHERE m.user_id = $1 AND c.is_active = true
+          ORDER BY m.joined_at DESC LIMIT 1`, [uid]);
+      if (m.rows[0]) {
+        const x = m.rows[0];
+        corp = x.corp_nome || x.slug; corpSlug = x.slug; corpTipo = x.tipo || 'corp';
+        cargo = x.cargo || null; salario = x.salary != null ? Number(x.salary) : null;
+        entrou = x.joined_at;
+      }
+      try {
+        const h = await pool.query(
+          `SELECT COALESCE(c.name, 'corporação extinta') AS corp_nome, h.cargo, h.entrou_em, h.saiu_em
+             FROM corp_vinculos_hist h
+             LEFT JOIN corporations c ON c.id = h.corporation_id
+            WHERE h.user_id = $1
+            ORDER BY h.saiu_em DESC LIMIT 10`, [uid]);
+        historico = h.rows.map(x => ({ corp: x.corp_nome, cargo: x.cargo || '', entrou: x.entrou_em, saiu: x.saiu_em }));
+      } catch (_) { historico = []; }
     }
 
     // procurado ativo?
@@ -1684,7 +1710,7 @@ router.get('/dossie/:nome', async (req, res) => {
         level: Number(p.level) || 1, xp: Number(p.xp) || 0,
         emprego: p.emprego || '',
         carros: p.carros || {}, casas: p.casas || [],
-        corp, cargo,
+        corp, cargo, corp_slug: corpSlug, corp_tipo: corpTipo, salario, entrou, historico,
         procurado: pr.rows[0] ? (pr.rows[0].motivo || 'sim') : null,
         pds_anteriores: fe.rows[0] ? fe.rows[0].n : 0,
         // [09/10] a ficha criminal AGORA vem (o jogo passou a espelhar)
@@ -1693,6 +1719,7 @@ router.get('/dossie/:nome', async (req, res) => {
         divida_estado: p.divida_estado || 'Pagando',
         divida_recusas: Number(p.divida_recusas) || 0,
         preso: Number(p.preso) || 0,
+        financiamentos: p.financiamentos || [],
         atualizado_em: p.atualizado_em,
       },
     });
@@ -1747,7 +1774,7 @@ router.get('/patrimonio/ids', async (req, res) => {
     const r = await pool.query(
       `SELECT gp.roblox_id FROM game_players gp
          LEFT JOIN game_patrimonio pa ON pa.roblox_id = gp.roblox_id
-        WHERE pa.roblox_id IS NULL
+        WHERE pa.roblox_id IS NULL OR COALESCE(pa.versao, 1) < 2
         ORDER BY gp.ultima_vez DESC
         LIMIT 60`);
     res.json({ ok: true, ids: r.rows.map(x => Number(x.roblox_id)) });
