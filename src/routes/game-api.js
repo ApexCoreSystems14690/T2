@@ -1121,18 +1121,26 @@ router.post('/patrimonio', async (req, res) => {
     const obj = (v) => (v && typeof v === 'object' && !Array.isArray(v)) ? v : {};
     const arr = (v) => Array.isArray(v) ? v : [];
     await pool.query(
-      `INSERT INTO game_patrimonio (roblox_id, nome, bolso, banco, level, xp, emprego, carros, casas, atualizado_em)
-       VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9, NOW())
+      `INSERT INTO game_patrimonio (roblox_id, nome, bolso, banco, level, xp, emprego, carros, casas,
+                                    prisoes, dividas, divida_estado, divida_recusas, preso, atualizado_em)
+       VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14, NOW())
        ON CONFLICT (roblox_id) DO UPDATE SET
          nome = COALESCE(EXCLUDED.nome, game_patrimonio.nome),
          bolso = EXCLUDED.bolso, banco = EXCLUDED.banco,
          level = EXCLUDED.level, xp = EXCLUDED.xp, emprego = EXCLUDED.emprego,
          carros = EXCLUDED.carros, casas = EXCLUDED.casas,
+         prisoes = EXCLUDED.prisoes, dividas = EXCLUDED.dividas,
+         divida_estado = EXCLUDED.divida_estado, divida_recusas = EXCLUDED.divida_recusas,
+         preso = EXCLUDED.preso,
          atualizado_em = NOW()`,
       [rid, b.nome != null ? String(b.nome).slice(0, 64) : null,
        num(b.bolso), num(b.banco), num(b.level) || 1, num(b.xp),
        b.emprego != null ? String(b.emprego).slice(0, 64) : null,
-       JSON.stringify(obj(b.carros)), JSON.stringify(arr(b.casas))]);
+       JSON.stringify(obj(b.carros)), JSON.stringify(arr(b.casas)),
+       // [09/10 PD] a ficha. Vem como ARRAY do jogo (Prisoes/Dividas sao listas).
+       JSON.stringify(arr(b.prisoes)), JSON.stringify(arr(b.dividas)),
+       b.divida_estado != null ? String(b.divida_estado).slice(0, 16) : 'Pagando',
+       num(b.divida_recusas), num(b.preso)]);
     res.json({ ok: true });
   } catch (err) {
     console.error('patrimonio:', err.message);
@@ -1642,7 +1650,8 @@ router.get('/dossie/:nome', async (req, res) => {
   if (!nome) return res.status(400).json({ error: 'nome invalido' });
   try {
     const pa = await pool.query(
-      `SELECT roblox_id, nome, bolso, banco, level, xp, emprego, carros, casas, atualizado_em
+      `SELECT roblox_id, nome, bolso, banco, level, xp, emprego, carros, casas,
+              prisoes, dividas, divida_estado, divida_recusas, preso, atualizado_em
          FROM game_patrimonio WHERE LOWER(nome) = LOWER($1) LIMIT 1`, [nome]);
     if (pa.rows.length === 0) return res.json({ ok: false, erro: 'nao_achei' });
     const p = pa.rows[0];
@@ -1678,13 +1687,55 @@ router.get('/dossie/:nome', async (req, res) => {
         corp, cargo,
         procurado: pr.rows[0] ? (pr.rows[0].motivo || 'sim') : null,
         pds_anteriores: fe.rows[0] ? fe.rows[0].n : 0,
-        // o espelho nao tem a ficha criminal: o jogo mostra isso como lacuna
-        prisoes: null,
+        // [09/10] a ficha criminal AGORA vem (o jogo passou a espelhar)
+        prisoes: p.prisoes || [],
+        dividas: p.dividas || [],
+        divida_estado: p.divida_estado || 'Pagando',
+        divida_recusas: Number(p.divida_recusas) || 0,
+        preso: Number(p.preso) || 0,
         atualizado_em: p.atualizado_em,
       },
     });
   } catch (err) {
     console.error('game/dossie:', err.message);
+    res.status(500).json({ error: 'Erro interno' });
+  }
+});
+
+// ---------------------------------------------------------------------------
+// GET /api/game/ficha/cidade
+// [09/10 PD] TODO MUNDO que o espelho conhece, pras abas do PC da Policia Civil.
+//
+// [stated] Julio: "precisa ver offline tbm, todo mundo, em tudo da pc".
+// Antes, Procurados / Na cadeia / Historico / Multas so liam
+// `Players:GetPlayers()` -- ou seja, so quem estava no servidor naquele segundo.
+//
+// Devolve cru e o JOGO monta cada aba (quem tem divida vira Procurado, quem tem
+// Preso>0 vira Na cadeia, etc). Assim a regra de negocio continua num lugar so.
+// Teto de 300: a ficha e pra consultar, nao pra rolar a cidade inteira.
+// ---------------------------------------------------------------------------
+router.get('/ficha/cidade', async (req, res) => {
+  try {
+    const r = await pool.query(
+      `SELECT roblox_id, nome, bolso, banco, level, emprego,
+              prisoes, dividas, divida_estado, divida_recusas, preso, atualizado_em
+         FROM game_patrimonio
+        ORDER BY atualizado_em DESC NULLS LAST
+        LIMIT 300`);
+    res.json({
+      ok: true,
+      pessoas: r.rows.map(p => ({
+        roblox_id: Number(p.roblox_id), nome: p.nome,
+        bolso: Number(p.bolso) || 0, banco: Number(p.banco) || 0,
+        level: Number(p.level) || 1, emprego: p.emprego || '',
+        prisoes: p.prisoes || [], dividas: p.dividas || [],
+        divida_estado: p.divida_estado || 'Pagando',
+        divida_recusas: Number(p.divida_recusas) || 0,
+        preso: Number(p.preso) || 0,
+      })),
+    });
+  } catch (err) {
+    console.error('game/ficha/cidade:', err.message);
     res.status(500).json({ error: 'Erro interno' });
   }
 });

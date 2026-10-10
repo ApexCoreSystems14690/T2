@@ -461,6 +461,15 @@ CREATE TABLE IF NOT EXISTS game_patrimonio (
   atualizado_em TIMESTAMP DEFAULT NOW()
 );
 CREATE INDEX IF NOT EXISTS idx_patrimonio_nome ON game_patrimonio(LOWER(nome));
+--- [09/10 PD] A FICHA no espelho. [stated] Julio: "precisa ver offline tbm, todo
+--- mundo, em tudo da pc". Sem estas colunas, as abas Historico / Multas /
+--- Procurados do PC da Policia Civil so enxergam quem esta no servidor agora.
+--- ALTER com IF NOT EXISTS: roda de novo sem estragar nada.
+ALTER TABLE game_patrimonio ADD COLUMN IF NOT EXISTS prisoes JSONB NOT NULL DEFAULT '[]'::jsonb;
+ALTER TABLE game_patrimonio ADD COLUMN IF NOT EXISTS dividas JSONB NOT NULL DEFAULT '[]'::jsonb;
+ALTER TABLE game_patrimonio ADD COLUMN IF NOT EXISTS divida_estado VARCHAR(16) DEFAULT 'Pagando';
+ALTER TABLE game_patrimonio ADD COLUMN IF NOT EXISTS divida_recusas INTEGER NOT NULL DEFAULT 0;
+ALTER TABLE game_patrimonio ADD COLUMN IF NOT EXISTS preso INTEGER NOT NULL DEFAULT 0;
 
 
 
