@@ -197,17 +197,19 @@ router.delete('/:corpId/icon', requireCorpOwner, requireCorpPoder('editar_corp')
 router.post('/:corpId/ranks', requireCorpOwner, requireCorpPoder('gerir_cargos'), async (req, res) => {
   try {
     const { name, level, salary } = req.body;
+    // [10/10] carreira: o nivel so precisa ser unico DENTRO da carreira (PC: Delegados x Agentes)
+    const carreira = String(req.body.carreira || '').trim().slice(0, 48);
     if (!name || level === undefined) {
       return res.status(400).json({ error: 'Nome e nível são obrigatórios' });
     }
     const result = await pool.query(
-      'INSERT INTO ranks (corporation_id, name, level, salary) VALUES ($1, $2, $3, $4) RETURNING *',
-      [req.params.corpId, name, parseInt(level), parseInt(salary) || 0]
+      'INSERT INTO ranks (corporation_id, name, level, salary, carreira) VALUES ($1, $2, $3, $4, $5) RETURNING *',
+      [req.params.corpId, name, parseInt(level), parseInt(salary) || 0, carreira]
     );
     res.json({ rank: result.rows[0] });
   } catch (err) {
     if (err.code === '23505') {
-      return res.status(400).json({ error: 'Cargo com esse nome ou nível já existe' });
+      return res.status(400).json({ error: 'Já existe um cargo com esse nome, ou com esse nível na mesma carreira' });
     }
     res.status(500).json({ error: 'Erro interno' });
   }
@@ -237,17 +239,23 @@ router.put('/:corpId/ranks/:rankId', requireCorpOwner, requireCorpPoder('gerir_c
         gm === null ? [req.params.rankId, req.params.corpId] : [req.params.rankId, req.params.corpId, gm]
       );
       if (r0.rows.length === 0) return res.status(404).json({ error: 'Cargo não encontrado' });
-      if (name === undefined && level === undefined && salary === undefined) return res.json({ rank: r0.rows[0] });
+      if (name === undefined && level === undefined && salary === undefined && req.body.carreira === undefined) return res.json({ rank: r0.rows[0] });
     }
+    const carreira = req.body.carreira === undefined ? null : String(req.body.carreira || '').trim().slice(0, 48);
     const result = await pool.query(
       `UPDATE ranks SET name = COALESCE($1, name), level = COALESCE($2, level),
-       salary = COALESCE($3, salary) WHERE id = $4 AND corporation_id = $5 RETURNING *`,
-      [name, level !== undefined ? parseInt(level) : null, salary !== undefined ? parseInt(salary) : null,
-       req.params.rankId, req.params.corpId]
+       salary = COALESCE($3, salary), carreira = COALESCE($6, carreira)
+       WHERE id = $4 AND corporation_id = $5 RETURNING *`,
+      [name || null, level !== undefined && level !== '' ? parseInt(level) : null,
+       salary !== undefined && salary !== '' ? parseInt(salary) : null,
+       req.params.rankId, req.params.corpId, carreira]
     );
     if (result.rows.length === 0) return res.status(404).json({ error: 'Cargo não encontrado' });
     res.json({ rank: result.rows[0] });
   } catch (err) {
+    if (err.code === '23505') {
+      return res.status(400).json({ error: 'Já existe um cargo com esse nome, ou com esse nível na mesma carreira' });
+    }
     res.status(500).json({ error: 'Erro interno' });
   }
 });

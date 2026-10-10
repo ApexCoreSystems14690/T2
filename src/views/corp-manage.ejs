@@ -110,6 +110,28 @@
     </div>
 
     <!-- CARGOS -->
+    <%# [10/10] CARREIRAS: o nivel e unico DENTRO da carreira (PC: Delegados, Investigacao,
+        Pericia, Agentes...). Corp sem carreira = uma lista so, igual antes. %>
+    <% var CARREIRAS = [], porC = {};
+       ranks.forEach(function (r) { var c = r.carreira || ''; if (!porC[c]) { porC[c] = []; CARREIRAS.push(c); } porC[c].push(r); });
+       var TEM_CARREIRA = CARREIRAS.some(function (c) { return c !== ''; });
+       function escH(t) { return String(t == null ? '' : t).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;'); }
+       // modo 'esconde': some com cargo >= o meu (form de adicionar); modo 'trava': mostra desabilitado
+       function opcoesCargo(selId, modo, soId, travado) {
+         var h = '';
+         CARREIRAS.forEach(function (c) {
+           var itens = '';
+           porC[c].forEach(function (rank) {
+             var acima = soId && MEU_NIVEL !== null && Number(rank.level) >= Number(MEU_NIVEL);
+             if (modo === 'esconde' && acima) return;
+             var dis = (modo === 'trava' && acima && !travado) ? ' disabled' : '';
+             itens += '<option value="' + rank.id + '"' + (selId === rank.id ? ' selected' : '') + dis + '>' + escH(rank.name) + ' (Nv.' + rank.level + ')</option>';
+           });
+           if (!itens) return;
+           h += TEM_CARREIRA ? ('<optgroup label="' + escH(c || 'Sem carreira') + '">' + itens + '</optgroup>') : itens;
+         });
+         return h;
+       } %>
     <div class="panel active" id="panel-cargos">
       <% if (!P.gerir_cargos) { %>
         <div class="empty" style="margin-bottom:1rem">Só o dono e os co-gerentes mexem em cargo e salário. Aqui você só vê a lista.</div>
@@ -119,6 +141,11 @@
         <div class="form-group">
           <label>Nome do Cargo</label>
           <input type="text" id="rank-name" placeholder="Ex: Soldado">
+        </div>
+        <div class="form-group" style="max-width:170px">
+          <label>Carreira <span style="color:#7a8ba5;font-weight:400">(opcional)</span></label>
+          <input type="text" id="rank-carreira" placeholder="Ex: Delegados" list="lista-carreiras">
+          <datalist id="lista-carreiras"><% CARREIRAS.forEach(function (c) { if (c) { %><option value="<%= c %>"><% } }) %></datalist>
         </div>
         <div class="form-group" style="max-width:100px">
           <label>Nível</label>
@@ -138,7 +165,9 @@
         <% if (ranks.length === 0) { %>
           <div class="empty">Nenhum cargo criado ainda.</div>
         <% } else { %>
-          <% ranks.forEach(rank => { %>
+          <% CARREIRAS.forEach(function (carr) { %>
+          <% if (TEM_CARREIRA) { %><div style="margin:.6rem 0 .1rem;color:#00d4ff;font-size:.75rem;font-weight:700;letter-spacing:.06em;text-transform:uppercase">Carreira · <%= carr || 'Sem carreira' %></div><% } %>
+          <% porC[carr].forEach(rank => { %>
             <div class="rank-item" data-rank-id="<%= rank.id %>">
               <div class="rank-info">
                 <span class="rank-level">Nv.<%= rank.level %></span>
@@ -150,9 +179,11 @@
               <div class="rank-actions">
                 <%# [06/10] liga/desliga "gere membros abaixo" no cargo (ranks.permissions.gerir_membros) %>
                 <% if (P.gerir_cargos) { %><button class="btn-sm" onclick="toggleGerir(<%= rank.id %>, <%= gmOn ? 'null' : 'true' %>)"><%= gmOn ? 'Tirar gestão de membros' : 'Dar gestão de membros' %></button><% } %>
+                <% if (P.gerir_cargos) { %><button class="btn-sm" onclick='editRank(<%= rank.id %>, <%- JSON.stringify({ name: rank.name, level: rank.level, salary: rank.salary, carreira: rank.carreira || "" }).replace(/</g, "\\u003c").replace(/'/g, "\\u0027") %>)'>Editar</button><% } %>
                 <% if (P.gerir_cargos) { %><button class="btn-sm danger" onclick="deleteRank(<%= rank.id %>)">Remover</button><% } %>
               </div>
             </div>
+          <% }) %>
           <% }) %>
         <% } %>
       </div>
@@ -175,9 +206,7 @@
           <label>Cargo</label>
           <select id="member-rank">
             <option value="">Sem cargo</option>
-            <% ranks.forEach(rank => { if (SO_ID && MEU_NIVEL !== null && Number(rank.level) >= Number(MEU_NIVEL)) return; %>
-              <option value="<%= rank.id %>"><%= rank.name %> (Nv.<%= rank.level %>)</option>
-            <% }) %>
+            <%- opcoesCargo(null, 'esconde', SO_ID, false) %>
           </select>
         </div>
         <div class="form-group" style="max-width:120px;justify-content:flex-end<%= SO_ID ? ';display:none' : '' %>">
@@ -229,9 +258,7 @@
                   <td>
                     <select class="rank-select" <%= travado ? 'disabled' : '' %> onchange="changeRank(<%= m.id %>, this.value, this)">
                       <option value="" <%= !m.rank_id ? 'selected' : '' %>>Sem cargo</option>
-                      <% ranks.forEach(rank => { var acima = SO_ID && !travado && MEU_NIVEL !== null && Number(rank.level) >= Number(MEU_NIVEL); %>
-                        <option value="<%= rank.id %>" <%= m.rank_id === rank.id ? 'selected' : '' %> <%= acima ? 'disabled' : '' %>><%= rank.name %> (Nv.<%= rank.level %>)</option>
-                      <% }) %>
+                      <%- opcoesCargo(m.rank_id, 'trava', SO_ID, travado) %>
                     </select>
                   </td>
                   <td><%= new Date(m.joined_at).toLocaleDateString('pt-BR') %></td>
@@ -490,8 +517,9 @@
       const name = document.getElementById('rank-name').value.trim();
       const level = document.getElementById('rank-level').value;
       const salary = document.getElementById('rank-salary').value;
+      const carreira = (document.getElementById('rank-carreira') || {}).value || '';
       if (!name || !level) return showAlert('Preencha nome e nível', 'error');
-      const data = await api('POST', '/ranks', { name, level, salary: salary || 0 });
+      const data = await api('POST', '/ranks', { name, level, salary: salary || 0, carreira: carreira.trim() });
       if (data.error) return showAlert(data.error, 'error');
       showAlert('Cargo criado!', 'success');
       setTimeout(() => location.reload(), 500);
@@ -501,6 +529,18 @@
       const data = await api('PUT', '/ranks/' + rankId, { gerir_membros: valor });
       if (data && data.error) return showAlert(data.error, 'error');
       showAlert(valor ? 'Esse cargo agora gere os membros abaixo dele' : 'Gestão de membros retirada', 'success');
+      setTimeout(() => location.reload(), 500);
+    }
+
+    // [10/10] editar nome / carreira / nível / salário de um cargo existente
+    async function editRank(rankId, atual) {
+      const name = prompt('Nome do cargo:', atual.name); if (name === null) return;
+      const carreira = prompt('Carreira (vazio = sem carreira):', atual.carreira || ''); if (carreira === null) return;
+      const level = prompt('Nível (pode repetir em carreiras diferentes):', atual.level); if (level === null) return;
+      const salary = prompt('Salário (R$):', atual.salary); if (salary === null) return;
+      const data = await api('PUT', '/ranks/' + rankId, { name: name.trim(), carreira: carreira.trim(), level, salary });
+      if (data && data.error) return showAlert(data.error, 'error');
+      showAlert('Cargo atualizado', 'success');
       setTimeout(() => location.reload(), 500);
     }
 
