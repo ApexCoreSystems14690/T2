@@ -1,3 +1,10 @@
+# ============================================================
+# T2 -- painel do Santa Fe (Node/Express/Postgres, deploy no Railway)
+# Regra: no repo vai CODIGO + migracao + teste. O resto fica no disco.
+# Lembrete: ignorar NAO tira o que ja foi commitado -- pra isso
+#   git rm -r --cached <caminho>   (o arquivo continua no seu PC)
+# ============================================================
+
 # dependencias
 node_modules/
 
@@ -9,14 +16,21 @@ node_modules/
 *.key
 *.p12
 *.pfx
+**/SiteConfig*.lua
+**/*secret*
+**/*credenciais*
 
 # log e temporario
 *.log
 npm-debug.log*
+yarn-error.log*
 .DS_Store
 Thumbs.db
+desktop.ini
 *.tmp
 *.bak
+*.swp
+~$*
 
 # saida de build / cache
 dist/
@@ -24,21 +38,57 @@ build/
 coverage/
 .cache/
 .parcel-cache/
+.eslintcache
 
-# editor
+# editor / ferramentas
 .vscode/
 .idea/
+.claude/
+CLAUDE.local.md
 
 # [23/09] pesado e nao e codigo: o repo nao e lugar de .blend de 233 MB nem de
 # contact sheet de trailer. Se precisar versionar arte, use Git LFS.
 Claude outputs/
 *.blend
 *.blend1
+*.fbx
+*.obj
+*.psd
+*.kra
+*.mp4
+*.mov
+*.mkv
+*.wav
+*.mp3
+*.zip
+*.7z
+*.rar
+mcp-remote-devices-blob-*
 
-# vault do Obsidian: o estado da janela muda a cada abertura e suja todo commit
-Santa fe RP/Santa fe RP/.obsidian/workspace.json
+# [10/10] place/modelo do Roblox: backup de place NAO e codigo do site, pesa e pode
+# carregar script com chave de producao (SiteConfig). Fica no PC ou no Drive.
+*.rbxl
+*.rbxlx
+*.rbxm
+*.rbxmx
+
+# vault do Obsidian: a config da janela muda a cada abertura e suja todo commit.
+# As NOTAS (.md) continuam versionadas.
+**/.obsidian/
+**/.trash/
 
 # [30/09] backup dos perfis do ProfileService: sao DADOS DE JOGADOR (dinheiro,
 # inventario, casas) tirados do DataStore por Open Cloud. Os scripts ficam no
 # repo, os perfis NAO -- nem pra repo privado.
 backup_perfis/perfis_*/
+backup_perfis/*.json
+backup_perfis/*.csv
+
+# dump de banco: dado de jogador de producao. O seed.sql (dado de exemplo) fica.
+*.dump
+*.sqlite
+*.sqlite3
+*.db
+backup*.sql
+dump*.sql
+*.sql.gz
