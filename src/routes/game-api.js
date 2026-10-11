@@ -1124,7 +1124,10 @@ router.post('/patrimonio', async (req, res) => {
       `INSERT INTO game_patrimonio (roblox_id, nome, bolso, banco, level, xp, emprego, carros, casas,
                                     prisoes, dividas, divida_estado, divida_recusas, preso,
                                     financiamentos, versao, atualizado_em)
-       VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15,$16, NOW())
+       -- [10/10] o backfill do jogo nao manda nome: sem isto a linha nascia com nome NULL
+       -- e a ficha (que busca por nome) nunca achava quem nao entrou desde entao.
+       VALUES ($1, COALESCE($2, (SELECT nome FROM game_players WHERE roblox_id = $1)),
+               $3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15,$16, NOW())
        ON CONFLICT (roblox_id) DO UPDATE SET
          nome = COALESCE(EXCLUDED.nome, game_patrimonio.nome),
          bolso = EXCLUDED.bolso, banco = EXCLUDED.banco,

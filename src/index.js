@@ -661,6 +661,14 @@ async function start() {
           SELECT id INTO cid FROM corporations WHERE slug = 'policia-civil' AND is_active = true;
           IF cid IS NULL THEN RETURN; END IF;
           IF EXISTS (SELECT 1 FROM ranks WHERE corporation_id = cid AND name = '[DLG-G] Delegado Geral') THEN RETURN; END IF;
+          -- [10/10] BUG DO RESET: esta migracao e a da CARREIRA (abaixo) se desfaziam uma
+          -- a outra a CADA BOOT. A carreira apaga '[DLG-G] Delegado Geral' -> no boot seguinte
+          -- esta aqui achava que nunca tinha rodado, mandava TODO MUNDO pra 'Aluno' e apagava
+          -- os cargos; ai a carreira via '[DG]' sumido, recriava tudo e mandava 'Aluno' pra
+          -- '[ESPC] Instruendo'. Resultado: cada deploy/restart do Railway = PC inteira
+          -- Instruendo e cargo criado no painel apagado. Agora tem trava em game_config.
+          IF EXISTS (SELECT 1 FROM game_config WHERE key = 'pc_cargos_feito') THEN RETURN; END IF;
+          IF EXISTS (SELECT 1 FROM ranks WHERE corporation_id = cid AND name = '[DG] Delegado-Geral') THEN RETURN; END IF;
           n := array_length(novos, 1);
           -- 1) cria os cargos novos em níveis temporários (100+) pra não colidir com os da PF
           FOR i IN 1..n LOOP
@@ -847,7 +855,14 @@ async function start() {
         BEGIN
           SELECT id INTO cid FROM corporations WHERE slug = 'policia-civil' AND is_active = true;
           IF cid IS NULL THEN RETURN; END IF;
-          IF EXISTS (SELECT 1 FROM ranks WHERE corporation_id = cid AND name = '[DG] Delegado-Geral') THEN RETURN; END IF;
+          -- [10/10] trava definitiva: rodou uma vez (ou a carreira ja existe) -> nunca mais.
+          -- Renomear/apagar '[DG] Delegado-Geral' no painel NAO dispara reset de ninguem.
+          IF EXISTS (SELECT 1 FROM game_config WHERE key = 'pc_cargos_feito') THEN RETURN; END IF;
+          IF EXISTS (SELECT 1 FROM ranks WHERE corporation_id = cid AND name = '[DG] Delegado-Geral') THEN
+            INSERT INTO game_config (key, value) VALUES ('pc_cargos_feito', '{"em":"carreira ja existia"}')
+            ON CONFLICT (key) DO NOTHING;
+            RETURN;
+          END IF;
           n := array_length(novos, 1);
           -- 1) cria os novos em níveis temporários (100+) pra não colidir com os antigos
           FOR i IN 1..n LOOP
@@ -871,9 +886,183 @@ async function start() {
           -- 4) apaga os antigos e renumera os novos de 21 (topo) até 1
           DELETE FROM ranks WHERE corporation_id = cid AND level < 100;
           UPDATE ranks SET level = level - 100 WHERE corporation_id = cid AND level >= 100;
+          INSERT INTO game_config (key, value) VALUES ('pc_cargos_feito', '{"em":"carreira aplicada"}')
+          ON CONFLICT (key) DO NOTHING;
         END $$;
       `);
     } catch (e) { console.error('migração carreira PC:', e.message); }
+    // ===== [10/10] CARREIRAS (Policia Civil) =====
+    // [stated Julio] "a pc e por Carreiras, ent pode ter 2 com lv 14 mais carreira
+    // diferente, delegado / agente". O nivel deixa de ser unico na corp inteira e passa
+    // a ser unico DENTRO da carreira. Corp sem carreira (todas as outras) segue igual:
+    // carreira = '' pra todo mundo, entao o unico (corp, '', nivel) e o mesmo de antes.
+    // Nivel continua sendo o GRAU (quem pode promover quem compara nivel), so que agora
+    // um Investigador 1a e um Perito 1a estao no MESMO grau.
+    try {
+      await pool.query(`
+        ALTER TABLE ranks ADD COLUMN IF NOT EXISTS carreira VARCHAR(48) NOT NULL DEFAULT '';
+        ALTER TABLE ranks DROP CONSTRAINT IF EXISTS ranks_corporation_id_level_key;
+        -- garante: se o UNIQUE(corp, level) tiver outro nome em producao, cai tambem
+        DO $$
+        DECLARE c RECORD;
+        BEGIN
+          FOR c IN
+            SELECT con.conname FROM pg_constraint con
+             WHERE con.conrelid = 'ranks'::regclass AND con.contype = 'u'
+               AND (SELECT array_agg(a.attname::text ORDER BY a.attname) FROM pg_attribute a
+                     WHERE a.attrelid = con.conrelid AND a.attnum = ANY (con.conkey))
+                   = ARRAY['corporation_id','level']
+          LOOP
+            EXECUTE 'ALTER TABLE ranks DROP CONSTRAINT ' || quote_ident(c.conname);
+          END LOOP;
+        END $$;
+        CREATE UNIQUE INDEX IF NOT EXISTS uq_ranks_corp_carreira_level ON ranks(corporation_id, carreira, level);
+        DO $$
+        DECLARE
+          cid INTEGER;
+          plano TEXT[][] := ARRAY[
+            ['[DG] Delegado-Geral','Direção','12'],
+            ['[DGA] Delegado-Geral Adjunto','Direção','11'],
+            ['[DD] Diretor de Departamento','Direção','10'],
+            ['[CG] Corregedor-Geral','Corregedoria','10'],
+            ['[DP-1] Delegado de Polícia 1ª Classe','Delegados','9'],
+            ['[DP-2] Delegado de Polícia 2ª Classe','Delegados','8'],
+            ['[DP-3] Delegado de Polícia 3ª Classe','Delegados','7'],
+            ['[DINV] Diretor de Investigação','Investigação','7'],
+            ['[INV-1] Investigador 1ª Classe','Investigação','6'],
+            ['[INV-2] Investigador 2ª Classe','Investigação','5'],
+            ['[INV-3] Investigador 3ª Classe','Investigação','4'],
+            ['[AUX] Auxiliar de Investigação','Investigação','3'],
+            ['[PER-1] Perito Criminal 1ª Classe','Perícia','6'],
+            ['[PER-2] Perito Criminal 2ª Classe','Perícia','5'],
+            ['[PER-3] Perito Criminal 3ª Classe','Perícia','4'],
+            ['[PAP] Papiloscopista Policial','Papiloscopia','5'],
+            ['[APJ-1] Agente de Polícia Judiciária 1ª Classe','Agentes','5'],
+            ['[APJ-2] Agente de Polícia Judiciária 2ª Classe','Agentes','4'],
+            ['[APJ-3] Agente de Polícia Judiciária 3ª Classe','Agentes','3'],
+            ['[ESPC] Instruendo','Escola','2'],
+            ['Holder','Escola','1']
+          ];
+          i INTEGER;
+        BEGIN
+          IF EXISTS (SELECT 1 FROM game_config WHERE key = 'pc_carreiras_v1') THEN RETURN; END IF;
+          SELECT id INTO cid FROM corporations WHERE slug = 'policia-civil' AND is_active = true;
+          IF cid IS NULL THEN RETURN; END IF;
+          -- tira todo mundo do caminho (nivel +500) pra nao colidir no meio da troca
+          UPDATE ranks SET level = level + 500 WHERE corporation_id = cid;
+          FOR i IN 1..array_length(plano, 1) LOOP
+            UPDATE ranks SET carreira = plano[i][2], level = plano[i][3]::INTEGER
+             WHERE corporation_id = cid AND name = plano[i][1];
+          END LOOP;
+          -- cargo criado no painel que nao esta no plano: volta pro nivel que tinha, carreira 'Outros'
+          UPDATE ranks SET level = level - 500, carreira = 'Outros'
+           WHERE corporation_id = cid AND level >= 500;
+          INSERT INTO game_config (key, value) VALUES ('pc_carreiras_v1', '{"em":"aplicado"}')
+          ON CONFLICT (key) DO NOTHING;
+        END $$;
+      `);
+    } catch (e) { console.error('migração carreiras PC:', e.message); }
+    // ===== [11/10] CARREIRAS v2 (Policia Civil) — modelo do Arthur =====
+    // [stated] "tem de ter 15 cargos / Do nivel I ao nivel XI / e dps tem o Diretor de
+    // Departamento, Corregedor-Geral, Delegado Geral adjunto / E delegado geral".
+    // Carreiras: Delegado, Perito, Investigador, Papiloscopista, Agente -- cada uma do
+    // Nivel I ao XI, e Nivel N vale o MESMO grau em todas (level = N). Nenhuma carreira
+    // e superior a outra. Em cima: DD 12, CG 13, DGA 14, DG 15 (carreira Direcao).
+    // Escola: Instruendo 1 (mesmo grau do Nivel I), Holder 0.
+    // Nome: "[DP-IX] Delegado de Polícia Nível IX". Roda UMA vez (flag pc_carreiras_v2).
+    // Membros dos cargos de classe (v1) vao pro equivalente: 3a -> I, 2a -> II, 1a -> III.
+    try {
+      await pool.query(`
+        DO $$
+        DECLARE
+          cid INTEGER;
+          rom TEXT[] := ARRAY['I','II','III','IV','V','VI','VII','VIII','IX','X','XI'];
+          -- sigla, nome do cargo, carreira, salario do Nivel I, passo por nivel
+          carr TEXT[][] := ARRAY[
+            ['DP','Delegado de Polícia','Delegado','11000','400'],
+            ['PER','Perito Criminal','Perito','7500','450'],
+            ['INV','Investigador de Polícia','Investigador','7500','450'],
+            ['PAP','Papiloscopista Policial','Papiloscopista','7000','400'],
+            ['APJ','Agente de Polícia Judiciária','Agente','4000','400']
+          ];
+          topo TEXT[][] := ARRAY[
+            ['[DG] Delegado-Geral','Direção','15','19000'],
+            ['[DGA] Delegado-Geral Adjunto','Direção','14','17500'],
+            ['[CG] Corregedor-Geral','Direção','13','16500'],
+            ['[DD] Diretor de Departamento','Direção','12','15500'],
+            ['[ESPC] Instruendo','Escola','1','2210'],
+            ['Holder','Escola','0','2125']
+          ];
+          mapa TEXT[][] := ARRAY[
+            ['[DP-1] Delegado de Polícia 1ª Classe','[DP-III] Delegado de Polícia Nível III'],
+            ['[DP-2] Delegado de Polícia 2ª Classe','[DP-II] Delegado de Polícia Nível II'],
+            ['[DP-3] Delegado de Polícia 3ª Classe','[DP-I] Delegado de Polícia Nível I'],
+            ['[DINV] Diretor de Investigação','[INV-XI] Investigador de Polícia Nível XI'],
+            ['[INV-1] Investigador 1ª Classe','[INV-III] Investigador de Polícia Nível III'],
+            ['[INV-2] Investigador 2ª Classe','[INV-II] Investigador de Polícia Nível II'],
+            ['[INV-3] Investigador 3ª Classe','[INV-I] Investigador de Polícia Nível I'],
+            ['[AUX] Auxiliar de Investigação','[INV-I] Investigador de Polícia Nível I'],
+            ['[PER-1] Perito Criminal 1ª Classe','[PER-III] Perito Criminal Nível III'],
+            ['[PER-2] Perito Criminal 2ª Classe','[PER-II] Perito Criminal Nível II'],
+            ['[PER-3] Perito Criminal 3ª Classe','[PER-I] Perito Criminal Nível I'],
+            ['[PAP] Papiloscopista Policial','[PAP-I] Papiloscopista Policial Nível I'],
+            ['[APJ-1] Agente de Polícia Judiciária 1ª Classe','[APJ-III] Agente de Polícia Judiciária Nível III'],
+            ['[APJ-2] Agente de Polícia Judiciária 2ª Classe','[APJ-II] Agente de Polícia Judiciária Nível II'],
+            ['[APJ-3] Agente de Polícia Judiciária 3ª Classe','[APJ-I] Agente de Polícia Judiciária Nível I']
+          ];
+          i INTEGER; n INTEGER; velho_id INTEGER; novo_id INTEGER; r RECORD; lv INTEGER;
+          nomes TEXT[] := ARRAY[]::TEXT[];
+        BEGIN
+          IF EXISTS (SELECT 1 FROM game_config WHERE key = 'pc_carreiras_v2') THEN RETURN; END IF;
+          SELECT id INTO cid FROM corporations WHERE slug = 'policia-civil' AND is_active = true;
+          IF cid IS NULL THEN RETURN; END IF;
+          -- tudo pra fora do caminho (nivel +500) pra nao colidir no meio da troca
+          UPDATE ranks SET level = level + 500 WHERE corporation_id = cid AND level < 500;
+          -- 1) cria/ajusta os 55 cargos de carreira + direcao + escola
+          FOR i IN 1..array_length(carr, 1) LOOP
+            FOR n IN 1..11 LOOP
+              nomes := nomes || ('[' || carr[i][1] || '-' || rom[n] || '] ' || carr[i][2] || ' Nível ' || rom[n]);
+              INSERT INTO ranks (corporation_id, name, level, salary, carreira)
+              VALUES (cid, '[' || carr[i][1] || '-' || rom[n] || '] ' || carr[i][2] || ' Nível ' || rom[n],
+                      n, carr[i][4]::INTEGER + (n - 1) * carr[i][5]::INTEGER, carr[i][3])
+              ON CONFLICT (corporation_id, name) DO UPDATE
+                SET level = EXCLUDED.level, salary = EXCLUDED.salary, carreira = EXCLUDED.carreira;
+            END LOOP;
+          END LOOP;
+          FOR i IN 1..array_length(topo, 1) LOOP
+            nomes := nomes || topo[i][1];
+            INSERT INTO ranks (corporation_id, name, level, salary, carreira)
+            VALUES (cid, topo[i][1], topo[i][3]::INTEGER, topo[i][4]::INTEGER, topo[i][2])
+            ON CONFLICT (corporation_id, name) DO UPDATE
+              SET level = EXCLUDED.level, salary = EXCLUDED.salary, carreira = EXCLUDED.carreira;
+          END LOOP;
+          -- 2) quem estava num cargo de classe vai pro equivalente; o cargo velho some
+          FOR i IN 1..array_length(mapa, 1) LOOP
+            SELECT id INTO velho_id FROM ranks WHERE corporation_id = cid AND name = mapa[i][1];
+            SELECT id INTO novo_id  FROM ranks WHERE corporation_id = cid AND name = mapa[i][2];
+            IF velho_id IS NOT NULL AND novo_id IS NOT NULL THEN
+              UPDATE members SET rank_id = novo_id WHERE corporation_id = cid AND rank_id = velho_id;
+              DELETE FROM ranks WHERE id = velho_id;
+            END IF;
+          END LOOP;
+          -- 3) cargo que nao esta no plano (criado no painel): fica, na carreira 'Outros',
+          --    no nivel que tinha (ou o mais proximo livre) -- ninguem perde cargo
+          FOR r IN SELECT id, level FROM ranks
+                    WHERE corporation_id = cid AND level >= 500 AND NOT (name = ANY (nomes))
+                    ORDER BY level DESC LOOP
+            -- teto 11: cargo solto nunca fica acima da Direcao (o topo do nivel e quem e chefe)
+            lv := LEAST(GREATEST(r.level - 500, 1), 11);
+            WHILE EXISTS (SELECT 1 FROM ranks WHERE corporation_id = cid AND carreira = 'Outros' AND level = lv) LOOP
+              lv := lv - 1;
+              IF lv < 1 THEN lv := 600; END IF;
+            END LOOP;
+            UPDATE ranks SET level = lv, carreira = 'Outros' WHERE id = r.id;
+          END LOOP;
+          INSERT INTO game_config (key, value) VALUES ('pc_carreiras_v2', '{"em":"aplicado"}')
+          ON CONFLICT (key) DO NOTHING;
+        END $$;
+      `);
+    } catch (e) { console.error('migração carreiras PC v2:', e.message); }
     // ===== [10/10] PC DA POLICIA CIVIL — ficha identica online/offline =====
     // (1) As colunas da FICHA no espelho so existiam no migrate.js -- que nao roda no
     //     Railway (o Procfile e `node src/index.js`). Sem elas o POST /patrimonio

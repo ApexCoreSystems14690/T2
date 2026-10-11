@@ -490,6 +490,10 @@ BEGIN
 END $fn$ LANGUAGE plpgsql;
 DROP TRIGGER IF EXISTS trg_members_saida ON members;
 CREATE TRIGGER trg_members_saida AFTER DELETE ON members FOR EACH ROW EXECUTE FUNCTION fn_members_saida();
+--- [10/10] carreiras: nivel unico DENTRO da carreira (espelho do index.js)
+ALTER TABLE ranks ADD COLUMN IF NOT EXISTS carreira VARCHAR(48) NOT NULL DEFAULT '';
+ALTER TABLE ranks DROP CONSTRAINT IF EXISTS ranks_corporation_id_level_key;
+CREATE UNIQUE INDEX IF NOT EXISTS uq_ranks_corp_carreira_level ON ranks(corporation_id, carreira, level);
 
 
 

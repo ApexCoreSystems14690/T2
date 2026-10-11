@@ -518,7 +518,7 @@
       const level = document.getElementById('rank-level').value;
       const salary = document.getElementById('rank-salary').value;
       const carreira = (document.getElementById('rank-carreira') || {}).value || '';
-      if (!name || !level) return showAlert('Preencha nome e nível', 'error');
+      if (!name || level === '') return showAlert('Preencha nome e nível', 'error');
       const data = await api('POST', '/ranks', { name, level, salary: salary || 0, carreira: carreira.trim() });
       if (data.error) return showAlert(data.error, 'error');
       showAlert('Cargo criado!', 'success');
