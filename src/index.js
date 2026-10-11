@@ -1074,6 +1074,23 @@ async function start() {
     //     A PC ve "entrou em X, saiu em Y".
     try {
       await pool.query(`
+        -- [11/10 PD] a ficha encerrada do PD morava SO no migrate.js (que o Railway nao roda):
+        -- sem ela o POST /player/:id/encerrar-personagem falha e o wipe sai sem registro.
+        CREATE TABLE IF NOT EXISTS fichas_encerradas (
+          id SERIAL PRIMARY KEY,
+          chave VARCHAR(80) UNIQUE,
+          roblox_id BIGINT NOT NULL,
+          nome VARCHAR(64),
+          estado VARCHAR(32) NOT NULL DEFAULT 'preso_permanente',
+          motivo VARCHAR(300),
+          por_nome VARCHAR(64),
+          corp VARCHAR(64),
+          prisoes JSONB NOT NULL DEFAULT '[]'::jsonb,
+          dividas JSONB NOT NULL DEFAULT '[]'::jsonb,
+          resumo JSONB,
+          encerrado_em TIMESTAMP DEFAULT NOW()
+        );
+        CREATE INDEX IF NOT EXISTS idx_fichas_enc ON fichas_encerradas(roblox_id, id DESC);
         ALTER TABLE game_patrimonio ADD COLUMN IF NOT EXISTS prisoes JSONB NOT NULL DEFAULT '[]'::jsonb;
         ALTER TABLE game_patrimonio ADD COLUMN IF NOT EXISTS dividas JSONB NOT NULL DEFAULT '[]'::jsonb;
         ALTER TABLE game_patrimonio ADD COLUMN IF NOT EXISTS divida_estado VARCHAR(16) DEFAULT 'Pagando';
