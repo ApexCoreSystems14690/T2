@@ -15,11 +15,19 @@
 const FUSO = -3 * 3600; // America/Sao_Paulo, UTC-3 fixo (sem horário de verão desde 2019)
 
 // 0=domingo ... 6=sábado no JS. O Lua usa 1..7; a conversão é +1.
+// [11/10] GRADE NOVA: TODO DIA MENOS QUINTA, 12:00 às 00:00. Substitui a grade antiga
+// (quarta 19-22, sexta 19-00, sábado 19-00, domingo 19-22). Quinta (wday 4 no JS) não
+// existe aqui de propósito — é assim que o módulo inteiro já sabia dizer "hoje não tem".
+// `fecha: 24` é meia-noite do dia SEGUINTE: a sessão de quarta morre às 00:00 de quinta
+// e não deixa quinta aberta, porque `sessaoVigente` exige `epoch < s.fim`.
 const GRADE = {
-  3: { abre: 19, fecha: 22, tetoExtensao: 23 }, // quarta
-  5: { abre: 19, fecha: 24 },                   // sexta
-  6: { abre: 19, fecha: 24 },                   // sábado
-  0: { abre: 19, fecha: 22 },                   // domingo
+  1: { abre: 12, fecha: 24 },  // segunda
+  2: { abre: 12, fecha: 24 },  // terça
+  3: { abre: 12, fecha: 24 },  // quarta (morre às 00:00 de quinta)
+  //                              [4] quinta: FECHADO, de propósito
+  5: { abre: 12, fecha: 24 },  // sexta
+  6: { abre: 12, fecha: 24 },  // sábado
+  0: { abre: 12, fecha: 24 },  // domingo
 };
 // [03/10] Julio: "todo dia ter opcao de aumentar uma hora, infinitamente". Qualquer dia
 // da grade estica de 1 em 1 hora. O unico limite e tecnico: a sessao vigente e procurada
@@ -29,7 +37,7 @@ const EXTENSAO_MAX = 71;
 // abrir ssu a qualquer hora". E a UNICA coisa no sistema que CRIA sessao fora da grade,
 // e por isso e exclusiva do DONO (quem barra e a rota; aqui so mora a regra).
 // Nao toca na grade: e uma sessao paralela, com inicio e fim proprios em epoch.
-const AVULSA_HORAS = 3;        // duracao padrao = a menor sessao da grade
+const AVULSA_HORAS = 3;        // [11/10] segue 3h: a avulsa e um extra fora de hora, nao uma noite inteira
 const AVULSA_MAX = 71 * 3600;  // mesmo teto tecnico da extensao
 
 const NOME_DIA = ['domingo', 'segunda', 'terça', 'quarta', 'quinta', 'sexta', 'sábado'];
@@ -186,7 +194,8 @@ function hhmm(seg) {
   return h > 0 ? `${h}h${String(m).padStart(2, '0')}min` : `${m} min`;
 }
 function gradeTexto() {
-  return [3, 5, 6, 0].map(w => {
+  // [11/10] segunda -> domingo, pulando quinta (que nao esta na GRADE)
+  return [1, 2, 3, 5, 6, 0].map(w => {
     const g = GRADE[w];
     let l = `${NOME_DIA[w]}: ${horaTexto(g.abre)} às ${horaTexto(g.fecha)}`;
     return l;

@@ -18,23 +18,25 @@ const fim = ini + 7 * 86400;
 const cenarios = [
   ['sem ajuste', null],
   ['encerrada sexta', { sessao: '2026-09-25', encerrada: true }],
-  ['estendida quarta', { sessao: '2026-09-23', estendidaAte: 23 }],
-  ['abuso: estender domingo ate 23', { sessao: '2026-09-27', estendidaAte: 23 }],
+  ['estendida quarta ate 01h', { sessao: '2026-09-23', estendidaAte: 25 }],
+  ['abuso: estender domingo ate 25', { sessao: '2026-09-27', estendidaAte: 25 }],
   // [27/09] botao "Iniciar SSU agora" (ajuste iniciadaAs)
-  ['inicio antecipado quarta 17:30',   { sessao: '2026-09-23', iniciadaAs: ini + 2 * 86400 + 17.5 * 3600 }],
-  ['antecipado + encerrado depois',    { sessao: '2026-09-23', iniciadaAs: ini + 2 * 86400 + 17.5 * 3600, encerrada: true }],
-  ['antecipado num dia sem SSU (seg)', { sessao: '2026-09-21', iniciadaAs: ini + 18 * 3600 }],
+  ['inicio antecipado quarta 10:30',      { sessao: '2026-09-23', iniciadaAs: ini + 2 * 86400 + 10.5 * 3600 }],
+  ['antecipado + encerrado depois',       { sessao: '2026-09-23', iniciadaAs: ini + 2 * 86400 + 10.5 * 3600, encerrada: true }],
+  // [11/10] com a grade nova o dia sem SSU e a QUINTA (antes era a segunda)
+  ['antecipado num dia sem SSU (quinta)', { sessao: '2026-09-24', iniciadaAs: ini + 3 * 86400 + 10 * 3600 }],
 ];
 // o que o Lua devolveu, colado aqui pra comparar
+// [11/10] REGERADO no Studio depois da grade nova (todo dia menos quinta, 12:00-00:00).
+// Nunca escrever a mao: rodar o Regras.SSU no Edit e colar a saida.
 const doLua = {
-  'sem ajuste': '0:f 241200:A 252000:f 414000:A 432000:f 500400:A 518400:f 586800:A 597600:f',
-  'encerrada sexta': '0:f 241200:A 252000:f 414000:E 432000:f 500400:A 518400:f 586800:A 597600:f',
-  'estendida quarta': '0:f 241200:A 255600:f 414000:A 432000:f 500400:A 518400:f 586800:A 597600:f',
-  'abuso: estender domingo ate 23': '0:f 241200:A 252000:f 414000:A 432000:f 500400:A 518400:f 586800:A 597600:f',
-  // [27/09] geradas no Studio rodando o Regras.SSU editado — nao escrever a mao
-  'inicio antecipado quarta 17:30': '0:f 235800:A 252000:f 414000:A 432000:f 500400:A 518400:f 586800:A 597600:f',
-  'antecipado + encerrado depois': '0:f 235800:E 252000:f 414000:A 432000:f 500400:A 518400:f 586800:A 597600:f',
-  'antecipado num dia sem SSU (seg)': '0:f 241200:A 252000:f 414000:A 432000:f 500400:A 518400:f 586800:A 597600:f',
+  'sem ajuste': '0:f 43200:A 86400:f 129600:A 172800:f 216000:A 259200:f 388800:A 432000:f 475200:A 518400:f 561600:A 604800:f',
+  'encerrada sexta': '0:f 43200:A 86400:f 129600:A 172800:f 216000:A 259200:f 388800:E 432000:f 475200:A 518400:f 561600:A 604800:f',
+  'estendida quarta ate 01h': '0:f 43200:A 86400:f 129600:A 172800:f 216000:A 262800:f 388800:A 432000:f 475200:A 518400:f 561600:A 604800:f',
+  'abuso: estender domingo ate 25': '0:f 43200:A 86400:f 129600:A 172800:f 216000:A 259200:f 388800:A 432000:f 475200:A 518400:f 561600:A',
+  'inicio antecipado quarta 10:30': '0:f 43200:A 86400:f 129600:A 172800:f 210600:A 259200:f 388800:A 432000:f 475200:A 518400:f 561600:A 604800:f',
+  'antecipado + encerrado depois': '0:f 43200:A 86400:f 129600:A 172800:f 210600:E 259200:f 388800:A 432000:f 475200:A 518400:f 561600:A 604800:f',
+  'antecipado num dia sem SSU (quinta)': '0:f 43200:A 86400:f 129600:A 172800:f 216000:A 259200:f 388800:A 432000:f 475200:A 518400:f 561600:A 604800:f',
 };
 let ok = 0, dif = 0;
 for (const [nome, aj] of cenarios) {
