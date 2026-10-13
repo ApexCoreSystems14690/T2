@@ -882,6 +882,59 @@ router.post('/procurados', async (req, res) => {
   } catch (err) { console.error('procurados/criar:', err.message); res.status(500).json({ error: 'Erro interno' }); }
 });
 
+// ===========================================================================
+// VEICULOS PROCURADOS (12/10) — o carro (dono + id do modelo) marcado pela PC.
+// GET  /api/game/veiculos-procurados          -> os abertos
+// POST /api/game/veiculos-procurados          { dono_nome, carro_id, carro_nome, motivo, descricao, por_nome, corp }
+// POST /api/game/veiculos-procurados/:id/encerrar   { por_nome }
+// ===========================================================================
+router.get('/veiculos-procurados', async (req, res) => {
+  try {
+    const lim = Math.min(300, Math.max(1, parseInt(req.query.limit) || 200));
+    const r = await pool.query(
+      `SELECT * FROM veiculos_procurados WHERE estado <> 'encerrado' ORDER BY id DESC LIMIT $1`, [lim]);
+    res.json({ ok: true, veiculos: r.rows });
+  } catch (err) { console.error('veiculos-procurados:', err.message); res.status(500).json({ error: 'Erro interno' }); }
+});
+
+router.post('/veiculos-procurados', async (req, res) => {
+  try {
+    const b = req.body || {};
+    const dono = String(b.dono_nome || '').trim().slice(0, 64);
+    const carro = String(b.carro_id || '').trim().slice(0, 64);
+    if (!dono || !carro) return res.status(400).json({ error: 'dono e carro obrigatórios' });
+    const ja = await pool.query(
+      `SELECT id FROM veiculos_procurados WHERE LOWER(dono_nome) = LOWER($1) AND carro_id = $2 AND estado <> 'encerrado' LIMIT 1`,
+      [dono, carro]);
+    if (ja.rows[0]) return res.status(409).json({ error: 'já procurado', id: ja.rows[0].id });
+    const achou = await pool.query(`SELECT roblox_id FROM game_players WHERE LOWER(nome) = LOWER($1) LIMIT 1`, [dono]);
+    const rid = achou.rows[0] ? Number(achou.rows[0].roblox_id) : null;
+    const r = await pool.query(
+      `INSERT INTO veiculos_procurados (dono_roblox_id, dono_nome, carro_id, carro_nome, motivo, descricao, por_nome, corp)
+       VALUES ($1,$2,$3,$4,$5,$6,$7,$8) RETURNING *`,
+      [rid, dono, carro,
+       b.carro_nome ? String(b.carro_nome).slice(0, 80) : null,
+       b.motivo ? String(b.motivo).slice(0, 160) : null,
+       b.descricao ? String(b.descricao).slice(0, 600) : null,
+       b.por_nome ? String(b.por_nome).slice(0, 64) : null,
+       b.corp ? String(b.corp).slice(0, 64) : null]);
+    res.json({ ok: true, veiculo: r.rows[0] });
+  } catch (err) { console.error('veiculos-procurados/criar:', err.message); res.status(500).json({ error: 'Erro interno' }); }
+});
+
+router.post('/veiculos-procurados/:id/encerrar', async (req, res) => {
+  try {
+    const id = Number(req.params.id);
+    if (!Number.isFinite(id) || id <= 0) return res.status(400).json({ error: 'id inválido' });
+    const por = req.body && req.body.por_nome ? String(req.body.por_nome).slice(0, 64) : null;
+    const r = await pool.query(
+      `UPDATE veiculos_procurados SET estado = 'encerrado', encerrado_em = NOW(), encerrado_por = $2
+        WHERE id = $1 AND estado <> 'encerrado' RETURNING *`, [id, por]);
+    if (!r.rows[0]) return res.status(404).json({ error: 'não encontrado ou já encerrado' });
+    res.json({ ok: true, veiculo: r.rows[0] });
+  } catch (err) { console.error('veiculos-procurados/encerrar:', err.message); res.status(500).json({ error: 'Erro interno' }); }
+});
+
 // POST /api/game/procurados/:id/encerrar   { por_nome }
 router.post('/procurados/:id/encerrar', async (req, res) => {
   try {
@@ -1748,7 +1801,8 @@ router.get('/ficha/cidade', async (req, res) => {
   try {
     const r = await pool.query(
       `SELECT roblox_id, nome, bolso, banco, level, emprego,
-              prisoes, dividas, divida_estado, divida_recusas, preso, atualizado_em
+              prisoes, dividas, divida_estado, divida_recusas, preso,
+              carros, financiamentos, atualizado_em
          FROM game_patrimonio
         ORDER BY atualizado_em DESC NULLS LAST
         LIMIT 300`);
@@ -1762,6 +1816,9 @@ router.get('/ficha/cidade', async (req, res) => {
         divida_estado: p.divida_estado || 'Pagando',
         divida_recusas: Number(p.divida_recusas) || 0,
         preso: Number(p.preso) || 0,
+        // [12/10] aba Veiculos do PC da PC: os carros e os financiamentos de todo mundo
+        carros: p.carros || {},
+        financiamentos: p.financiamentos || [],
       })),
     });
   } catch (err) {

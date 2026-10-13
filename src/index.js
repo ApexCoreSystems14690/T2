@@ -279,6 +279,28 @@ async function start() {
       CREATE UNIQUE INDEX IF NOT EXISTS uq_procurados_aberto
         ON procurados(roblox_id) WHERE estado <> 'encerrado' AND roblox_id IS NOT NULL;
 
+      -- ===== VEICULOS PROCURADOS (12/10) =====
+      -- Julio: "a policia civil pelo pc deve conseguir por esse carro como procurado
+      -- alem de players". Nao tem placa no jogo: o carro e (dono + id do modelo).
+      -- Um carro so tem UM alerta aberto por vez.
+      CREATE TABLE IF NOT EXISTS veiculos_procurados (
+        id SERIAL PRIMARY KEY,
+        dono_roblox_id BIGINT,
+        dono_nome VARCHAR(64) NOT NULL,
+        carro_id VARCHAR(64) NOT NULL,
+        carro_nome VARCHAR(80),
+        motivo VARCHAR(160),
+        descricao TEXT,
+        por_nome VARCHAR(64),
+        corp VARCHAR(64),
+        estado VARCHAR(16) NOT NULL DEFAULT 'ativo',
+        criado_em TIMESTAMP DEFAULT NOW(),
+        encerrado_em TIMESTAMP,
+        encerrado_por VARCHAR(64)
+      );
+      CREATE UNIQUE INDEX IF NOT EXISTS uq_veiculos_procurados_aberto
+        ON veiculos_procurados(LOWER(dono_nome), carro_id) WHERE estado <> 'encerrado';
+
       -- ===== ALERTAS DE COMPRA SUSPEITA (30/09) =====
       -- Julio: "se o cara comprar muito papel parafuso etc coisas suspeitas de
       -- fabricacao de armas, faca chegar no pc da policia civil notificando eles,

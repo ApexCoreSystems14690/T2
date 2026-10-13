@@ -1,0 +1,172 @@
+# SANTA FE RP - MAPA DE REVERSAO DAS MARCAS (12/10/2026)
+# Guardado aqui pra sair da place. Formato: <pasta>|<nome da peca>  TAB  <template original>
+# Pra reverter uma peca no Studio:
+#   local p = game.ReplicatedStorage.Resources.Assets.Camisas["Camisa Lacoste Preta"]
+#   p.ShirtTemplate = "http://www.roblox.com/asset/?id=6414886707"
+# (em Calcas use PantsTemplate)
+
+=== ROUPAS (137) ===
+Calcas|Calça Elon	http://www.roblox.com/asset/?id=10647902397
+Calcas|Calça Hello Kitty	http://www.roblox.com/asset/?id=7914533185
+Calcas|Calça Nelk Boys	http://www.roblox.com/asset/?id=4628693524
+Calcas|Calça adidas	http://www.roblox.com/asset/?id=4531880115
+Calcas|Conjunto Champion	http://www.roblox.com/asset/?id=7006911016
+Calcas|Conjunto Nike Azul	http://www.roblox.com/asset/?id=6519831222
+Calcas|Conjunto Oakley	http://www.roblox.com/asset/?id=7343917619
+Calcas|Kit Lavender	http://www.roblox.com/asset/?id=5668770449
+Calcas|Pijama Batman	http://www.roblox.com/asset/?id=6063980969
+Calcas|Pijama Hello Kitty	http://www.roblox.com/asset/?id=7914533185
+Calcas|Shorts hello kitty	http://www.roblox.com/asset/?id=6134405014
+Calcas|Shorts masculino Adidas	http://www.roblox.com/asset/?id=4588319620
+Camisas|Apoiador PNI 	http://www.roblox.com/asset/?id=7577666920
+Camisas|Apoiador PNI 2	http://www.roblox.com/asset/?id=7577623542
+Camisas|Apoiador PNI 2 	http://www.roblox.com/asset/?id=7577623542
+Camisas|Bobojaco Azul North Face	http://www.roblox.com/asset/?id=4524057924
+Camisas|Bobojaco Cinza North Face	http://www.roblox.com/asset/?id=5684164359
+Camisas|Camisa Astro	http://www.roblox.com/asset/?id=5947809113
+Camisas|Camisa Atletico Madrid S1	http://www.roblox.com/asset/?id=6344995423
+Camisas|Camisa Bape amarela	http://www.roblox.com/asset/?id=5718252075
+Camisas|Camisa Barcelona L1	http://www.roblox.com/asset/?id=6216429575
+Camisas|Camisa Barcelona LS	http://www.roblox.com/asset/?id=6216429575
+Camisas|Camisa Batman	http://www.roblox.com/asset/?id=6842163513
+Camisas|Camisa Bayern	http://www.roblox.com/asset/?id=7239638407
+Camisas|Camisa Bayern Home	http://www.roblox.com/asset/?id=7239638407
+Camisas|Camisa Borussia L1	http://www.roblox.com/asset/?id=6254916636
+Camisas|Camisa Borussia S1	http://www.roblox.com/asset/?id=6254916636
+Camisas|Camisa Chelsea	http://www.roblox.com/asset/?id=6237481267
+Camisas|Camisa Chelsea L1	http://www.roblox.com/asset/?id=6237481267
+Camisas|Camisa Corinthians L3	http://www.roblox.com/asset/?id=6993542812
+Camisas|Camisa Corinthians L5	http://www.roblox.com/asset/?id=6935906898
+Camisas|Camisa Corinthians Lacoste	http://www.roblox.com/asset/?id=7331059206
+Camisas|Camisa Corinthians S3	http://www.roblox.com/asset/?id=6993542812
+Camisas|Camisa Corinthians S5	http://www.roblox.com/asset/?id=6935906898
+Camisas|Camisa CorinthiansXLacoste	http://www.roblox.com/asset/?id=7331059206
+Camisas|Camisa Ferrari	rbxassetid://18389978992
+Camisas|Camisa Flamengo	http://www.roblox.com/asset/?id=6947351053
+Camisas|Camisa Flamengo v2	http://www.roblox.com/asset/?id=6947351053
+Camisas|Camisa Fluxo	http://www.roblox.com/asset/?id=10022692358
+Camisas|Camisa Freefire	http://www.roblox.com/asset/?id=6355515833
+Camisas|Camisa GUESS	http://www.roblox.com/asset/?id=3438992748
+Camisas|Camisa Hello Kitty	http://www.roblox.com/asset/?id=6136846267
+Camisas|Camisa Inter Dragão	rbxassetid://12171290877
+Camisas|Camisa Inter Milan	http://www.roblox.com/asset/?id=6573757002
+Camisas|Camisa Inter Milan S2	http://www.roblox.com/asset/?id=6573754828
+Camisas|Camisa Inter Milan S3	http://www.roblox.com/asset/?id=6284258480
+Camisas|Camisa Iron Maiden	http://www.roblox.com/asset/?id=5758071041
+Camisas|Camisa Italia	http://www.roblox.com/asset/?id=6235803666
+Camisas|Camisa Italia L1	http://www.roblox.com/asset/?id=6235803666
+Camisas|Camisa Italia V2	rbxassetid://135994196021500   # ASSET MORTO (404) - nao adianta reverter
+Camisas|Camisa KISS	http://www.roblox.com/asset/?id=5759570166
+Camisas|Camisa Kazz	rbxassetid://15674404888
+Camisas|Camisa Lacoste Azul	http://www.roblox.com/asset/?id=5528494818
+Camisas|Camisa Lacoste Blue	http://www.roblox.com/asset/?id=6967572430
+Camisas|Camisa Lacoste Blue v2	http://www.roblox.com/asset/?id=6967572430
+Camisas|Camisa Lacoste Brasil	http://www.roblox.com/asset/?id=5528499713
+Camisas|Camisa Lacoste Colorida	http://www.roblox.com/asset/?id=5528503842
+Camisas|Camisa Lacoste Custom	http://www.roblox.com/asset/?id=6968654517
+Camisas|Camisa Lacoste Estados Unidos	http://www.roblox.com/asset/?id=5528505733
+Camisas|Camisa Lacoste França	http://www.roblox.com/asset/?id=5528490138
+Camisas|Camisa Lacoste Listra	http://www.roblox.com/asset/?id=6958204565
+Camisas|Camisa Lacoste Listrada	http://www.roblox.com/asset/?id=6958204565
+Camisas|Camisa Lacoste Preta	http://www.roblox.com/asset/?id=6414886707
+Camisas|Camisa Lacoste Rainbown	http://www.roblox.com/asset/?id=5528503842
+Camisas|Camisa Lacoste v3	http://www.roblox.com/asset/?id=6899986294
+Camisas|Camisa Lacoste v4	http://www.roblox.com/asset/?id=6899986294
+Camisas|Camisa Lacoste v5	http://www.roblox.com/asset/?id=6968654517
+Camisas|Camisa Liverpool	http://www.roblox.com/asset/?id=6842716269
+Camisas|Camisa Liverpool Home	http://www.roblox.com/asset/?id=6842716269
+Camisas|Camisa Longa Grêmio L1	http://www.roblox.com/asset/?id=6855268541
+Camisas|Camisa Longa Grêmio L2	http://www.roblox.com/asset/?id=6655318672
+Camisas|Camisa Longa Grêmio S1	http://www.roblox.com/asset/?id=6855268541
+Camisas|Camisa Longa Grêmio S2	http://www.roblox.com/asset/?id=6655318672
+Camisas|Camisa Longa Madrid	http://www.roblox.com/asset/?id=5808901111
+Camisas|Camisa Madrid	http://www.roblox.com/asset/?id=5808901111
+Camisas|Camisa Madrid L1	http://www.roblox.com/asset/?id=6344995423
+Camisas|Camisa Milan	http://www.roblox.com/asset/?id=6573757002
+Camisas|Camisa Milan L2	http://www.roblox.com/asset/?id=6573754828
+Camisas|Camisa Milan L3	http://www.roblox.com/asset/?id=6284258480
+Camisas|Camisa Milan Zafira	rbxassetid://96749425370546
+Camisas|Camisa PSG Rosa	http://www.roblox.com/asset/?id=7002028863
+Camisas|Camisa PSG Rosa v3	http://www.roblox.com/asset/?id=7002028863
+Camisas|Camisa Palmeiras	http://www.roblox.com/asset/?id=6734978686
+Camisas|Camisa Palmeiras Home	http://www.roblox.com/asset/?id=6734978686
+Camisas|Camisa Quiksilver	http://www.roblox.com/asset/?id=5528501340
+Camisas|Camisa Sabaton	http://www.roblox.com/asset/?id=5758071940
+Camisas|Camisa Sao Paulo	http://www.roblox.com/asset/?id=6498636388
+Camisas|Camisa SaoXPaulo	http://www.roblox.com/asset/?id=6498636388
+Camisas|Camisa Stoke	http://www.roblox.com/asset/?id=437137167
+Camisas|Camisa Stoke Home	http://www.roblox.com/asset/?id=437137167
+Camisas|Camisa Thrasher Vermelha	http://www.roblox.com/asset/?id=5833314370
+Camisas|Camisa Trasher	http://www.roblox.com/asset/?id=5402532587
+Camisas|Camisa Vasco 2000	http://www.roblox.com/asset/?id=6431860404
+Camisas|Camisa VascoX2000	http://www.roblox.com/asset/?id=6431860404
+Camisas|Camisa Vlone roxa	http://www.roblox.com/asset/?id=10315240632
+Camisas|Camisa Vlone verde	http://www.roblox.com/asset/?id=6763238393
+Camisas|Camisa xadrez bege	http://www.roblox.com/asset/?id=6403954132
+Camisas|Camiseta Flamengo	http://www.roblox.com/asset/?id=5837140077
+Camisas|Camiseta Grêmio	http://www.roblox.com/asset/?id=6307233970
+Camisas|Camiseta Hello Kitty	http://www.roblox.com/asset/?id=6136846267
+Camisas|Camiseta Hig Flier	http://www.roblox.com/asset/?id=6519554790
+Camisas|Camiseta Internacional	http://www.roblox.com/asset/?id=5860312076
+Camisas|Camiseta Lacoste/Tatuagem	http://www.roblox.com/asset/?id=5870554599
+Camisas|Camiseta Manchester United	http://www.roblox.com/asset/?id=12543512985
+Camisas|Camiseta Palm Angels	http://www.roblox.com/asset/?id=5690407032
+Camisas|Camiseta Ramones	http://www.roblox.com/asset/?id=540920692
+Camisas|Camiseta Trasher	http://www.roblox.com/asset/?id=5763759140
+Camisas|Camiseta iFood - Macacão	http://www.roblox.com/asset/?id=10831429882
+Camisas|Casaco Freefire	http://www.roblox.com/asset/?id=6355511907
+Camisas|Casaco Nike Fit	rbxassetid://73366624381194
+Camisas|Corta-Vento Adidas	http://www.roblox.com/asset/?id=4984055362
+Camisas|Corta-Vento Lacoste	http://www.roblox.com/asset/?id=5822757379
+Camisas|Cropped AC/DC	http://www.roblox.com/asset/?id=3158967239
+Camisas|Cropped Bathory	http://www.roblox.com/asset/?id=5779486570
+Camisas|Cropped Lavender	http://www.roblox.com/asset/?id=5668770857
+Camisas|Cropped preto	http://www.roblox.com/asset/?id=6519554790
+Camisas|Jaqueta Bathory Denim	http://www.roblox.com/asset/?id=6243517576
+Camisas|Jaqueta Chrome Hearts	http://www.roblox.com/asset/?id=5732935798
+Camisas|Jaqueta Death Metal	http://www.roblox.com/asset/?id=6424633578
+Camisas|Jaqueta Lacoste	http://www.roblox.com/asset/?id=6317539211
+Camisas|Jaqueta Lacoste Vermelha	http://www.roblox.com/asset/?id=5639034355
+Camisas|Jaqueta Preta Metallica	http://www.roblox.com/asset/?id=2388548754
+Camisas|Macacão Oktoberfest	http://www.roblox.com/asset/?id=10647902397
+Camisas|Manga Longa Adidas Halloween	http://www.roblox.com/asset/?id=5825771753
+Camisas|Manga Longa Damassaclan	http://www.roblox.com/asset/?id=4768745129
+Camisas|Manga Longa Killstation	http://www.roblox.com/asset/?id=6064128904
+Camisas|Manga Longa Nargaroth	http://www.roblox.com/asset/?id=6568651387
+Camisas|Manga Longa Nirvana	http://www.roblox.com/asset/?id=6051572477
+Camisas|Manga Longa Oakley	http://www.roblox.com/asset/?id=5702669510
+Camisas|Manga Longa Slipknot	http://www.roblox.com/asset/?id=6232215501
+Camisas|Manga Longa Vans	http://www.roblox.com/asset/?id=3088426962
+Camisas|Moletom Anti-Social Club	http://www.roblox.com/asset/?id=4757723766
+Camisas|Moletom Nike Vermelho	http://www.roblox.com/asset/?id=6421304754
+Camisas|Moletom Triple Nike	rbxassetid://94385341971806
+Camisas|PSG White	http://www.roblox.com/asset/?id=11968080511
+Camisas|Red short sleeve Vlone pajamas	http://www.roblox.com/asset/?id=9727458658
+Camisas|White Suit Black	http://www.roblox.com/asset/?id=10058338201
+
+=== MAPA (25) ===
+Workspace.Coca-Cola.Part.Coca-Cola|Name	Coca-Cola
+Workspace.Coca-Cola.Part.Coca-Cola|Texture	rbxassetid://8987072
+Workspace.Coca-Cola|Name	Coca-Cola
+Workspace.Mapa(Spot).Compra_Items.ComprarBandeirao Flamengo|Description	Comprar Bandeirao Flamengo 850R$
+Workspace.Mapa(Spot).Compra_Items.ComprarBandeirao do Gremio|Description	Comprar Bandeirao do Gremio 850R$
+Workspace.Mapa(Spot).Compra_Items.ComprarFlamengo|Description	Comprar Flamengo 600R$
+Workspace.Mapa(Spot).Compra_Items.ComprarVasco|Description	Comprar Vasco 600R$
+Workspace.Mapa(Spot).Part.Coca-Cola|Name	Coca-Cola
+Workspace.Mapa(Spot).Part.Coca-Cola|Texture	rbxassetid://8987072
+Workspace.MapaOrganizado.SO.Models.Model.Part.Coca-Cola|Name	Coca-Cola
+Workspace.MapaOrganizado.SO.Models.Model.Part.Coca-Cola|Texture	rbxassetid://10676188755
+Workspace.Model.Model.Máquina da Conke-Cola.Bebidas.Conke-Cola.Coca|Name	Coca
+Workspace.Model.Máquina da Conke-Cola.Bebidas.Conke-Cola.Coca|Name	Coca
+Workspace.Palio.Wheels.FL.Parts.Part.Volkswagen ABS Sport Hubcap|Name	Volkswagen ABS Sport Hubcap
+Workspace.Palio.Wheels.FL.Parts.Part.Volkswagen ABS Sport Hubcap|Transparency	1
+Workspace.Palio.Wheels.FR.Parts.Part.Volkswagen ABS Sport Hubcap|Name	Volkswagen ABS Sport Hubcap
+Workspace.Palio.Wheels.FR.Parts.Part.Volkswagen ABS Sport Hubcap|Transparency	1
+Workspace.Palio.Wheels.RL.Parts.Part.Volkswagen ABS Sport Hubcap|Name	Volkswagen ABS Sport Hubcap
+Workspace.Palio.Wheels.RL.Parts.Part.Volkswagen ABS Sport Hubcap|Transparency	1
+Workspace.Palio.Wheels.RR.Parts.Part.Volkswagen ABS Sport Hubcap|Name	Volkswagen ABS Sport Hubcap
+Workspace.Palio.Wheels.RR.Parts.Part.Volkswagen ABS Sport Hubcap|Transparency	1
+Workspace.Part.Coca-Cola|Name	Coca-Cola
+Workspace.Part.Coca-Cola|Texture	rbxassetid://8987072
+Workspace.VeiculosGovernamentais.Vectra PC Descaracterizada.Body.Modelo.chevrolet logo|Name	chevrolet logo
+Workspace.VeiculosGovernamentais.Vectra PC Descaracterizada.Body.Modelo.chevrolet logo|Transparency	1
