@@ -1142,6 +1142,9 @@ async function start() {
           FOR EACH ROW EXECUTE FUNCTION fn_members_saida();
       `);
     } catch (e) { console.error('migração ficha PC:', e.message); }
+    // [14/10 SEGURANCA] hash de IP por conta (anti-alt), vinculo Roblox verificado, config
+    try { await require('./seguranca').migrar(pool); }
+    catch (e) { console.error('migração segurança:', e.message); }
     console.log('✅ Banco migrado');
   } catch (err) {
     console.error('❌ Migração falhou:', err.message);
@@ -1235,6 +1238,10 @@ async function start() {
     }
     next();
   });
+
+  // [14/10 SEGURANCA] grava o HASH do IP de quem esta logado (1x por sessao/IP) pro
+  // anti-alt. O jogo nao ve IP; o site ve. IP cru nunca vai pro banco.
+  app.use(require('./seguranca').middlewareIp(pool));
 
   // View engine
   app.set('view engine', 'ejs');

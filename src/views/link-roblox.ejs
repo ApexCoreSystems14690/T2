@@ -18,6 +18,13 @@
     .btn:hover { opacity: 0.85; }
     .back { display: block; text-align: center; margin-top: 1rem; color: #7a8ba5; text-decoration: none; font-size: 0.85rem; }
     .error { background: #ef444422; color: #ef4444; padding: 0.5rem; border-radius: 4px; font-size: 0.8rem; margin-bottom: 1rem; text-align: center; }
+    .ok { background: #22c55e22; color: #4ade80; padding: 0.5rem; border-radius: 4px; font-size: 0.8rem; margin-bottom: 1rem; text-align: center; }
+    .verif { margin-top: 1.4rem; padding-top: 1.2rem; border-top: 1px solid #1e2a40; }
+    .selo { display: inline-block; padding: .15rem .5rem; border-radius: 99px; font-size: .75rem; font-weight: 700; }
+    .selo.sim { background: #22c55e22; color: #4ade80; } .selo.nao { background: #f59e0b22; color: #fbbf24; }
+    .codigo { font-family: ui-monospace, Consolas, monospace; font-size: 1.5rem; letter-spacing: .2rem; text-align: center; background: #0a0e17; border: 1px dashed #00d4ff; border-radius: 6px; padding: .6rem; margin: .6rem 0; user-select: all; }
+    .passos { color: #7a8ba5; font-size: .8rem; line-height: 1.5; margin: .4rem 0 .8rem 1rem; }
+    .btn.sec { background: #1e2a40; color: #f0f4f8; margin-top: .4rem; }
   </style>
 </head>
 <body>
@@ -31,8 +38,12 @@
         <% if (error === 'id_required') { %>Escreve o seu nome de usuário do Roblox.<% } %>
         <% if (error === 'nome_nao_achado') { %>Não achei esse nome no Roblox. Confere a escrita (é o nome de usuário, não o apelido).<% } %>
         <% if (error === 'internal') { %>Deu erro aqui do nosso lado. Tenta de novo.<% } %>
+        <% if (error === 'codigo_vencido') { %>Seu código venceu (vale 30 min). Gere outro.<% } %>
+        <% if (error === 'bio_sem_codigo') { %>Não achei o código na bio do seu Roblox. Salva a bio e tenta de novo (pode levar 1 minuto pra atualizar).<% } %>
+        <% if (error === 'roblox_fora') { %>O Roblox não respondeu agora. Tenta de novo daqui a pouco.<% } %>
       </div>
     <% } %>
+    <% if (typeof ok !== 'undefined' && ok === 'verificado') { %><div class="ok">Conta Roblox VERIFICADA ✔</div><% } %>
     <form method="POST" action="/dashboard/link-roblox">
       <div class="form-group">
         <label>Seu nome de usuário do Roblox</label>
@@ -44,6 +55,27 @@
       </div>
       <button type="submit" class="btn">Vincular</button>
     </form>
+
+    <% if (user.roblox_id) { %>
+    <div class="verif">
+      <h2 style="font-size:1rem">Verificação <span class="selo <%= user.roblox_verificado ? 'sim' : 'nao' %>"><%= user.roblox_verificado ? 'verificada' : 'não verificada' %></span></h2>
+      <% if (!user.roblox_verificado) { %>
+        <p class="hint" style="margin-bottom:.6rem">Prova que essa conta Roblox é sua. Sem isso ela não conta como sua pro sistema de segurança do servidor.</p>
+        <% if (user.vinculo_codigo) { %>
+          <div class="codigo"><%= user.vinculo_codigo %></div>
+          <ol class="passos">
+            <li><b>No jogo:</b> digite <code>/vincular <%= user.vinculo_codigo %></code> no chat. Pronto.</li>
+            <li><b>Ou na bio do Roblox:</b> cole o código na sua descrição do perfil, salve e clique em Verificar.</li>
+          </ol>
+          <form method="POST" action="/dashboard/link-roblox/verificar-bio"><button class="btn" type="submit">Verificar pela bio</button></form>
+          <form method="POST" action="/dashboard/link-roblox/codigo"><button class="btn sec" type="submit">Gerar outro código</button></form>
+          <p class="hint" style="margin:.5rem 0 0">O código vale 30 minutos.</p>
+        <% } else { %>
+          <form method="POST" action="/dashboard/link-roblox/codigo"><button class="btn" type="submit">Gerar código de verificação</button></form>
+        <% } %>
+      <% } %>
+    </div>
+    <% } %>
     <a href="/dashboard" class="back">Voltar ao painel</a>
   </div>
 </body>

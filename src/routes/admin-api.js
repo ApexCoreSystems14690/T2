@@ -180,17 +180,30 @@ router.post('/command', async (req, res) => {
       return res.json({ ok: true, ids });
     }
 
+    // [14/10 SEGURANCA] ban/unban NAO precisa mais de servidor online. O site virou a fonte
+    // da verdade: o jogo pergunta /api/game/acesso na entrada de cada jogador e aplica (e
+    // sincroniza o DataStore) ali. Com servidor de pe, o comando continua indo pra la so pra
+    // EXPULSAR na hora quem esta dentro.
+    let semServidor = false;
     if (spec.alvo === 'id') {
-      // ban/unban: manda pra todos os servidores (o online executa kick; todos podem gravar o DataStore, mas só um precisa)
-      const servers = await pool.query(`SELECT job_id FROM game_servers WHERE updated_at > NOW() - INTERVAL '90 seconds' ORDER BY updated_at DESC LIMIT 1`);
-      if (servers.rows.length === 0) return res.status(400).json({ error: 'Nenhum servidor online pra executar' });
-      jobId = servers.rows[0].job_id;
+      const servers = await pool.query(`SELECT job_id, players FROM game_servers WHERE updated_at > NOW() - INTERVAL '90 seconds' ORDER BY updated_at DESC`);
+      if (servers.rows.length === 0) semServidor = true;
+      else {
+        jobId = servers.rows[0].job_id;
+        // se o alvo estiver online, manda pro servidor DELE (o kick sai na hora)
+        for (const sv of servers.rows) {
+          if ((sv.players || []).some(p => Number(p.userId) === Number(alvoId))) { jobId = sv.job_id; break; }
+        }
+      }
     }
 
-    const r = await pool.query(
-      'INSERT INTO game_commands (tipo, target_roblox_id, target_name, payload, job_id, created_by) VALUES ($1, $2, $3, $4, $5, $6) RETURNING id',
-      [tipo, alvoId, alvoNome, JSON.stringify(dados), jobId, req.user.id]);
-    await audit(req, 'comando:' + tipo, { alvo: alvoNome || alvoId, payload: dados });
+    let r = { rows: [{ id: null }] };
+    if (!semServidor) {
+      r = await pool.query(
+        'INSERT INTO game_commands (tipo, target_roblox_id, target_name, payload, job_id, created_by) VALUES ($1, $2, $3, $4, $5, $6) RETURNING id',
+        [tipo, alvoId, alvoNome, JSON.stringify(dados), jobId, req.user.id]);
+    }
+    await audit(req, 'comando:' + tipo, { alvo: alvoNome || alvoId, payload: dados, semServidor });
 
     // [05/10] ESPELHO DOS BANIDOS. O ban vive no DataStore do Roblox e o site nao le aquilo,
     // entao sem isto o painel nunca saberia QUEM esta banido -- e nao daria pra desbanir
@@ -217,7 +230,15 @@ router.post('/command', async (req, res) => {
       console.error('game_bans:', e.message);
     }
 
-    res.json({ ok: true, id: r.rows[0].id });
+    // o painel tambem ve o ban/desban como linha de log (mesma aba que os kicks do jogo)
+    if (tipo === 'ban' || tipo === 'unban') {
+      try {
+        await pool.query(`INSERT INTO game_logs (tipo, jogador, alvo, detalhe, ocorrido_em) VALUES ('ban', $1, $2, $3, NOW())`,
+          [String(alvoNome || alvoId), req.user.discord_username || ('user#' + req.user.id),
+           JSON.stringify({ userId: alvoId, origem: 'painel', desfeito: tipo === 'unban', motivo: dados.motivo || null, horas: dados.horas || 0, semServidor })]);
+      } catch (e) { console.error('log ban:', e.message); }
+    }
+    res.json({ ok: true, id: r.rows[0].id, semServidor });
   } catch (err) {
     console.error('command:', err.message);
     res.status(500).json({ error: 'Erro interno' });
@@ -252,6 +273,83 @@ router.get('/bans', requirePoder('banir'), async (req, res) => {
       ativos: bans.filter(b => !b.desfeito_em && !b.vencido).length });
   } catch (err) {
     console.error('bans:', err.message);
+    res.status(500).json({ error: 'Erro interno' });
+  }
+});
+
+// ------------------------------------------------------------
+// [14/10] SEGURANCA — o que o anti-cheat/anti-exploit do jogo pegou, quem foi expulso
+// e por que, entradas recusadas, contas ligadas por IP e a config do anti-alt.
+// ------------------------------------------------------------
+const SEG = require('../seguranca');
+router.get('/seguranca', requirePoder('ver_registro'), async (req, res) => {
+  try {
+    const horas = Math.min(Math.max(parseInt(req.query.horas) || 24, 1), 24 * 30);
+    const janela = `COALESCE(ocorrido_em, created_at) > NOW() - ($1 || ' hours')::interval`;
+    const alertas = await pool.query(
+      `SELECT jogador, COUNT(*)::int AS n, MAX((detalhe->>'pontos')::int) AS pico,
+              array_agg(DISTINCT detalhe->>'regra') AS regras, MAX(COALESCE(ocorrido_em, created_at)) AS ultimo
+         FROM game_logs WHERE tipo = 'seguranca' AND ${janela}
+        GROUP BY jogador ORDER BY pico DESC NULLS LAST, n DESC LIMIT 100`, [String(horas)]);
+    const kicks = await pool.query(
+      `SELECT tipo, jogador, alvo, detalhe, COALESCE(ocorrido_em, created_at) AS quando FROM game_logs
+        WHERE tipo IN ('kick','ban','acesso') AND ${janela} ORDER BY id DESC LIMIT 200`, [String(horas)]);
+    const origens = await pool.query(
+      `SELECT COALESCE(detalhe->>'origem', tipo) AS origem, COUNT(*)::int AS n FROM game_logs
+        WHERE tipo IN ('kick','acesso') AND ${janela} GROUP BY 1 ORDER BY n DESC`, [String(horas)]);
+    const vinc = await pool.query(
+      `SELECT COUNT(*) FILTER (WHERE roblox_id IS NOT NULL)::int AS vinculados,
+              COUNT(*) FILTER (WHERE roblox_verificado)::int AS verificados FROM users`);
+    res.json({ ok: true, horas, config: await SEG.config(pool), alertas: alertas.rows, kicks: kicks.rows,
+      origens: origens.rows, vinculos: vinc.rows[0] });
+  } catch (err) {
+    console.error('seguranca:', err.message);
+    res.status(500).json({ error: 'Erro interno' });
+  }
+});
+
+// grupos de contas Roblox VERIFICADAS que dividem a mesma rede (IP fora da faixa de CGNAT)
+router.get('/seguranca/alts', requirePoder('ver_registro'), async (req, res) => {
+  try {
+    const r = await pool.query(
+      `WITH uso AS (
+          SELECT ip_hash, COUNT(DISTINCT user_id) AS n FROM user_ips
+           WHERE ultima > NOW() - ($1 || ' days')::interval GROUP BY ip_hash
+          HAVING COUNT(DISTINCT user_id) BETWEEN 2 AND $2
+       )
+       SELECT uso.ip_hash, uso.n,
+              json_agg(json_build_object('roblox_id', u.roblox_id, 'nome', u.roblox_username,
+                'discord', u.discord_username, 'verificado', u.roblox_verificado,
+                'banido', EXISTS (SELECT 1 FROM game_bans b WHERE b.roblox_id = u.roblox_id AND b.desfeito_em IS NULL
+                                    AND (b.ate IS NULL OR b.ate = 0 OR b.ate > EXTRACT(EPOCH FROM NOW()))),
+                'ultima', ui.ultima) ORDER BY ui.ultima DESC) AS contas
+         FROM uso JOIN user_ips ui ON ui.ip_hash = uso.ip_hash JOIN users u ON u.id = ui.user_id
+        GROUP BY uso.ip_hash, uso.n ORDER BY MAX(ui.ultima) DESC LIMIT 150`,
+      [String(SEG.JANELA_DIAS), SEG.MAX_CONTAS_POR_IP]);
+    // o hash nao sai do servidor: o painel so precisa saber que e "a mesma rede"
+    res.json({ ok: true, maxPorIp: SEG.MAX_CONTAS_POR_IP, dias: SEG.JANELA_DIAS,
+      grupos: r.rows.map((g, i) => ({ rede: 'Rede ' + (i + 1), n: g.n, contas: g.contas })) });
+  } catch (err) {
+    console.error('seguranca/alts:', err.message);
+    res.status(500).json({ error: 'Erro interno' });
+  }
+});
+
+router.post('/seguranca/config', requirePoder('banir'), async (req, res) => {
+  try {
+    const atual = await SEG.config(pool);
+    const b = req.body || {};
+    const novo = {
+      exige_vinculo: typeof b.exige_vinculo === 'boolean' ? b.exige_vinculo : atual.exige_vinculo,
+      bloquear_alt_de_banido: typeof b.bloquear_alt_de_banido === 'boolean' ? b.bloquear_alt_de_banido : atual.bloquear_alt_de_banido,
+    };
+    await pool.query(
+      `INSERT INTO game_config (key, value, updated_at) VALUES ('seguranca', $1, NOW())
+       ON CONFLICT (key) DO UPDATE SET value = EXCLUDED.value, updated_at = NOW()`, [JSON.stringify(novo)]);
+    await audit(req, 'seguranca:config', { antes: atual, depois: novo });
+    res.json({ ok: true, config: novo });
+  } catch (err) {
+    console.error('seguranca/config:', err.message);
     res.status(500).json({ error: 'Erro interno' });
   }
 });

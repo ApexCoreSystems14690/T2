@@ -108,7 +108,48 @@ router.get('/corp/:corpId', async (req, res) => {
 router.get('/link-roblox', (req, res) => {
   // [20/09] o 'error' vinha no querystring mas NUNCA era passado pra view, entao
   // quem errava era redirecionado de volta pra uma tela muda.
-  res.render('link-roblox', { user: req.user, error: req.query.error || undefined });
+  res.render('link-roblox', { user: req.user, error: req.query.error || undefined, ok: req.query.ok || undefined });
+});
+
+// [14/10 SEGURANCA] PROVA DE POSSE da conta Roblox. Antes bastava digitar o nome de
+// qualquer jogador. Agora o site gera um codigo e a pessoa prova de um dos dois jeitos:
+//   (a) digita /vincular CODIGO dentro do jogo (o jogo garante o UserId), ou
+//   (b) cola o codigo na BIO do perfil Roblox e clica Verificar (o site le a bio publica).
+// So vinculo VERIFICADO conta pro anti-alt por IP.
+const SEG = require('../seguranca');
+router.post('/link-roblox/codigo', async (req, res) => {
+  try {
+    const cod = SEG.novoCodigo();
+    await pool.query('UPDATE users SET vinculo_codigo = $1, vinculo_codigo_em = NOW() WHERE id = $2', [cod, req.user.id]);
+    res.redirect('/dashboard/link-roblox?ok=codigo');
+  } catch (e) {
+    console.error('link-roblox/codigo:', e.message);
+    res.redirect('/dashboard/link-roblox?error=internal');
+  }
+});
+router.post('/link-roblox/verificar-bio', async (req, res) => {
+  try {
+    const u = await pool.query(
+      `SELECT roblox_id, roblox_username, vinculo_codigo, vinculo_codigo_em > NOW() - ($2 || ' minutes')::interval AS valido
+         FROM users WHERE id = $1`, [req.user.id, String(SEG.CODIGO_VALIDADE_MIN)]);
+    const me = u.rows[0];
+    if (!me || !me.roblox_id) return res.redirect('/dashboard/link-roblox?error=id_required');
+    if (!me.vinculo_codigo || !me.valido) return res.redirect('/dashboard/link-roblox?error=codigo_vencido');
+    const r = await fetch('https://users.roblox.com/v1/users/' + encodeURIComponent(me.roblox_id));
+    if (!r.ok) return res.redirect('/dashboard/link-roblox?error=roblox_fora');
+    const j = await r.json();
+    const bio = String((j && j.description) || '').toUpperCase();
+    if (!bio.includes(me.vinculo_codigo)) return res.redirect('/dashboard/link-roblox?error=bio_sem_codigo');
+    const outro = await pool.query(
+      'SELECT id FROM users WHERE roblox_id = $1 AND id <> $2 AND roblox_verificado = true', [me.roblox_id, req.user.id]);
+    if (outro.rows.length) return res.redirect('/dashboard/link-roblox?error=already_linked');
+    await SEG.confirmarVinculo(pool, req.user.id, Number(me.roblox_id), (j && j.name) || me.roblox_username);
+    console.log('[seguranca] vinculo VERIFICADO pela bio: user ' + req.user.id + ' = roblox ' + me.roblox_id);
+    res.redirect('/dashboard/link-roblox?ok=verificado');
+  } catch (e) {
+    console.error('link-roblox/verificar-bio:', e.message);
+    res.redirect('/dashboard/link-roblox?error=internal');
+  }
 });
 
 // [20/09] Resolve o ID do Roblox a partir do NOME de usuario. Motivo: a filiacao
@@ -177,8 +218,12 @@ router.post('/link-roblox', async (req, res) => {
       return res.redirect('/dashboard/link-roblox?error=already_linked');
     }
 
+    // [14/10] vinculo digitado NAO e prova de posse: trocar de conta Roblox zera a verificacao
+    // (ela so volta com o codigo no jogo ou na bio -- ver /link-roblox/codigo).
     await client.query(
-      'UPDATE users SET roblox_id = $1, roblox_username = $2, updated_at = NOW() WHERE id = $3',
+      `UPDATE users SET roblox_id = $1, roblox_username = $2,
+              roblox_verificado = (roblox_verificado AND roblox_id IS NOT DISTINCT FROM $1),
+              updated_at = NOW() WHERE id = $3`,
       [rid, nomeRoblox || null, req.user.id]
     );
     await client.query('COMMIT');

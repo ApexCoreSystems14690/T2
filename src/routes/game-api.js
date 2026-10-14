@@ -5,6 +5,82 @@ const { requireApiKey } = require('../middleware/auth');
 // Todas as rotas aqui precisam da API key
 router.use(requireApiKey);
 
+// ===========================================================================
+// [14/10 SEGURANCA] ACESSO — o jogo pergunta isto na ENTRADA de cada jogador.
+// O site virou a FONTE DA VERDADE do ban: ban/desban pelo painel vale mesmo com
+// o servidor do jogo fechado (antes dava "Nenhum servidor online"). O DataStore
+// do Roblox continua como copia local pro dia que o site cair -- quem concilia
+// os dois e o Seguranca.N.decidirAcesso no jogo.
+// Resposta:
+//   ban: { estado: 'ativo'|'desfeito'|'vencido'|'nenhum', ate, motivo, desfeito_em(epoch) }
+//   alt: { vinculado, verificado, contas:[{roblox_id,nome,discord,banido}], banidaLigada }
+//   bloquear + msg: o jogo expulsa com esta mensagem (alt de banido / exige vinculo)
+// ===========================================================================
+const SEG = require('../seguranca');
+router.get('/acesso/:robloxId', async (req, res) => {
+  try {
+    const rid = Number(req.params.robloxId);
+    if (!Number.isFinite(rid) || rid <= 0) return res.status(400).json({ error: 'id invalido' });
+    const agora = Math.floor(Date.now() / 1000);
+    const b = await pool.query(
+      `SELECT motivo, ate, desfeito_em, EXTRACT(EPOCH FROM desfeito_em)::bigint AS desfeito_epoch
+         FROM game_bans WHERE roblox_id = $1`, [rid]);
+    let ban = { estado: 'nenhum' };
+    if (b.rows.length) {
+      const x = b.rows[0];
+      const ate = Number(x.ate) || 0;
+      if (x.desfeito_em) ban = { estado: 'desfeito', desfeito_em: Number(x.desfeito_epoch) || 0 };
+      else if (ate > 0 && ate <= agora) ban = { estado: 'vencido', ate };
+      else ban = { estado: 'ativo', ate, motivo: x.motivo || null };
+    }
+    const cfg = await SEG.config(pool);
+    let alt = { vinculado: false, verificado: false, contas: [], banidaLigada: false };
+    try { alt = await SEG.altsDe(pool, rid); } catch (e) { console.error('acesso/alt:', e.message); }
+    let bloquear = false, msg = null;
+    if (ban.estado !== 'ativo') {
+      if (cfg.bloquear_alt_de_banido && alt.banidaLigada) {
+        bloquear = true;
+        msg = 'Esta conta está ligada (mesma rede) a uma conta banida do Santa Fé.\nSe for engano, abra um ticket no Discord.';
+      } else if (cfg.exige_vinculo && !alt.verificado) {
+        bloquear = true;
+        msg = 'Pra jogar, vincule e verifique sua conta Roblox no site do Santa Fé\n(Dashboard → Vincular Roblox → código na bio do Roblox).';
+      }
+    }
+    res.json({ ok: true, ban, alt: { ...alt, suspeito: alt.contas.length > 0 }, bloquear, msg, config: cfg });
+  } catch (err) {
+    console.error('acesso:', err.message);
+    res.status(500).json({ error: 'Erro interno' });
+  }
+});
+
+// [14/10] /vincular CODIGO digitado DENTRO do jogo: la o UserId e garantido pela
+// Roblox, entao isto PROVA que quem gerou o codigo no site e dono da conta.
+router.post('/vincular', async (req, res) => {
+  try {
+    const rid = Number(req.body && req.body.roblox_id);
+    const nome = req.body && req.body.nome ? String(req.body.nome).slice(0, 64) : null;
+    const codigo = String((req.body && req.body.codigo) || '').toUpperCase().replace(/[^A-Z0-9]/g, '');
+    if (!Number.isFinite(rid) || rid <= 0 || codigo.length < 4) return res.status(400).json({ ok: false, error: 'Código inválido.' });
+    const u = await pool.query(
+      `SELECT id, discord_username, roblox_id FROM users
+        WHERE vinculo_codigo = $1 AND vinculo_codigo_em > NOW() - ($2 || ' minutes')::interval`,
+      [codigo, String(SEG.CODIGO_VALIDADE_MIN)]);
+    if (!u.rows.length) return res.json({ ok: false, error: 'Código não existe ou venceu. Gere outro no site.' });
+    const user = u.rows[0];
+    // outra conta do site ja tem esse Roblox VERIFICADO? nao rouba.
+    const outro = await pool.query(
+      `SELECT id FROM users WHERE roblox_id = $1 AND id <> $2 AND roblox_verificado = true`, [rid, user.id]);
+    if (outro.rows.length) return res.json({ ok: false, error: 'Esta conta Roblox já está verificada em outra conta do site.' });
+    await SEG.confirmarVinculo(pool, user.id, rid, nome);
+    console.log('[seguranca] vinculo VERIFICADO no jogo: user ' + user.id + ' (' + user.discord_username + ') = roblox ' + rid);
+    res.json({ ok: true, discord: user.discord_username });
+  } catch (err) {
+    console.error('vincular:', err.message);
+    if (err.code === '23505') return res.json({ ok: false, error: 'Conflito de vínculo. Fale com um admin.' });
+    res.status(500).json({ ok: false, error: 'Erro interno' });
+  }
+});
+
 // ---------------------------------------------------------------------------
 // GET /api/game/temporada
 // [19/09] O WIPE E UMA TEMPORADA NOVA, nao um DELETE jogador a jogador.

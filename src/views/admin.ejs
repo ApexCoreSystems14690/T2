@@ -108,6 +108,7 @@
       <div class="tab" data-tab="historico">Histórico</div>
       <div class="tab" data-tab="analise">Análise</div>
       <div class="tab" data-tab="banidos">Banidos</div>
+      <div class="tab" data-tab="seguranca">Segurança</div>
     </div>
 
     <!-- JOGADORES -->
@@ -238,7 +239,12 @@
             <option value="tiro">Tiros (acertos)</option>
             <option value="entrou">Entradas</option>
             <option value="saiu">Saídas</option>
-            <option value="admin">Ações admin (jogo)</option>
+            <option value="admin">Ações admin (painel)</option>
+            <option value="admin_jogo">Comandos admin (dentro do jogo)</option>
+            <option value="kick">Kicks (todos os sistemas)</option>
+            <option value="ban">Bans / desbans</option>
+            <option value="seguranca">Segurança (anti-cheat/exploit)</option>
+            <option value="acesso">Entradas recusadas</option>
           </select>
         </div>
         <div class="fg" style="max-width:260px"><label>Jogador</label><input id="log-q" placeholder="nome"></div>
@@ -302,7 +308,7 @@
     <div class="panel" id="panel-banidos">
       <div class="row" style="margin-bottom:.6rem;align-items:center;gap:.6rem;flex-wrap:wrap">
         <b id="bn-conta">—</b>
-        <span class="muted" style="font-size:.8rem;flex:1">O ban de verdade fica no Roblox; esta lista é o registro do painel. Desbanir precisa de um servidor online pra executar.</span>
+        <span class="muted" style="font-size:.8rem;flex:1">Esta lista manda: o jogo confere ela na entrada de cada jogador. Banir/desbanir funciona mesmo com o servidor fechado.</span>
         <label class="muted" style="font-size:.8rem"><input type="checkbox" id="bn-hist" onclick="loadBans()"> ver desbanidos também</label>
         <button class="btn sec" onclick="loadBans()">↻ Atualizar</button>
       </div>
@@ -319,6 +325,28 @@
           <tbody id="bn-body"><tr><td colspan="7" class="empty">Carregando…</td></tr></tbody>
         </table>
       </div>
+    </div>
+
+    <!-- SEGURANÇA (14/10) -->
+    <div class="panel" id="panel-seguranca">
+      <div class="row" style="margin-bottom:.6rem;align-items:center;gap:.6rem;flex-wrap:wrap">
+        <b>Segurança do servidor</b>
+        <span class="muted" style="font-size:.8rem;flex:1">Tudo que o jogo expulsou, recusou ou pegou de cheat/exploit — de qualquer sistema. O anti-cheat nunca bane sozinho: ban é decisão sua.</span>
+        <select id="sg-horas" onchange="loadSeg()"><option value="24">24 h</option><option value="72">3 dias</option><option value="168">7 dias</option><option value="720">30 dias</option></select>
+        <button class="btn sec" onclick="loadSeg()">↻ Atualizar</button>
+      </div>
+      <div class="row" style="gap:1rem;flex-wrap:wrap;background:rgba(255,255,255,.03);padding:.6rem;border-radius:8px;margin-bottom:.8rem">
+        <label style="font-size:.85rem"><input type="checkbox" id="sg-altban" onchange="salvaSegCfg()" data-poder="banir"> Bloquear conta ligada por IP a uma conta <b>banida</b></label>
+        <label style="font-size:.85rem"><input type="checkbox" id="sg-exige" onchange="salvaSegCfg()" data-poder="banir"> Exigir vínculo <b>verificado</b> pra entrar no jogo</label>
+        <span id="sg-vinc" class="muted" style="font-size:.8rem"></span>
+      </div>
+      <h4 style="margin:.4rem 0">Alertas de cheat/exploit (por jogador)</h4>
+      <div style="overflow-x:auto"><table><thead><tr><th>Jogador</th><th>Alertas</th><th>Pico de pontos (expulsa em 15)</th><th>Regras</th><th>Último</th></tr></thead><tbody id="sg-alertas"></tbody></table></div>
+      <h4 style="margin:.9rem 0 .4rem">Kicks, bans e entradas recusadas <span id="sg-origens" class="muted" style="font-size:.78rem;font-weight:400"></span></h4>
+      <div style="overflow-x:auto"><table><thead><tr><th>Quando</th><th>Tipo</th><th>Jogador</th><th>Origem</th><th>Motivo</th></tr></thead><tbody id="sg-kicks"></tbody></table></div>
+      <h4 style="margin:.9rem 0 .4rem">Contas na mesma rede (anti-alt por IP)</h4>
+      <p class="muted" style="font-size:.78rem;margin:0 0 .4rem">IP só é guardado como hash. Rede com mais de <span id="sg-max">4</span> contas é tratada como operadora/CGNAT e não entra aqui (não prova nada). Só conta Roblox com vínculo <b>verificado</b> entra no bloqueio.</p>
+      <div id="sg-alts" class="muted">—</div>
     </div>
 
     <div class="panel" id="panel-analise">
@@ -423,7 +451,7 @@
     const btnSe = (tipo, html) => podeCmd(tipo) ? html : '';
 
     // Painéis e abas por poder. Aba sem nenhum poder some do topo.
-    const PODER_DA_ABA = { jogadores: null, registro: 'ver_registro', servidor: 'servidor', logs: 'ver_registro', cargos: 'corp', usuarios: 'admins', historico: 'admins', analise: 'ver_registro', banidos: 'banir' };
+    const PODER_DA_ABA = { jogadores: null, registro: 'ver_registro', servidor: 'servidor', logs: 'ver_registro', cargos: 'corp', usuarios: 'admins', historico: 'admins', analise: 'ver_registro', banidos: 'banir', seguranca: 'ver_registro' };
 
     async function carregarEu() {
       EU = await api('GET', '/eu');
@@ -677,10 +705,10 @@
       }
     }
     async function desbanir(id) {
-      if (!confirm('DESBANIR o Roblox ID ' + id + '?\n\nIsso apaga o banimento no Roblox. Precisa de um servidor online pra executar.')) return;
+      if (!confirm('DESBANIR o Roblox ID ' + id + '?')) return;
       try {
         const d = await api('POST', '/command', { tipo: 'unban', payload: { roblox_id: id } });
-        alert(d && d.error ? ('Não deu: ' + d.error) : 'Desbanido. O servidor executa em alguns segundos.');
+        alert(d && d.error ? ('Não deu: ' + d.error) : (d && d.semServidor ? 'Desbanido. Vale na próxima vez que ele entrar.' : 'Desbanido.'));
       } catch (err) { alert('Não deu: ' + (err.message || 'erro')); }
       loadBans();
     }
@@ -688,6 +716,29 @@
       const v = parseInt(($('bn-id').value || '').trim(), 10);
       if (!v || v <= 0) return alert('Põe um Roblox ID válido.');
       desbanir(v);
+    }
+
+    // ---------- segurança (14/10) ----------
+    async function loadSeg() {
+      try {
+        const d = await api('GET', '/seguranca?horas=' + ($('sg-horas').value || 24));
+        $('sg-altban').checked = !!d.config.bloquear_alt_de_banido;
+        $('sg-exige').checked = !!d.config.exige_vinculo;
+        $('sg-altban').disabled = $('sg-exige').disabled = !podeP('banir');
+        $('sg-vinc').textContent = (d.vinculos.verificados || 0) + ' verificadas de ' + (d.vinculos.vinculados || 0) + ' contas vinculadas';
+        $('sg-alertas').innerHTML = d.alertas.map(a => '<tr><td>' + esc(a.jogador || '—') + '</td><td>' + a.n + '</td><td>' + (a.pico == null ? '—' : a.pico) + '</td><td>' + esc((a.regras || []).filter(Boolean).join(', ')) + '</td><td class="muted">' + fmtT(a.ultimo) + '</td></tr>').join('') || '<tr><td colspan="5" class="empty">Nada no período.</td></tr>';
+        $('sg-origens').textContent = d.origens.map(o => o.origem + ': ' + o.n).join(' · ');
+        $('sg-kicks').innerHTML = d.kicks.map(k => { const x = k.detalhe || {}; return '<tr><td class="muted" style="white-space:nowrap">' + fmtT(k.quando) + '</td><td>' + '<span class="pill ' + (k.tipo === 'ban' ? 'err' : 'warn') + '">' + esc(x.desfeito ? 'desban' : k.tipo) + '</span>' + '</td><td>' + esc(k.jogador || '—') + '</td><td>' + esc(x.origem || x.fonte || '—') + '</td><td style="font-size:.78rem">' + esc(String(x.motivo || x.regra || '').replace(/\n/g, ' ')) + '</td></tr>'; }).join('') || '<tr><td colspan="5" class="empty">Nada no período.</td></tr>';
+        const al = await api('GET', '/seguranca/alts');
+        $('sg-max').textContent = al.maxPorIp;
+        $('sg-alts').innerHTML = al.grupos.length ? al.grupos.map(g => '<div style="background:rgba(255,255,255,.03);border-radius:8px;padding:.5rem;margin-bottom:.4rem"><b>' + esc(g.rede) + '</b> <span class="muted">(' + g.n + ' contas)</span><br>' + g.contas.map(c => '<span class="pill ' + (c.banido ? 'err' : (c.verificado ? 'ok' : '')) + '" style="margin:.15rem">' + esc(c.nome || ('id ' + (c.roblox_id || '—'))) + ' · ' + esc(c.discord || '?') + (c.verificado ? ' ✔' : '') + (c.banido ? ' · BANIDO' : '') + '</span>').join('') + '</div>').join('') : '<span class="muted">Nenhuma rede com 2+ contas ainda.</span>';
+      } catch (e) { showAlert('Segurança: ' + e.message, 'error'); }
+    }
+    async function salvaSegCfg() {
+      try {
+        await api('POST', '/seguranca/config', { bloquear_alt_de_banido: $('sg-altban').checked, exige_vinculo: $('sg-exige').checked });
+        showAlert('Configuração de segurança salva — vale na próxima entrada de cada jogador', 'success');
+      } catch (e) { showAlert(e.message, 'error'); loadSeg(); }
     }
 
     document.querySelectorAll('.tab').forEach(tab => tab.addEventListener('click', () => {
@@ -701,6 +752,7 @@
       if (tab.dataset.tab === 'cargos') loadCargos();
       if (tab.dataset.tab === 'analise') loadAnalise();
       if (tab.dataset.tab === 'banidos') loadBans();
+      if (tab.dataset.tab === 'seguranca') loadSeg();
     }));
 
     // ---------- estado ao vivo ----------
@@ -878,7 +930,7 @@
         const d = await api('GET', '/logs?tipo=' + encodeURIComponent(tipo) + '&q=' + encodeURIComponent(q) + '&limit=300');
         $('log-counts').textContent = d.counts.map(c => c.tipo + ': ' + c.n).join(' · ');
         if (!d.logs.length) { $('log-body').innerHTML = '<tr><td colspan="5" class="empty">Sem registros</td></tr>'; return; }
-        const cls = { abate: 'err', morte: 'err', tiro: 'warn', entrou: 'ok', saiu: '', admin: 'info' };
+        const cls = { abate: 'err', morte: 'err', tiro: 'warn', entrou: 'ok', saiu: '', admin: 'info', admin_jogo: 'info', kick: 'warn', ban: 'err', seguranca: 'err', acesso: 'warn' };
         $('log-body').innerHTML = d.logs.map(l => '<tr><td class="muted" style="white-space:nowrap">' + fmtT(l.quando) + '</td><td><span class="pill ' + (cls[l.tipo] || '') + '">' + esc(l.tipo) + '</span></td><td>' + esc(l.jogador || '—') + '</td><td>' + esc(l.alvo || '—') + '</td><td><pre class="det">' + esc(Object.entries(l.detalhe || {}).map(([k, v]) => k + '=' + (typeof v === 'object' ? JSON.stringify(v) : v)).join('  ')) + '</pre></td></tr>').join('');
       } catch (e) { showAlert(e.message, 'error'); }
     }
