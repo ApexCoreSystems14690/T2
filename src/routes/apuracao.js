@@ -1,4 +1,4 @@
-// [14/10] APURAÇÃO — aba pública (qualquer um logado vê) + botões da staff (Diretor/Dono).
+// [14/10] APURAÇÃO — aba pública (qualquer um logado vê) + botões da staff (só o Dono).
 // O voto entra pelo /api/game/eleicao/voto (game-api.js); aqui só se LÊ e se controla o turno.
 const router = require('express').Router();
 const pool = require('../db/pool');
@@ -8,10 +8,10 @@ const E = require('../eleicao');
 
 router.use(requireAuth);
 
-const ehStaff = u => perm.ehDiretorOuMais(u);
+const ehStaff = u => perm.ehDono(u);
 function soStaff(req, res, next) {
   if (ehStaff(req.user)) return next();
-  return res.status(403).json({ error: 'Só Diretor Geral ou Dono controla a eleição.' });
+  return res.status(403).json({ error: 'Só o Dono controla a eleição.' });
 }
 async function audit(req, acao, detalhe) {
   try {
