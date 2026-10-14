@@ -6,52 +6,54 @@
   <title>Todas as Organizações — Santa Fé</title>
   <style>
     * { margin: 0; padding: 0; box-sizing: border-box; }
-    body { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif; background: #0a0e17; color: #f0f4f8; min-height: 100vh; }
-    .topbar { background: #131a2b; border-bottom: 1px solid #1e2a40; padding: 0.75rem 1.5rem; display: flex; align-items: center; justify-content: space-between; flex-wrap: wrap; gap: 0.5rem; }
-    .topbar h1 { font-size: 1rem; color: #f59e0b; letter-spacing: 0.04em; }
-    .topbar .user { display: flex; align-items: center; gap: 0.75rem; font-size: 0.85rem; color: #7a8ba5; flex-wrap: wrap; }
-    .topbar a { color: #7a8ba5; text-decoration: none; font-size: 0.8rem; }
-    .topbar a:hover { color: #f59e0b; }
+    body { font-family: var(--sans); background: #E7E9EC; color: #161A1F; min-height: 100vh; }
+    .topbar { background: #FFFFFF; border-bottom: 1px solid #D6DADF; padding: 0.75rem 1.5rem; display: flex; align-items: center; justify-content: space-between; flex-wrap: wrap; gap: 0.5rem; }
+    .topbar h1 { font-size: 1rem; color: #A86400;  }
+    .topbar .user { display: flex; align-items: center; gap: 0.75rem; font-size: 0.85rem; color: #5B6573; flex-wrap: wrap; }
+    .topbar a { color: #5B6573; text-decoration: none; font-size: 0.8rem; }
+    .topbar a:hover { color: #A86400; }
     .main { max-width: 1040px; margin: 0 auto; padding: 2rem 1.25rem; }
-    .nota { background: #1e2a40; border: 1px solid #2d3a52; border-left: 3px solid #f59e0b; border-radius: 6px; padding: 0.9rem 1rem; margin-bottom: 1.25rem; font-size: 0.82rem; color: #9fb0c8; line-height: 1.5; }
+    .nota { background: #D6DADF; border: 1px solid #C1C7CF; border-left: 3px solid #A86400; border-radius: 6px; padding: 0.9rem 1rem; margin-bottom: 1.25rem; font-size: 0.82rem; color: #46505C; line-height: 1.5; }
     .resumo { display: flex; gap: 0.5rem; flex-wrap: wrap; margin-bottom: 1.25rem; }
-    .pill { background: #131a2b; border: 1px solid #1e2a40; border-radius: 999px; padding: 0.35rem 0.85rem; font-size: 0.78rem; color: #9fb0c8; }
-    .pill strong { color: #f0f4f8; }
+    .pill { background: #FFFFFF; border: 1px solid #D6DADF; border-radius: 8px; padding: 0.35rem 0.85rem; font-size: 0.78rem; color: #46505C; }
+    .pill strong { color: #161A1F; }
     .ferramentas { display: flex; gap: 0.5rem; flex-wrap: wrap; align-items: center; margin-bottom: 1rem; }
-    .ferramentas input { flex: 1; min-width: 180px; background: #0a0e17; border: 1px solid #2d3a52; border-radius: 6px; padding: 0.5rem 0.7rem; color: #f0f4f8; font-size: 0.85rem; }
-    .ferramentas button { background: none; border: 1px solid #2d3a52; color: #7a8ba5; padding: 0.45rem 0.8rem; border-radius: 6px; font-size: 0.78rem; cursor: pointer; }
-    .ferramentas button.on { border-color: #f59e0b; color: #f59e0b; }
+    .ferramentas input { flex: 1; min-width: 180px; background: #E7E9EC; border: 1px solid #C1C7CF; border-radius: 6px; padding: 0.5rem 0.7rem; color: #161A1F; font-size: 0.85rem; }
+    .ferramentas button { background: none; border: 1px solid #C1C7CF; color: #5B6573; padding: 0.45rem 0.8rem; border-radius: 6px; font-size: 0.78rem; cursor: pointer; }
+    .ferramentas button.on { border-color: #A86400; color: #A86400; }
     table { width: 100%; border-collapse: collapse; font-size: 0.85rem; }
-    thead th { text-align: left; color: #7a8ba5; font-size: 0.72rem; text-transform: uppercase; letter-spacing: 0.05em; padding: 0.5rem 0.6rem; border-bottom: 1px solid #1e2a40; white-space: nowrap; }
-    tbody tr { border-bottom: 1px solid #141c2c; }
-    tbody tr:hover { background: #10192a; }
+    thead th { text-align: left; color: #5B6573; font-size: 0.72rem;  padding: 0.5rem 0.6rem; border-bottom: 1px solid #D6DADF; white-space: nowrap; }
+    tbody tr { border-bottom: 1px solid #E6E9ED; }
+    tbody tr:hover { background: #F7F8FA; }
     td { padding: 0.65rem 0.6rem; vertical-align: middle; }
     .nome { display: flex; align-items: center; gap: 0.6rem; font-weight: 600; }
     .bolinha { width: 11px; height: 11px; border-radius: 3px; flex-shrink: 0; }
-    .ico { width: 26px; height: 26px; border-radius: 5px; object-fit: cover; background: #0a0e17; flex-shrink: 0; }
-    .sub { color: #64748b; font-size: 0.74rem; font-family: monospace; }
-    .tag { font-size: 0.7rem; padding: 0.15rem 0.5rem; border-radius: 999px; font-weight: 700; letter-spacing: 0.03em; white-space: nowrap; }
-    .t-empresa { background: #22c55e22; color: #22c55e; }
-    .t-corp    { background: #3b82f622; color: #60a5fa; }
-    .t-faccao  { background: #ef444422; color: #f87171; }
-    .btn { color: #f59e0b; text-decoration: none; font-size: 0.78rem; font-weight: 600; padding: 0.32rem 0.7rem; border: 1px solid #f59e0b33; border-radius: 4px; white-space: nowrap; }
-    .btn:hover { background: #f59e0b11; }
-    .vazio { color: #7a8ba5; text-align: center; padding: 2rem; font-size: 0.9rem; }
+    .ico { width: 26px; height: 26px; border-radius: 5px; object-fit: cover; background: #E7E9EC; flex-shrink: 0; }
+    .sub { color: #6B7480; font-size: 0.78rem; font-stretch: 75%; font-variation-settings: "wdth" 75; font-weight: 600; }
+    .tag { font-size: 0.7rem; padding: 0.15rem 0.5rem; border-radius: 8px; font-weight: 700;  white-space: nowrap; }
+    .t-empresa { background: #1D7A4522; color: #1D7A45; }
+    .t-corp    { background: #2F5BBF22; color: #2F5BBF; }
+    .t-faccao  { background: #B2322722; color: #B23227; }
+    .btn { color: #A86400; text-decoration: none; font-size: 0.78rem; font-weight: 600; padding: 0.32rem 0.7rem; border: 1px solid #A8640033; border-radius: 4px; white-space: nowrap; }
+    .btn:hover { background: #A8640011; }
+    .vazio { color: #5B6573; text-align: center; padding: 2rem; font-size: 0.9rem; }
     .num { text-align: right; font-variant-numeric: tabular-nums; white-space: nowrap; }
     @media (max-width: 720px) { .esconde-mob { display: none; } }
   </style>
+  <link rel="stylesheet" href="/sf.css">
+
 </head>
 <body>
   <div class="topbar">
     <div style="display:flex;align-items:center;gap:1rem">
-      <a href="/" title="Voltar ao início">&larr; Início</a>
-      <h1>SANTA FÉ — TODAS AS ORGANIZAÇÕES</h1>
+      <%- include('partials/placa') %>
+      <h1>Todas as organizações</h1>
     </div>
     <div class="user">
       <a href="/dashboard">Corporações</a>
       <a href="/faccoes">Facções</a>
       <a href="/empresas">Empresas</a>
-      <a href="/admin" style="color:#ef4444">Painel Admin</a>
+      <a href="/admin">Painel Admin</a>
       <span><%= user.discord_username %> · <%= cargo %></span>
       <a href="/auth/logout">Sair</a>
     </div>
@@ -103,7 +105,7 @@
               <% if (o.has_icon_file) { %><img src="/api/corps/<%= o.id %>/icon" class="ico" alt="">
               <% } else if (o.icon_url) { %><img src="<%= o.icon_url %>" class="ico" alt="">
               <% } else { %><span class="bolinha" style="background:<%= o.color %>"></span><% } %>
-              <span><%= o.name %><% if (o.is_active === false) { %> <span style="color:#ef4444;font-size:0.72rem">(inativa)</span><% } %></span>
+              <span><%= o.name %><% if (o.is_active === false) { %> <span style="color:#B23227;font-size:0.72rem">(inativa)</span><% } %></span>
             </div>
             <div class="sub"><%= o.slug %><% if (o.cnpj) { %> · CNPJ <%= o.cnpj %><% } %></div>
           </td>
@@ -111,7 +113,7 @@
           <td class="esconde-mob"><%= o.dono_nome || '—' %></td>
           <td class="num"><%= o.membros %></td>
           <td class="num esconde-mob"><%= o.cargos %></td>
-          <td class="num" style="color:<%= Number(o.saldo) > 0 ? '#22c55e' : '#64748b' %>">R$ <%= Number(o.saldo).toLocaleString('pt-BR') %></td>
+          <td class="num" style="color:<%= Number(o.saldo) > 0 ? '#1D7A45' : '#6B7480' %>">R$ <%= Number(o.saldo).toLocaleString('pt-BR') %></td>
           <td><a class="btn" href="<%= o.tipo === 'empresa' ? ('/empresas/' + o.id) : ('/dashboard/corp/' + o.id) %>">Gerenciar</a></td>
         </tr>
         <% }) %>

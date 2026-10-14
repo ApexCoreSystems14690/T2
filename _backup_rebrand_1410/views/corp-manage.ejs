@@ -1,0 +1,923 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title><%= corporation.name %> — Santa Fé</title>
+  <style>
+    * { margin: 0; padding: 0; box-sizing: border-box; }
+    body { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif; background: #0a0e17; color: #f0f4f8; min-height: 100vh; }
+    .topbar { background: #131a2b; border-bottom: 1px solid #1e2a40; padding: 0.75rem 1.5rem; display: flex; align-items: center; gap: 1rem; }
+    .topbar a { color: #7a8ba5; text-decoration: none; font-size: 0.85rem; }
+    .topbar a:hover { color: #00d4ff; }
+    .topbar h1 { font-size: 1rem; color: #f0f4f8; flex: 1; }
+    .main { max-width: 900px; margin: 0 auto; padding: 2rem 1.25rem; }
+    .tabs { display: flex; gap: 0; border-bottom: 1px solid #1e2a40; margin-bottom: 1.5rem; }
+    .tab { padding: 0.6rem 1.25rem; color: #7a8ba5; cursor: pointer; font-size: 0.85rem; font-weight: 600; border-bottom: 2px solid transparent; transition: all 0.15s; }
+    .tab.active { color: #00d4ff; border-bottom-color: #00d4ff; }
+    .tab:hover { color: #f0f4f8; }
+    .panel { display: none; }
+    .panel.active { display: block; }
+
+    /* Cargos */
+    .rank-list { display: flex; flex-direction: column; gap: 0.5rem; margin-bottom: 1rem; }
+    .rank-item { background: #131a2b; border: 1px solid #1e2a40; border-radius: 6px; padding: 0.75rem 1rem; display: flex; align-items: center; justify-content: space-between; }
+    .rank-info { display: flex; align-items: center; gap: 1rem; }
+    .rank-level { background: #1e2a40; color: #7a8ba5; font-size: 0.7rem; font-weight: 700; padding: 0.2rem 0.5rem; border-radius: 3px; min-width: 2rem; text-align: center; }
+    .rank-name { font-weight: 600; font-size: 0.9rem; }
+    .rank-salary { color: #10b981; font-size: 0.8rem; }
+    .rank-actions { display: flex; gap: 0.5rem; }
+    .btn-sm { padding: 0.3rem 0.6rem; font-size: 0.75rem; border: 1px solid #1e2a40; background: transparent; color: #7a8ba5; border-radius: 4px; cursor: pointer; }
+    .btn-sm:hover { border-color: #3d4a62; color: #f0f4f8; }
+    .btn-sm.danger { border-color: #ef444433; color: #ef4444; }
+    .btn-sm.danger:hover { background: #ef444411; }
+
+    /* Membros */
+    .member-table { width: 100%; border-collapse: collapse; font-size: 0.85rem; }
+    .member-table th { text-align: left; color: #7a8ba5; font-weight: 600; padding: 0.5rem 0.75rem; border-bottom: 1px solid #1e2a40; font-size: 0.75rem; text-transform: uppercase; letter-spacing: 0.05em; }
+    .member-table td { padding: 0.6rem 0.75rem; border-bottom: 1px solid #1e2a4066; }
+    .member-table tr:hover td { background: #131a2b; }
+
+    /* Forms */
+    .form-row { display: flex; gap: 0.75rem; margin-bottom: 1rem; flex-wrap: wrap; }
+    .form-group { display: flex; flex-direction: column; gap: 0.25rem; flex: 1; min-width: 120px; }
+    .form-group label { font-size: 0.75rem; color: #7a8ba5; font-weight: 600; }
+    .form-group input, .form-group select { background: #131a2b; border: 1px solid #1e2a40; color: #f0f4f8; padding: 0.5rem 0.75rem; border-radius: 4px; font-size: 0.85rem; }
+    .form-group input:focus, .form-group select:focus { outline: none; border-color: #00d4ff; }
+    .btn { padding: 0.5rem 1.25rem; background: #00d4ff; color: #0a0e17; border: none; border-radius: 4px; font-weight: 600; font-size: 0.85rem; cursor: pointer; }
+    .btn:hover { opacity: 0.85; }
+    .btn.secondary { background: transparent; border: 1px solid #1e2a40; color: #f0f4f8; }
+
+    .alert { padding: 0.75rem 1rem; border-radius: 6px; font-size: 0.85rem; margin-bottom: 1rem; }
+    .alert.success { background: #10b98122; color: #10b981; border: 1px solid #10b98133; }
+    .alert.error { background: #ef444422; color: #ef4444; border: 1px solid #ef444433; }
+    .empty { color: #7a8ba5; font-size: 0.85rem; padding: 1.5rem; text-align: center; }
+
+    /* Seletor de usuários */
+    .picker { position: relative; }
+    .picker input { width: 100%; }
+    .picker-list { position: absolute; top: 100%; left: 0; right: 0; z-index: 20; max-height: 260px; overflow-y: auto; background: #131a2b; border: 1px solid #2d3a52; border-radius: 6px; margin-top: 4px; display: none; }
+    .picker-list.open { display: block; }
+    .picker-item { padding: 0.5rem 0.75rem; cursor: pointer; display: flex; align-items: center; gap: 0.6rem; font-size: 0.85rem; border-bottom: 1px solid #1e2a4066; }
+    .picker-item:hover, .picker-item.active { background: #1e2a40; }
+    .picker-item .avatar { width: 24px; height: 24px; border-radius: 50%; background: #2d3a52; flex-shrink: 0; object-fit: cover; }
+    .picker-item .meta { color: #7a8ba5; font-size: 0.75rem; }
+    .picker-item .tag { margin-left: auto; font-size: 0.65rem; padding: 0.1rem 0.4rem; border-radius: 3px; background: #2d3a52; color: #7a8ba5; text-transform: uppercase; letter-spacing: 0.04em; }
+    .picker-item .tag.ok { background: #10b98122; color: #10b981; }
+    .picker-empty { padding: 0.75rem; color: #7a8ba5; font-size: 0.8rem; text-align: center; }
+    .picked { display: flex; align-items: center; gap: 0.5rem; font-size: 0.8rem; color: #10b981; margin-top: 0.3rem; min-height: 1.2rem; }
+    .picked button { background: none; border: none; color: #7a8ba5; cursor: pointer; font-size: 0.8rem; }
+    .fallback { margin-top: 0.5rem; font-size: 0.8rem; color: #7a8ba5; }
+    .fallback summary { cursor: pointer; }
+    .fallback .form-row { margin-top: 0.5rem; }
+    .rank-select { background: #0a0e17; border: 1px solid #1e2a40; color: #f0f4f8; padding: 0.3rem 0.5rem; border-radius: 4px; font-size: 0.8rem; }
+  </style>
+</head>
+<body>
+  <div class="topbar">
+    <a href="/dashboard">&larr; Voltar</a>
+    <a href="/" title="Início">Início</a>
+    <% if (corporation.has_icon_file) { %>
+      <img src="/api/corps/<%= corporation.id %>/icon" style="width:28px;height:28px;border-radius:5px;object-fit:cover">
+    <% } else if (corporation.icon_url) { %>
+      <img src="<%= corporation.icon_url %>" style="width:28px;height:28px;border-radius:5px;object-fit:cover">
+    <% } %>
+    <h1><%= corporation.name %></h1>
+    <span style="color:#7a8ba5;font-size:0.8rem">slug: <%= corporation.slug %></span>
+  </div>
+
+  <div class="main">
+    <%# [23/09] a view agora esconde pelo PODER, nao pelo isOwner. Quem barra
+        continua sendo o back (requireCorpPoder); isto aqui e conforto. %>
+    <% var P = (typeof poderes !== 'undefined' && poderes) ? poderes : {gerir_cargos:true, editar_corp:true, gerir_membros:true, gerir_gerentes:isOwner, excluir_corp:isOwner};
+       var MEU_NIVEL = (typeof meuNivel !== 'undefined') ? meuNivel : null;
+       var MEU_PAPEL = (typeof papel !== 'undefined') ? papel : (isOwner ? 'dono' : 'gerente');
+       // [29/09, reposto em 30/09] Diretor Geral (80) e Dono do site. Esta linha
+       // ja tinha sido escrita em 29/09 e SUMIU do arquivo no PC do Julio -- o
+       // back tinha o ehStaffAlto e a tela continuava trancando tudo.
+       var EH_STAFF_ALTO = (typeof ehStaffAlto !== 'undefined') && ehStaffAlto; %>
+    <div id="alert-container"></div>
+
+    <div style="margin-bottom:1rem;color:#7a8ba5;font-size:0.8rem">
+      Você entra aqui como <strong style="color:#00d4ff"><%= MEU_PAPEL %></strong><% if (MEU_NIVEL !== null) { %> · seu nível de cargo: <%= MEU_NIVEL %><% } %>
+    </div>
+
+    <div class="tabs">
+      <div class="tab active" data-tab="cargos">Cargos (<%= ranks.length %>)</div>
+      <div class="tab" data-tab="membros">Membros (<%= members.length %>)</div>
+      <% if (P.ver_caixa) { %><div class="tab" data-tab="caixa">Caixa</div><% } %>
+      <% if (P.editar_corp || P.gerir_gerentes) { %><div class="tab" data-tab="config">Configurações</div><% } %>
+    </div>
+
+    <!-- CARGOS -->
+    <%# [10/10] CARREIRAS: o nivel e unico DENTRO da carreira (PC: Delegados, Investigacao,
+        Pericia, Agentes...). Corp sem carreira = uma lista so, igual antes. %>
+    <% var CARREIRAS = [], porC = {};
+       ranks.forEach(function (r) { var c = r.carreira || ''; if (!porC[c]) { porC[c] = []; CARREIRAS.push(c); } porC[c].push(r); });
+       var TEM_CARREIRA = CARREIRAS.some(function (c) { return c !== ''; });
+       function escH(t) { return String(t == null ? '' : t).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;'); }
+       // modo 'esconde': some com cargo >= o meu (form de adicionar); modo 'trava': mostra desabilitado
+       function opcoesCargo(selId, modo, soId, travado) {
+         var h = '';
+         CARREIRAS.forEach(function (c) {
+           var itens = '';
+           porC[c].forEach(function (rank) {
+             var acima = soId && MEU_NIVEL !== null && Number(rank.level) >= Number(MEU_NIVEL);
+             if (modo === 'esconde' && acima) return;
+             var dis = (modo === 'trava' && acima && !travado) ? ' disabled' : '';
+             itens += '<option value="' + rank.id + '"' + (selId === rank.id ? ' selected' : '') + dis + '>' + escH(rank.name) + ' (Nv.' + rank.level + ')</option>';
+           });
+           if (!itens) return;
+           h += TEM_CARREIRA ? ('<optgroup label="' + escH(c || 'Sem carreira') + '">' + itens + '</optgroup>') : itens;
+         });
+         return h;
+       } %>
+    <div class="panel active" id="panel-cargos">
+      <% if (!P.gerir_cargos) { %>
+        <div class="empty" style="margin-bottom:1rem">Só o dono e os co-gerentes mexem em cargo e salário. Aqui você só vê a lista.</div>
+      <% } %>
+      <% if (P.gerir_cargos) { %>
+      <div class="form-row">
+        <div class="form-group">
+          <label>Nome do Cargo</label>
+          <input type="text" id="rank-name" placeholder="Ex: Soldado">
+        </div>
+        <div class="form-group" style="max-width:170px">
+          <label>Carreira <span style="color:#7a8ba5;font-weight:400">(opcional)</span></label>
+          <input type="text" id="rank-carreira" placeholder="Ex: Delegados" list="lista-carreiras">
+          <datalist id="lista-carreiras"><% CARREIRAS.forEach(function (c) { if (c) { %><option value="<%= c %>"><% } }) %></datalist>
+        </div>
+        <div class="form-group" style="max-width:100px">
+          <label>Nível</label>
+          <input type="number" id="rank-level" placeholder="1" min="0">
+        </div>
+        <div class="form-group" style="max-width:120px">
+          <label>Salário (R$)</label>
+          <input type="number" id="rank-salary" placeholder="500" min="0">
+        </div>
+        <div class="form-group" style="max-width:120px;justify-content:flex-end">
+          <button class="btn" onclick="addRank()">Adicionar</button>
+        </div>
+      </div>
+      <% } %>
+
+      <div class="rank-list" id="rank-list">
+        <% if (ranks.length === 0) { %>
+          <div class="empty">Nenhum cargo criado ainda.</div>
+        <% } else { %>
+          <% CARREIRAS.forEach(function (carr) { %>
+          <% if (TEM_CARREIRA) { %><div style="margin:.6rem 0 .1rem;color:#00d4ff;font-size:.75rem;font-weight:700;letter-spacing:.06em;text-transform:uppercase">Carreira · <%= carr || 'Sem carreira' %></div><% } %>
+          <% porC[carr].forEach(rank => { %>
+            <div class="rank-item" data-rank-id="<%= rank.id %>">
+              <div class="rank-info">
+                <span class="rank-level">Nv.<%= rank.level %></span>
+                <span class="rank-name"><%= rank.name %></span>
+                <span class="rank-salary">R$<%= rank.salary %></span>
+                <% var gmOn = rank.permissions && rank.permissions.gerir_membros === true; %>
+                <% if (gmOn) { %><span style="color:#00d4ff;font-size:0.75rem" title="Pode adicionar, remover e trocar o cargo de quem está ABAIXO deste cargo">✓ gere membros abaixo</span><% } %>
+              </div>
+              <div class="rank-actions">
+                <%# [06/10] liga/desliga "gere membros abaixo" no cargo (ranks.permissions.gerir_membros) %>
+                <% if (P.gerir_cargos) { %><button class="btn-sm" onclick="toggleGerir(<%= rank.id %>, <%= gmOn ? 'null' : 'true' %>)"><%= gmOn ? 'Tirar gestão de membros' : 'Dar gestão de membros' %></button><% } %>
+                <% if (P.gerir_cargos) { %><button class="btn-sm" onclick='editRank(<%= rank.id %>, <%- JSON.stringify({ name: rank.name, level: rank.level, salary: rank.salary, carreira: rank.carreira || "" }).replace(/</g, "\\u003c").replace(/'/g, "\\u0027") %>)'>Editar</button><% } %>
+                <% if (P.gerir_cargos) { %><button class="btn-sm danger" onclick="deleteRank(<%= rank.id %>)">Remover</button><% } %>
+              </div>
+            </div>
+          <% }) %>
+          <% }) %>
+        <% } %>
+      </div>
+    </div>
+
+    <!-- MEMBROS -->
+    <div class="panel" id="panel-membros">
+      <div class="form-row">
+        <%# [06/10] chefe/cargo-gestor não lê a base de usuários (users/list é só dono/co-gerente/staff): pra ele, adiciona por Roblox ID %>
+        <% var SO_ID = ((MEU_PAPEL === 'chefe' || MEU_PAPEL === 'gestor') && !EH_STAFF_ALTO); %>
+        <div class="form-group" style="flex:2<%= SO_ID ? ';display:none' : '' %>">
+          <label>Usuário registrado na plataforma</label>
+          <div class="picker" id="member-picker">
+            <input type="text" id="member-search" placeholder="Digite pra buscar por Discord, Roblox ou ID…" autocomplete="off">
+            <div class="picker-list" id="member-list"></div>
+          </div>
+          <div class="picked" id="member-picked"></div>
+        </div>
+        <div class="form-group">
+          <label>Cargo</label>
+          <select id="member-rank">
+            <option value="">Sem cargo</option>
+            <%- opcoesCargo(null, 'esconde', SO_ID, false) %>
+          </select>
+        </div>
+        <div class="form-group" style="max-width:120px;justify-content:flex-end<%= SO_ID ? ';display:none' : '' %>">
+          <button class="btn" onclick="addMember()">Adicionar</button>
+        </div>
+      </div>
+      <details class="fallback" <%= SO_ID ? 'open' : '' %>>
+        <summary>O jogador ainda não entrou no site? Adicionar pelo Roblox ID</summary>
+        <div class="form-row">
+          <div class="form-group">
+            <label>Roblox User ID</label>
+            <input type="number" id="member-roblox-id" placeholder="Ex: 123456789">
+          </div>
+          <div class="form-group" style="max-width:160px;justify-content:flex-end">
+            <button class="btn secondary" onclick="addMemberById()">Adicionar por ID</button>
+          </div>
+        </div>
+        <div style="font-size:0.75rem">O nome é buscado no Roblox automaticamente. Quando ele logar com Discord e vincular o Roblox, o registro é unificado.</div>
+      </details>
+
+      <div style="overflow-x:auto">
+        <table class="member-table">
+          <thead>
+            <tr>
+              <th>Roblox ID</th>
+              <th>Username</th>
+              <th>Discord</th>
+              <th>Cargo</th>
+              <th>Desde</th>
+              <th></th>
+            </tr>
+          </thead>
+          <tbody id="member-tbody">
+            <% if (members.length === 0) { %>
+              <tr><td colspan="6" class="empty">Nenhum membro ainda.</td></tr>
+            <% } else { %>
+              <% members.forEach(m => { %>
+                <%# [30/09 Julio] "N consigo demitir esse gb de nada, ele ta como dono".
+                    `eh_dono_da_corp` e so quem CRIOU a corp no painel -- nao tem nada
+                    a ver com admin. Diretor+ do site agora passa por cima de tudo aqui
+                    (o back concorda: corp-poderes.podeMexerEmMembro). %>
+                <% var travado = !P.gerir_membros || (!EH_STAFF_ALTO && (
+                     m.eh_dono_da_corp || m.sou_eu
+                     || (MEU_NIVEL !== null && m.rank_level !== null && m.rank_level !== undefined && Number(m.rank_level) >= Number(MEU_NIVEL)))); %>
+                <tr>
+                  <td><%= m.roblox_id || '-' %></td>
+                  <td><%= m.roblox_username || '-' %></td>
+                  <td><%= (m.discord_username && !String(m.discord_username).startsWith('roblox_')) ? m.discord_username : '—' %></td>
+                  <td>
+                    <select class="rank-select" <%= travado ? 'disabled' : '' %> onchange="changeRank(<%= m.id %>, this.value, this)">
+                      <option value="" <%= !m.rank_id ? 'selected' : '' %>>Sem cargo</option>
+                      <%- opcoesCargo(m.rank_id, 'trava', SO_ID, travado) %>
+                    </select>
+                  </td>
+                  <td><%= new Date(m.joined_at).toLocaleDateString('pt-BR') %></td>
+                  <td>
+                    <% if (m.eh_dono_da_corp) { %><span style="color:#f59e0b;font-size:0.75rem;margin-right:.4rem" title="Criou esta corporação no painel. Não tem relação com admin do site.">dono</span><% } %>
+                    <% if (m.sou_eu && !m.eh_dono_da_corp) { %><span style="color:#7a8ba5;font-size:0.75rem;margin-right:.4rem">você</span><% } %>
+                    <% if (!travado) { %><button class="btn-sm danger" onclick="deleteMember(<%= m.id %>)">Remover</button><% } %>
+                    <%# Passar a posse. So quem poderia apagar a corp inteira mexe nisto. %>
+                    <% if (P.excluir_corp && !m.eh_dono_da_corp) { %>
+                      <button class="btn-sm" onclick="tornarDono(<%= m.id %>, <%= m.user_id %>, '<%= String(m.roblox_username || m.discord_username || 'essa pessoa').replace(/'/g, "\\'") %>')">Tornar dono</button>
+                    <% } %>
+                    <% if (P.excluir_corp && m.eh_dono_da_corp) { %>
+                      <button class="btn-sm danger" onclick="tirarDono()" title="Deixa a corporação sem dono; só staff gerencia até alguém assumir">Tirar posse</button>
+                    <% } %>
+                  </td>
+                </tr>
+              <% }) %>
+            <% } %>
+          </tbody>
+        </table>
+      </div>
+    </div>
+
+    <!-- CAIXA [28/09] — dinheiro, estoque e extrato da corporação.
+         O chefe VÊ (precisa saber o que a equipe tem); quem compra e paga bônus
+         é dono/co-gerente, mesmo critério do salário. Aqui a view só esconde
+         botão: quem barra de verdade é o requireCorpPoder nas rotas. -->
+    <% if (P.ver_caixa) { %>
+    <div class="panel" id="panel-caixa">
+      <div style="display:flex;gap:2rem;align-items:baseline;margin-bottom:1.25rem;flex-wrap:wrap">
+        <div>
+          <div style="color:#7a8ba5;font-size:0.75rem;text-transform:uppercase;letter-spacing:0.05em">Caixa da corporação</div>
+          <div id="cx-saldo" style="color:#00d4ff;font-size:2rem;font-weight:700;font-variant-numeric:tabular-nums">—</div>
+        </div>
+        <div>
+          <div style="color:#7a8ba5;font-size:0.75rem;text-transform:uppercase;letter-spacing:0.05em">Entrou</div>
+          <div id="cx-entrou" style="color:#3ddc84;font-size:1.1rem;font-weight:600;font-variant-numeric:tabular-nums">—</div>
+        </div>
+        <div>
+          <div style="color:#7a8ba5;font-size:0.75rem;text-transform:uppercase;letter-spacing:0.05em">Saiu</div>
+          <div id="cx-saiu" style="color:#ff6b6b;font-size:1.1rem;font-weight:600;font-variant-numeric:tabular-nums">—</div>
+        </div>
+        <div>
+          <div style="color:#7a8ba5;font-size:0.75rem;text-transform:uppercase;letter-spacing:0.05em">Equipamento perdido</div>
+          <div id="cx-perdas" style="color:#ffb347;font-size:1.1rem;font-weight:600;font-variant-numeric:tabular-nums">—</div>
+        </div>
+      </div>
+
+      <!-- [28/09] REPASSE DO GOVERNO. Toda corp recebe a cada 7 dias: base fixa +
+           parte por atividade. É a ÚNICA entrada da SAMU -- ela não multa, não
+           apreende e não cobra dívida. O bloco some sozinho se a rota não mandar
+           o resumo (banco velho, erro na leitura): painel sem bloco é melhor que
+           painel quebrado. -->
+      <div id="cx-orcamento" style="display:none;margin-bottom:1.25rem;padding:0.75rem 1rem;border-left:3px solid #00d4ff;background:rgba(0,212,255,0.06);border-radius:4px;color:#b9c7d9;font-size:0.85rem;line-height:1.6"></div>
+
+      <% if (P.gerir_estoque) { %>
+      <div class="form-row">
+        <div class="form-group">
+          <label>Comprar pro vestiário</label>
+          <select id="cx-item"><option value="">Carregando preços…</option></select>
+          <div style="margin-top:0.35rem;color:#7a8ba5;font-size:0.78rem;line-height:1.5">
+            Só arma e algema gastam caixa. Colete, capacete, uniforme e acessório
+            são infinitos no vestiário — não acabam, não se perdem e não aparecem aqui.
+          </div>
+        </div>
+        <div class="form-group" style="max-width:120px">
+          <label>Quantidade</label>
+          <input type="number" id="cx-qtd" value="1" min="1" max="99">
+        </div>
+        <div class="form-group" style="max-width:160px">
+          <label>&nbsp;</label>
+          <button class="btn" onclick="comprarItem()">Comprar</button>
+        </div>
+      </div>
+      <% } %>
+
+      <% if (P.aportar_caixa) { %>
+      <!-- [29/09] SÓ STAFF. Aporte é dinheiro do nada; a corp normal vive do
+           repasse do governo + multa/pátio/dívida. -->
+      <div class="form-row">
+        <div class="form-group" style="max-width:200px">
+          <label>Aporte no caixa <span style="color:#7a8ba5;font-weight:400">(staff)</span></label>
+          <input type="number" id="cx-aporte" placeholder="R$" min="1">
+        </div>
+        <div class="form-group" style="max-width:160px">
+          <label>&nbsp;</label>
+          <button class="btn secondary" onclick="aportar()">Depositar</button>
+        </div>
+      </div>
+      <% } %>
+
+      <% if (P.gastar_caixa) { %>
+
+      <%
+        // Bonus so pode cair pra quem tem Roblox vinculado: a fila de entrega do
+        // jogo e chaveada por roblox_id. Membro sem vinculo nem aparece na lista,
+        // senao o comandante debita o caixa e o dinheiro nao chega em ninguem.
+        var comRoblox = members.filter(function (m) { return m.roblox_id; });
+      %>
+      <div class="form-row">
+        <div class="form-group">
+          <label>Pagar b&ocirc;nus</label>
+          <select id="cx-bonus-quem">
+            <% if (comRoblox.length === 0) { %>
+              <option value="">Nenhum membro com Roblox vinculado</option>
+            <% } else { %>
+              <% comRoblox.forEach(function (m) { %>
+                <option value="<%= m.roblox_id %>" data-nome="<%= m.roblox_username || ('ID ' + m.roblox_id) %>"><%= m.roblox_username || ('ID ' + m.roblox_id) %></option>
+              <% }) %>
+            <% } %>
+          </select>
+        </div>
+        <div class="form-group" style="max-width:160px">
+          <label>Valor</label>
+          <input type="number" id="cx-bonus-valor" placeholder="R$" min="1">
+        </div>
+        <div class="form-group" style="max-width:160px">
+          <label>&nbsp;</label>
+          <button class="btn" onclick="pagarBonus()">Pagar</button>
+        </div>
+      </div>
+      <div style="color:#7a8ba5;font-size:0.75rem;margin:-0.5rem 0 1rem">
+        Sai do caixa na hora. Cai na conta do jogador quando ele estiver num servidor.
+      </div>
+      <% } %>
+
+      <h3 style="color:#f0f4f8;font-size:0.9rem;margin:1.5rem 0 0.5rem">Estoque do vestiário</h3>
+      <table class="member-table">
+        <thead><tr><th>Item</th><th>Na prateleira</th><th>Na rua</th><th>Perdidos</th><% if (P.gerir_estoque) { %><th></th><% } %></tr></thead>
+        <tbody id="cx-estoque"><tr><td colspan="5" class="empty">Carregando…</td></tr></tbody>
+      </table>
+
+      <h3 style="color:#f0f4f8;font-size:0.9rem;margin:1.5rem 0 0.5rem">Com quem está agora</h3>
+      <table class="member-table">
+        <thead><tr><th>Policial</th><th>Item</th><th>Desde</th></tr></thead>
+        <tbody id="cx-emprestimos"><tr><td colspan="3" class="empty">Carregando…</td></tr></tbody>
+      </table>
+
+      <!-- [29/09] PERDAS: só o NÚMERO, sem nome. O comandante vê quantas peças
+           sumiram na rua em cada dia e cobra a equipe; quem desviou ele tem que
+           descobrir. Baixa dada pelo próprio comando não entra aqui. -->
+      <h3 style="color:#f0f4f8;font-size:0.9rem;margin:1.5rem 0 0.5rem">Equipamento perdido por dia</h3>
+      <table class="member-table">
+        <thead><tr><th>Dia</th><th>Item</th><th style="text-align:right">Perdidas</th></tr></thead>
+        <tbody id="cx-perdas-dia"><tr><td colspan="3" class="empty">Carregando…</td></tr></tbody>
+      </table>
+
+      <h3 style="color:#f0f4f8;font-size:0.9rem;margin:1.5rem 0 0.5rem">Extrato do caixa</h3>
+      <table class="member-table">
+        <thead><tr><th>Quando</th><th>O quê</th><th>Quem</th><th>Autorizou</th><th style="text-align:right">Valor</th><th style="text-align:right">Saldo</th></tr></thead>
+        <tbody id="cx-extrato"><tr><td colspan="6" class="empty">Carregando…</td></tr></tbody>
+      </table>
+    </div>
+    <% } %>
+
+    <!-- CONFIGURAÇÕES -->
+    <div class="panel" id="panel-config">
+      <% if (P.editar_corp) { %>
+      <div class="form-row">
+        <div class="form-group">
+          <label>Nome</label>
+          <input type="text" id="cfg-name" value="<%= corporation.name %>">
+        </div>
+      </div>
+      <div class="form-row">
+        <div class="form-group">
+          <label>Descrição</label>
+          <input type="text" id="cfg-desc" value="<%= corporation.description || '' %>">
+        </div>
+      </div>
+      <div class="form-row">
+        <div class="form-group">
+          <label>Imagem / Logo (arquivo)</label>
+          <input type="file" id="cfg-icon-file" accept="image/png,image/jpeg,image/gif,image/webp">
+        </div>
+      </div>
+      <div class="form-row">
+        <div class="form-group">
+          <label>Ou cole uma URL</label>
+          <input type="text" id="cfg-icon" value="<%= corporation.icon_url || '' %>" placeholder="https://i.imgur.com/exemplo.png">
+        </div>
+      </div>
+      <% if (corporation.has_icon_file) { %>
+        <div style="margin-bottom:1rem;display:flex;align-items:center;gap:0.75rem">
+          <img src="/api/corps/<%= corporation.id %>/icon" style="width:64px;height:64px;border-radius:8px;object-fit:cover;border:1px solid #1e2a40">
+          <button class="btn-sm danger" onclick="removeIcon()">Remover imagem</button>
+        </div>
+      <% } else if (corporation.icon_url) { %>
+        <div style="margin-bottom:1rem">
+          <img src="<%= corporation.icon_url %>" style="width:64px;height:64px;border-radius:8px;object-fit:cover;border:1px solid #1e2a40">
+        </div>
+      <% } %>
+      <div class="form-row">
+        <div class="form-group" style="max-width:160px">
+          <label>Cor</label>
+          <input type="color" id="cfg-color" value="<%= corporation.color || '#3B82F6' %>" style="height:36px;padding:2px">
+        </div>
+        <div class="form-group" style="max-width:160px">
+          <label>Máx. Membros</label>
+          <input type="number" id="cfg-max" value="<%= corporation.max_members || 100 %>" min="1">
+        </div>
+      </div>
+      <button class="btn" onclick="saveConfig()">Salvar</button>
+      <% } %>
+
+      <% if (P.gerir_gerentes) { %>
+      <div style="margin-top:2rem;padding-top:1.5rem;border-top:1px solid #1e2a40">
+        <h3 style="font-size:0.9rem;margin-bottom:1rem;color:#00d4ff">Co-Gerentes</h3>
+        <div class="form-row">
+          <div class="form-group" style="flex:2">
+            <label>Usuário registrado</label>
+            <div class="picker" id="mgr-picker">
+              <input type="text" id="mgr-search" placeholder="Digite pra buscar…" autocomplete="off">
+              <div class="picker-list" id="mgr-list"></div>
+            </div>
+            <div class="picked" id="mgr-picked"></div>
+          </div>
+          <div class="form-group" style="max-width:140px;justify-content:flex-end">
+            <button class="btn" onclick="addManager()">Adicionar</button>
+          </div>
+        </div>
+        <div id="managers-list" style="display:flex;flex-direction:column;gap:0.5rem"></div>
+      </div>
+      <% } %>
+    </div>
+
+  </div>
+
+  <script>
+    const CORP_ID = '<%= corporation.id %>';
+
+    // Tabs
+    document.querySelectorAll('.tab').forEach(tab => {
+      tab.addEventListener('click', () => {
+        document.querySelectorAll('.tab').forEach(t => t.classList.remove('active'));
+        document.querySelectorAll('.panel').forEach(p => p.classList.remove('active'));
+        tab.classList.add('active');
+        document.getElementById('panel-' + tab.dataset.tab).classList.add('active');
+      });
+    });
+
+    function showAlert(msg, type) {
+      const c = document.getElementById('alert-container');
+      c.innerHTML = '<div class="alert ' + type + '">' + msg + '</div>';
+      setTimeout(() => c.innerHTML = '', 3000);
+    }
+
+    async function api(method, path, body) {
+      const opts = { method, headers: { 'Content-Type': 'application/json' } };
+      if (body) opts.body = JSON.stringify(body);
+      const res = await fetch('/api/corps/' + CORP_ID + path, opts);
+      return res.json();
+    }
+
+    async function addRank() {
+      const name = document.getElementById('rank-name').value.trim();
+      const level = document.getElementById('rank-level').value;
+      const salary = document.getElementById('rank-salary').value;
+      const carreira = (document.getElementById('rank-carreira') || {}).value || '';
+      if (!name || level === '') return showAlert('Preencha nome e nível', 'error');
+      const data = await api('POST', '/ranks', { name, level, salary: salary || 0, carreira: carreira.trim() });
+      if (data.error) return showAlert(data.error, 'error');
+      showAlert('Cargo criado!', 'success');
+      setTimeout(() => location.reload(), 500);
+    }
+
+    async function toggleGerir(rankId, valor) {
+      const data = await api('PUT', '/ranks/' + rankId, { gerir_membros: valor });
+      if (data && data.error) return showAlert(data.error, 'error');
+      showAlert(valor ? 'Esse cargo agora gere os membros abaixo dele' : 'Gestão de membros retirada', 'success');
+      setTimeout(() => location.reload(), 500);
+    }
+
+    // [10/10] editar nome / carreira / nível / salário de um cargo existente
+    async function editRank(rankId, atual) {
+      const name = prompt('Nome do cargo:', atual.name); if (name === null) return;
+      const carreira = prompt('Carreira (vazio = sem carreira):', atual.carreira || ''); if (carreira === null) return;
+      const level = prompt('Nível (pode repetir em carreiras diferentes):', atual.level); if (level === null) return;
+      const salary = prompt('Salário (R$):', atual.salary); if (salary === null) return;
+      const data = await api('PUT', '/ranks/' + rankId, { name: name.trim(), carreira: carreira.trim(), level, salary });
+      if (data && data.error) return showAlert(data.error, 'error');
+      showAlert('Cargo atualizado', 'success');
+      setTimeout(() => location.reload(), 500);
+    }
+
+    async function deleteRank(rankId) {
+      if (!confirm('Remover este cargo?')) return;
+      await api('DELETE', '/ranks/' + rankId);
+      location.reload();
+    }
+
+    // ---------- Seletor de usuários registrados ----------
+    let ALL_USERS = null;
+    async function loadUsers() {
+      if (ALL_USERS) return ALL_USERS;
+      const res = await fetch('/api/corps/users/list');
+      const data = await res.json();
+      ALL_USERS = data.users || [];
+      return ALL_USERS;
+    }
+
+    function userLabel(u) {
+      const disc = (u.discord_username && !u.is_placeholder) ? u.discord_username : null;
+      const rbx = u.roblox_username || (u.roblox_id ? ('ID ' + u.roblox_id) : null);
+      return (disc || rbx || ('Usuário #' + u.id));
+    }
+
+    function avatarUrl(u) {
+      if (u.discord_avatar && u.discord_id && !u.is_placeholder) {
+        return 'https://cdn.discordapp.com/avatars/' + u.discord_id + '/' + u.discord_avatar + '.png?size=32';
+      }
+      return null;
+    }
+
+    function makePicker(prefix) {
+      const input = document.getElementById(prefix + '-search');
+      const list = document.getElementById(prefix + '-list');
+      const picked = document.getElementById(prefix + '-picked');
+      const state = { selected: null };
+
+      function render(filter) {
+        const q = (filter || '').toLowerCase().trim();
+        const users = (ALL_USERS || []).filter(u => {
+          if (!q) return true;
+          return [u.discord_username, u.roblox_username, u.roblox_id, u.id].some(v => v != null && String(v).toLowerCase().includes(q));
+        }).slice(0, 60);
+        if (users.length === 0) {
+          list.innerHTML = '<div class="picker-empty">Nenhum usuário encontrado</div>';
+        } else {
+          list.innerHTML = users.map(u => {
+            const av = avatarUrl(u);
+            const disc = (u.discord_username && !u.is_placeholder) ? u.discord_username : null;
+            const rbx = u.roblox_username ? (u.roblox_username + (u.roblox_id ? ' · ' + u.roblox_id : '')) : (u.roblox_id ? 'ID ' + u.roblox_id : 'sem Roblox');
+            return '<div class="picker-item" data-id="' + u.id + '">' +
+              (av ? '<img class="avatar" src="' + av + '">' : '<div class="avatar"></div>') +
+              '<div><div>' + (disc || rbx) + '</div>' + (disc ? '<div class="meta">' + rbx + '</div>' : '') + '</div>' +
+              (u.is_placeholder ? '<span class="tag">sem discord</span>' : (u.roblox_id ? '<span class="tag ok">vinculado</span>' : '<span class="tag">sem roblox</span>')) +
+            '</div>';
+          }).join('');
+        }
+        list.classList.add('open');
+      }
+
+      input.addEventListener('focus', async () => { await loadUsers(); render(input.value); });
+      input.addEventListener('input', async () => { await loadUsers(); state.selected = null; picked.innerHTML = ''; render(input.value); });
+      list.addEventListener('mousedown', e => {
+        const item = e.target.closest('.picker-item');
+        if (!item) return;
+        const u = ALL_USERS.find(x => String(x.id) === item.dataset.id);
+        state.selected = u;
+        input.value = userLabel(u);
+        picked.innerHTML = '✓ Selecionado: <strong>' + userLabel(u) + '</strong>' + (u.roblox_id ? ' (Roblox ' + u.roblox_id + ')' : ' — <span style="color:#f59e0b">sem Roblox vinculado, não vai funcionar no jogo ainda</span>') +
+          ' <button onclick="pickers.' + prefix + '.clear()">✕</button>';
+        list.classList.remove('open');
+      });
+      document.addEventListener('click', e => { if (!e.target.closest('#' + prefix + '-picker')) list.classList.remove('open'); });
+      return {
+        get: () => state.selected,
+        clear: () => { state.selected = null; input.value = ''; picked.innerHTML = ''; }
+      };
+    }
+    const pickers = { member: makePicker('member') };
+    if (document.getElementById('mgr-search')) pickers.mgr = makePicker('mgr');
+
+    async function addMember() {
+      const u = pickers.member.get();
+      const rank_id = document.getElementById('member-rank').value || null;
+      if (!u) return showAlert('Selecione um usuário da lista (ou use "Adicionar pelo Roblox ID")', 'error');
+      const data = await api('POST', '/members', { user_id: u.id, rank_id });
+      if (data.error) return showAlert(data.error, 'error');
+      showAlert('Membro adicionado!', 'success');
+      setTimeout(() => location.reload(), 500);
+    }
+
+    async function addMemberById() {
+      const roblox_id = document.getElementById('member-roblox-id').value;
+      const rank_id = document.getElementById('member-rank').value || null;
+      if (!roblox_id) return showAlert('Informe o Roblox ID', 'error');
+      const data = await api('POST', '/members', { roblox_id, rank_id });
+      if (data.error) return showAlert(data.error, 'error');
+      showAlert('Membro adicionado!', 'success');
+      setTimeout(() => location.reload(), 500);
+    }
+
+    async function changeRank(memberId, rankId, el) {
+      const data = await api('PUT', '/members/' + memberId, { rank_id: rankId || null });
+      if (data.error) { showAlert(data.error, 'error'); setTimeout(() => location.reload(), 800); return; }
+      showAlert('Cargo atualizado!', 'success');
+    }
+
+    // [30/09] TRANSFERIR A POSSE. `owner_id` é quem criou a corp -- até hoje não
+    // existia nenhum jeito de mudar isso fora do SQL.
+    async function tornarDono(memberId, userId, nome) {
+      if (!confirm('Passar a posse da corporação para ' + nome + '?\n\nQuem é dono não pode sair sozinho e responde pela corp.')) return;
+      const r = await api('POST', '/dono', { user_id: userId });
+      if (r !== false) location.reload();
+    }
+
+    async function tirarDono() {
+      if (!confirm('Deixar a corporação SEM dono?\n\nEla continua existindo, mas só staff do site vai conseguir gerenciar até alguém assumir.')) return;
+      const r = await api('POST', '/dono', { limpar: true });
+      if (r !== false) location.reload();
+    }
+
+    async function deleteMember(memberId) {
+      if (!confirm('Remover este membro?')) return;
+      await api('DELETE', '/members/' + memberId);
+      location.reload();
+    }
+
+    async function saveConfig() {
+      const iconFile = document.getElementById('cfg-icon-file').files[0];
+      const iconUrl = document.getElementById('cfg-icon').value.trim();
+
+      // 1. Se tem arquivo, faz upload primeiro
+      if (iconFile) {
+        const form = new FormData();
+        form.append('icon', iconFile);
+        const upRes = await fetch('/api/corps/' + CORP_ID + '/icon', { method: 'POST', body: form });
+        const upData = await upRes.json();
+        if (upData.error) return showAlert(upData.error, 'error');
+      }
+
+      // 2. Salva o resto das configs
+      const body = {
+        name: document.getElementById('cfg-name').value.trim(),
+        description: document.getElementById('cfg-desc').value.trim(),
+        icon_url: iconFile ? '' : iconUrl,
+        color: document.getElementById('cfg-color').value,
+        max_members: parseInt(document.getElementById('cfg-max').value) || 100
+      };
+      const res = await fetch('/api/corps/' + CORP_ID, {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(body)
+      });
+      const data = await res.json();
+      if (data.error) return showAlert(data.error, 'error');
+      showAlert('Configurações salvas!', 'success');
+      setTimeout(() => location.reload(), 500);
+    }
+
+    async function removeIcon() {
+      if (!confirm('Remover a imagem da corporação?')) return;
+      await fetch('/api/corps/' + CORP_ID + '/icon', { method: 'DELETE' });
+      showAlert('Imagem removida', 'success');
+      setTimeout(() => location.reload(), 500);
+    }
+
+    // Co-gerentes
+    async function loadManagers() {
+      const res = await fetch('/api/corps/' + CORP_ID + '/managers');
+      const data = await res.json();
+      const list = document.getElementById('managers-list');
+      if (!data.managers || data.managers.length === 0) {
+        list.innerHTML = '<div class="empty">Nenhum co-gerente adicionado.</div>';
+        return;
+      }
+      list.innerHTML = data.managers.map(function(m) {
+        return '<div class="rank-item">' +
+          '<div class="rank-info">' +
+            '<span class="rank-name">' + (m.discord_username || m.roblox_username || 'User #' + m.user_id) + '</span>' +
+            '<span class="rank-salary" style="color:#7a8ba5">ID: ' + m.user_id + '</span>' +
+          '</div>' +
+          '<div class="rank-actions">' +
+            '<button class="btn-sm danger" onclick="removeManager(' + m.id + ')">Remover</button>' +
+          '</div>' +
+        '</div>';
+      }).join('');
+    }
+
+    async function addManager() {
+      const u = pickers.mgr && pickers.mgr.get();
+      if (!u) return showAlert('Selecione um usuário da lista', 'error');
+      const res = await fetch('/api/corps/' + CORP_ID + '/managers', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ user_id: u.id })
+      });
+      const data = await res.json();
+      if (data.error) return showAlert(data.error, 'error');
+      showAlert('Co-gerente adicionado!', 'success');
+      pickers.mgr.clear();
+      loadManagers();
+    }
+
+    async function removeManager(managerId) {
+      if (!confirm('Remover este co-gerente?')) return;
+      await fetch('/api/corps/' + CORP_ID + '/managers/' + managerId, { method: 'DELETE' });
+      showAlert('Co-gerente removido', 'success');
+      loadManagers();
+    }
+
+    // Carrega co-gerentes ao abrir a aba config.
+    // [23/09] COM GUARDA: quem nao tem o poder nao recebe a aba, e sem o if o
+    // querySelector devolvia null aqui e MATAVA o script inteiro da pagina --
+    // trocar cargo, remover membro, as abas, tudo parava de funcionar em
+    // silencio. Um indice nil num script derruba todo o resto junto.
+    var abaConfig = document.querySelector('[data-tab="config"]');
+    if (abaConfig) {
+      abaConfig.addEventListener('click', loadManagers);
+      if (abaConfig.classList.contains('active')) loadManagers();
+    }
+
+    // ---------------------------------------------------------------- CAIXA
+    // Recarrega a cada abertura da aba e depois de toda acao: o extrato "em
+    // tempo real" que o Julio pediu e simplesmente nao mostrar dado velho.
+    function dinheiro(v) {
+      var n = Math.round(Number(v) || 0);
+      var s = Math.abs(n).toLocaleString('pt-BR');
+      return (n < 0 ? '-R$ ' : 'R$ ') + s;
+    }
+    function quando(iso) {
+      if (!iso) return '';
+      var d = new Date(iso);
+      return d.toLocaleDateString('pt-BR') + ' ' + d.toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit' });
+    }
+    var CAIXA_PRECOS = {};
+
+    async function loadCaixa() {
+      var res = await fetch('/api/corps/' + CORP_ID + '/caixa');
+      var d = await res.json();
+      if (d.error) return showAlert(d.error, 'error');
+      CAIXA_PRECOS = d.precos || {};
+
+      document.getElementById('cx-saldo').textContent = dinheiro(d.saldo);
+      document.getElementById('cx-entrou').textContent = dinheiro(d.balanco.entrou);
+      document.getElementById('cx-saiu').textContent = dinheiro(d.balanco.saiu);
+      document.getElementById('cx-perdas').textContent =
+        (d.itens || []).reduce(function (a, i) { return a + (i.perdido || 0); }, 0) + ' peça(s)';
+
+      // [28/09] REPASSE DO GOVERNO. A rota já pagou o que estava pendente antes de
+      // montar isto, então o "último" aqui pode ser o que acabou de cair.
+      var orc = d.orcamento;
+      var elOrc = document.getElementById('cx-orcamento');
+      if (elOrc) {
+        if (!orc) {
+          elOrc.style.display = 'none';
+        } else {
+          elOrc.style.display = '';
+          var faltaMs = Math.max(0, Number(orc.proximo_em) - Date.now());
+          var dd = Math.floor(faltaMs / 86400000);
+          var hh = Math.floor((faltaMs % 86400000) / 3600000);
+          var falta = dd > 0 ? (dd + 'd ' + hh + 'h') : (hh + 'h');
+          var ult = orc.ultimo
+            ? ('último: ' + dinheiro(orc.ultimo.valor) + ' em ' + quando(orc.ultimo.em))
+            : 'nenhum repasse ainda';
+          elOrc.innerHTML =
+            '<b style="color:#00d4ff">Repasse do governo</b> · a cada ' + orc.dias + ' dias · próximo em <b>' + falta + '</b><br>' +
+            'previsto <b>' + dinheiro(orc.previsto.total) + '</b> = base ' + dinheiro(orc.previsto.base) +
+            ' + ' + orc.atividade_periodo + ' ocorrência(s) no período · ' + ult;
+        }
+      }
+
+      // [29/09] o seletor lista SO arma e algema -- o resto do vestiario e
+      // infinito e nao tem preco de proposito. Vazio tem dois motivos bem
+      // diferentes, e o painel agora diz qual e: ou o jogo nao publicou o
+      // catalogo ainda, ou esta corp realmente nao compra nada (SAMU, Pavuna).
+      var sel = document.getElementById('cx-item');
+      if (sel) {
+        var nomes = Object.keys(CAIXA_PRECOS).sort();
+        sel.innerHTML = nomes.length
+          ? nomes.map(function (n) { return '<option value="' + n + '">' + n + ' — ' + dinheiro(CAIXA_PRECOS[n]) + '</option>'; }).join('')
+          : (d.catalogo_publicado
+              ? '<option value="">Esta corporação não compra nada — o vestiário dela só tem item infinito</option>'
+              : '<option value="">O jogo ainda não publicou os preços</option>');
+      }
+
+      var tb = document.getElementById('cx-estoque');
+      tb.innerHTML = (d.itens && d.itens.length)
+        ? d.itens.map(function (i) {
+            return '<tr><td>' + i.item + '</td>' +
+              '<td style="font-variant-numeric:tabular-nums">' + i.prateleira + '</td>' +
+              '<td style="font-variant-numeric:tabular-nums">' + i.rua + '</td>' +
+              '<td style="font-variant-numeric:tabular-nums;color:' + (i.perdido ? '#ffb347' : '#7a8ba5') + '">' + i.perdido + '</td>' +
+              (d.pode_estoque ? '<td><button class="btn-sm danger" onclick="darBaixa(\'' + i.item.replace(/'/g, "\\'") + '\')">Dar baixa</button></td>' : '') +
+              '</tr>';
+          }).join('')
+        : '<tr><td colspan="5" class="empty">Estoque vazio — compre equipamento acima.</td></tr>';
+
+      var te = document.getElementById('cx-emprestimos');
+      te.innerHTML = (d.emprestimos && d.emprestimos.length)
+        ? d.emprestimos.map(function (e) {
+            return '<tr><td>' + e.nome + '</td><td>' + e.item + '</td><td style="color:#7a8ba5">' + quando(e.pego_em) + '</td></tr>';
+          }).join('')
+        : '<tr><td colspan="3" class="empty">Ninguém está com equipamento da corp agora.</td></tr>';
+
+      // [29/09] perdas agregadas: dia, item, quantidade. Nenhum nome -- de propósito.
+      var tp = document.getElementById('cx-perdas-dia');
+      if (tp) {
+        tp.innerHTML = (d.perdas_dia && d.perdas_dia.length)
+          ? d.perdas_dia.map(function (p) {
+              var dia = new Date(p.dia).toLocaleDateString('pt-BR');
+              return '<tr><td style="color:#7a8ba5;white-space:nowrap">' + dia + '</td>' +
+                '<td>' + p.item + '</td>' +
+                '<td style="text-align:right;font-variant-numeric:tabular-nums;color:#ffb347">' + p.qtd + '</td></tr>';
+            }).join('')
+          : '<tr><td colspan="3" class="empty">Nenhuma peça perdida ainda.</td></tr>';
+      }
+
+      // O extrato é só DINHEIRO: a rota já filtra `tipo <> 'estoque'`.
+      var tx = document.getElementById('cx-extrato');
+      tx.innerHTML = (d.extrato && d.extrato.length)
+        ? d.extrato.map(function (l) {
+            var desc = l.tipo + (l.item ? ' · ' + l.item + (l.qtd > 1 ? ' x' + l.qtd : '') : '');
+            var cor = l.valor > 0 ? '#3ddc84' : (l.valor < 0 ? '#ff6b6b' : '#7a8ba5');
+            return '<tr><td style="color:#7a8ba5;white-space:nowrap">' + quando(l.criado_em) + '</td>' +
+              '<td>' + desc + '</td>' +
+              '<td>' + (l.quem || '—') + '</td><td style="color:#7a8ba5">' + (l.por || '—') + '</td>' +
+              '<td style="text-align:right;font-variant-numeric:tabular-nums;color:' + cor + '">' + (l.valor ? dinheiro(l.valor) : '—') + '</td>' +
+              '<td style="text-align:right;font-variant-numeric:tabular-nums;color:#7a8ba5">' + (l.saldo_depois === null ? '—' : dinheiro(l.saldo_depois)) + '</td></tr>';
+          }).join('')
+        : '<tr><td colspan="6" class="empty">Nenhum movimento ainda.</td></tr>';
+    }
+
+    async function comprarItem() {
+      var item = document.getElementById('cx-item').value;
+      var qtd = parseInt(document.getElementById('cx-qtd').value) || 1;
+      if (!item) return showAlert('Escolha o item', 'error');
+      var d = await api('POST', '/caixa/comprar', { item: item, qtd: qtd });
+      if (d.error) return showAlert(d.error, 'error');
+      showAlert('Comprado por ' + dinheiro(d.total) + ' · ' + d.prateleira + ' na prateleira', 'success');
+      loadCaixa();
+    }
+
+    async function darBaixa(item) {
+      if (!confirm('Dar baixa em 1 ' + item + '? Isso conta como PERDA e não devolve dinheiro.')) return;
+      var d = await api('POST', '/caixa/baixa', { item: item });
+      if (d.error) return showAlert(d.error, 'error');
+      showAlert('Baixa registrada', 'success');
+      loadCaixa();
+    }
+
+    async function aportar() {
+      var v = parseInt(document.getElementById('cx-aporte').value);
+      if (!(v > 0)) return showAlert('Valor inválido', 'error');
+      var d = await api('POST', '/caixa/aporte', { valor: v });
+      if (d.error) return showAlert(d.error, 'error');
+      document.getElementById('cx-aporte').value = '';
+      showAlert('Depositado', 'success');
+      loadCaixa();
+    }
+
+    async function pagarBonus() {
+      var sel = document.getElementById('cx-bonus-quem');
+      var robloxId = sel && sel.value;
+      var valor = parseInt(document.getElementById('cx-bonus-valor').value, 10);
+      if (!robloxId) return showAlert('Escolha quem recebe', 'error');
+      if (!(valor > 0)) return showAlert('Informe um valor', 'error');
+      var nome = sel.options[sel.selectedIndex].getAttribute('data-nome') || '';
+      var d = await api('POST', '/caixa/bonus', { roblox_id: robloxId, nome: nome, valor: valor });
+      if (!d || d.error) return;
+      document.getElementById('cx-bonus-valor').value = '';
+      showAlert('B\u00f4nus de ' + dinheiro(valor) + ' pago pra ' + nome, 'success');
+      loadCaixa();
+    }
+
+    var abaCaixa = document.querySelector('[data-tab="caixa"]');
+    if (abaCaixa) abaCaixa.addEventListener('click', loadCaixa);
+  </script>
+</body>
+</html>

@@ -6,84 +6,86 @@
   <title><%= corporation.name %> — Santa Fé</title>
   <style>
     * { margin: 0; padding: 0; box-sizing: border-box; }
-    body { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif; background: #0a0e17; color: #f0f4f8; min-height: 100vh; }
-    .topbar { background: #131a2b; border-bottom: 1px solid #1e2a40; padding: 0.75rem 1.5rem; display: flex; align-items: center; gap: 1rem; }
-    .topbar a { color: #7a8ba5; text-decoration: none; font-size: 0.85rem; }
-    .topbar a:hover { color: #00d4ff; }
-    .topbar h1 { font-size: 1rem; color: #f0f4f8; flex: 1; }
+    body { font-family: var(--sans); background: #E7E9EC; color: #161A1F; min-height: 100vh; }
+    .topbar { background: #FFFFFF; border-bottom: 1px solid #D6DADF; padding: 0.75rem 1.5rem; display: flex; align-items: center; gap: 1rem; }
+    .topbar a { color: #5B6573; text-decoration: none; font-size: 0.85rem; }
+    .topbar a:hover { color: #1D3F94; }
+    .topbar h1 { font-size: 1rem; color: #161A1F; flex: 1; }
     .main { max-width: 900px; margin: 0 auto; padding: 2rem 1.25rem; }
-    .tabs { display: flex; gap: 0; border-bottom: 1px solid #1e2a40; margin-bottom: 1.5rem; }
-    .tab { padding: 0.6rem 1.25rem; color: #7a8ba5; cursor: pointer; font-size: 0.85rem; font-weight: 600; border-bottom: 2px solid transparent; transition: all 0.15s; }
-    .tab.active { color: #00d4ff; border-bottom-color: #00d4ff; }
-    .tab:hover { color: #f0f4f8; }
+    .tabs { display: flex; gap: 0; border-bottom: 1px solid #D6DADF; margin-bottom: 1.5rem; }
+    .tab { padding: 0.6rem 1.25rem; color: #5B6573; cursor: pointer; font-size: 0.85rem; font-weight: 600; border-bottom: 2px solid transparent; transition: all 0.15s; }
+    .tab.active { color: #1D3F94; border-bottom-color: #1D3F94; }
+    .tab:hover { color: #161A1F; }
     .panel { display: none; }
     .panel.active { display: block; }
 
     /* Cargos */
     .rank-list { display: flex; flex-direction: column; gap: 0.5rem; margin-bottom: 1rem; }
-    .rank-item { background: #131a2b; border: 1px solid #1e2a40; border-radius: 6px; padding: 0.75rem 1rem; display: flex; align-items: center; justify-content: space-between; }
+    .rank-item { background: #FFFFFF; border: 1px solid #D6DADF; border-radius: 6px; padding: 0.75rem 1rem; display: flex; align-items: center; justify-content: space-between; }
     .rank-info { display: flex; align-items: center; gap: 1rem; }
-    .rank-level { background: #1e2a40; color: #7a8ba5; font-size: 0.7rem; font-weight: 700; padding: 0.2rem 0.5rem; border-radius: 3px; min-width: 2rem; text-align: center; }
+    .rank-level { background: #D6DADF; color: #5B6573; font-size: 0.7rem; font-weight: 700; padding: 0.2rem 0.5rem; border-radius: 3px; min-width: 2rem; text-align: center; }
     .rank-name { font-weight: 600; font-size: 0.9rem; }
-    .rank-salary { color: #10b981; font-size: 0.8rem; }
+    .rank-salary { color: #1D7A45; font-size: 0.8rem; }
     .rank-actions { display: flex; gap: 0.5rem; }
-    .btn-sm { padding: 0.3rem 0.6rem; font-size: 0.75rem; border: 1px solid #1e2a40; background: transparent; color: #7a8ba5; border-radius: 4px; cursor: pointer; }
-    .btn-sm:hover { border-color: #3d4a62; color: #f0f4f8; }
-    .btn-sm.danger { border-color: #ef444433; color: #ef4444; }
-    .btn-sm.danger:hover { background: #ef444411; }
+    .btn-sm { padding: 0.3rem 0.6rem; font-size: 0.75rem; border: 1px solid #D6DADF; background: transparent; color: #5B6573; border-radius: 4px; cursor: pointer; }
+    .btn-sm:hover { border-color: #8A94A0; color: #161A1F; }
+    .btn-sm.danger { border-color: #B2322733; color: #B23227; }
+    .btn-sm.danger:hover { background: #B2322711; }
 
     /* Membros */
     .member-table { width: 100%; border-collapse: collapse; font-size: 0.85rem; }
-    .member-table th { text-align: left; color: #7a8ba5; font-weight: 600; padding: 0.5rem 0.75rem; border-bottom: 1px solid #1e2a40; font-size: 0.75rem; text-transform: uppercase; letter-spacing: 0.05em; }
-    .member-table td { padding: 0.6rem 0.75rem; border-bottom: 1px solid #1e2a4066; }
-    .member-table tr:hover td { background: #131a2b; }
+    .member-table th { text-align: left; color: #5B6573; font-weight: 600; padding: 0.5rem 0.75rem; border-bottom: 1px solid #D6DADF; font-size: 0.75rem;  }
+    .member-table td { padding: 0.6rem 0.75rem; border-bottom: 1px solid #D6DADF66; }
+    .member-table tr:hover td { background: #FFFFFF; }
 
     /* Forms */
     .form-row { display: flex; gap: 0.75rem; margin-bottom: 1rem; flex-wrap: wrap; }
     .form-group { display: flex; flex-direction: column; gap: 0.25rem; flex: 1; min-width: 120px; }
-    .form-group label { font-size: 0.75rem; color: #7a8ba5; font-weight: 600; }
-    .form-group input, .form-group select { background: #131a2b; border: 1px solid #1e2a40; color: #f0f4f8; padding: 0.5rem 0.75rem; border-radius: 4px; font-size: 0.85rem; }
-    .form-group input:focus, .form-group select:focus { outline: none; border-color: #00d4ff; }
-    .btn { padding: 0.5rem 1.25rem; background: #00d4ff; color: #0a0e17; border: none; border-radius: 4px; font-weight: 600; font-size: 0.85rem; cursor: pointer; }
+    .form-group label { font-size: 0.75rem; color: #5B6573; font-weight: 600; }
+    .form-group input, .form-group select { background: #FFFFFF; border: 1px solid #D6DADF; color: #161A1F; padding: 0.5rem 0.75rem; border-radius: 4px; font-size: 0.85rem; }
+    .form-group input:focus, .form-group select:focus { outline: none; border-color: #1D3F94; }
+    .btn { padding: 0.5rem 1.25rem; background: #1D3F94; color: #E7E9EC; border: none; border-radius: 4px; font-weight: 600; font-size: 0.85rem; cursor: pointer; }
     .btn:hover { opacity: 0.85; }
-    .btn.secondary { background: transparent; border: 1px solid #1e2a40; color: #f0f4f8; }
+    .btn.secondary { background: transparent; border: 1px solid #D6DADF; color: #161A1F; }
 
     .alert { padding: 0.75rem 1rem; border-radius: 6px; font-size: 0.85rem; margin-bottom: 1rem; }
-    .alert.success { background: #10b98122; color: #10b981; border: 1px solid #10b98133; }
-    .alert.error { background: #ef444422; color: #ef4444; border: 1px solid #ef444433; }
-    .empty { color: #7a8ba5; font-size: 0.85rem; padding: 1.5rem; text-align: center; }
+    .alert.success { background: #1D7A4522; color: #1D7A45; border: 1px solid #1D7A4533; }
+    .alert.error { background: #B2322722; color: #B23227; border: 1px solid #B2322733; }
+    .empty { color: #5B6573; font-size: 0.85rem; padding: 1.5rem; text-align: center; }
 
     /* Seletor de usuários */
     .picker { position: relative; }
     .picker input { width: 100%; }
-    .picker-list { position: absolute; top: 100%; left: 0; right: 0; z-index: 20; max-height: 260px; overflow-y: auto; background: #131a2b; border: 1px solid #2d3a52; border-radius: 6px; margin-top: 4px; display: none; }
+    .picker-list { position: absolute; top: 100%; left: 0; right: 0; z-index: 20; max-height: 260px; overflow-y: auto; background: #FFFFFF; border: 1px solid #C1C7CF; border-radius: 6px; margin-top: 4px; display: none; }
     .picker-list.open { display: block; }
-    .picker-item { padding: 0.5rem 0.75rem; cursor: pointer; display: flex; align-items: center; gap: 0.6rem; font-size: 0.85rem; border-bottom: 1px solid #1e2a4066; }
-    .picker-item:hover, .picker-item.active { background: #1e2a40; }
-    .picker-item .avatar { width: 24px; height: 24px; border-radius: 50%; background: #2d3a52; flex-shrink: 0; object-fit: cover; }
-    .picker-item .meta { color: #7a8ba5; font-size: 0.75rem; }
-    .picker-item .tag { margin-left: auto; font-size: 0.65rem; padding: 0.1rem 0.4rem; border-radius: 3px; background: #2d3a52; color: #7a8ba5; text-transform: uppercase; letter-spacing: 0.04em; }
-    .picker-item .tag.ok { background: #10b98122; color: #10b981; }
-    .picker-empty { padding: 0.75rem; color: #7a8ba5; font-size: 0.8rem; text-align: center; }
-    .picked { display: flex; align-items: center; gap: 0.5rem; font-size: 0.8rem; color: #10b981; margin-top: 0.3rem; min-height: 1.2rem; }
-    .picked button { background: none; border: none; color: #7a8ba5; cursor: pointer; font-size: 0.8rem; }
-    .fallback { margin-top: 0.5rem; font-size: 0.8rem; color: #7a8ba5; }
+    .picker-item { padding: 0.5rem 0.75rem; cursor: pointer; display: flex; align-items: center; gap: 0.6rem; font-size: 0.85rem; border-bottom: 1px solid #D6DADF66; }
+    .picker-item:hover, .picker-item.active { background: #D6DADF; }
+    .picker-item .avatar { width: 24px; height: 24px; border-radius: 50%; background: #C1C7CF; flex-shrink: 0; object-fit: cover; }
+    .picker-item .meta { color: #5B6573; font-size: 0.75rem; }
+    .picker-item .tag { margin-left: auto; font-size: 0.65rem; padding: 0.1rem 0.4rem; border-radius: 3px; background: #C1C7CF; color: #5B6573;  }
+    .picker-item .tag.ok { background: #1D7A4522; color: #1D7A45; }
+    .picker-empty { padding: 0.75rem; color: #5B6573; font-size: 0.8rem; text-align: center; }
+    .picked { display: flex; align-items: center; gap: 0.5rem; font-size: 0.8rem; color: #1D7A45; margin-top: 0.3rem; min-height: 1.2rem; }
+    .picked button { background: none; border: none; color: #5B6573; cursor: pointer; font-size: 0.8rem; }
+    .fallback { margin-top: 0.5rem; font-size: 0.8rem; color: #5B6573; }
     .fallback summary { cursor: pointer; }
     .fallback .form-row { margin-top: 0.5rem; }
-    .rank-select { background: #0a0e17; border: 1px solid #1e2a40; color: #f0f4f8; padding: 0.3rem 0.5rem; border-radius: 4px; font-size: 0.8rem; }
+    .rank-select { background: #E7E9EC; border: 1px solid #D6DADF; color: #161A1F; padding: 0.3rem 0.5rem; border-radius: 4px; font-size: 0.8rem; }
   </style>
+  <link rel="stylesheet" href="/sf.css">
+
 </head>
 <body>
   <div class="topbar">
-    <a href="/dashboard">&larr; Voltar</a>
-    <a href="/" title="Início">Início</a>
+    <%- include('partials/placa') %>
+    <a href="/dashboard"><svg class="ic" aria-hidden="true"><use href="/icones.svg#voltar"/></svg>Corporações</a>
     <% if (corporation.has_icon_file) { %>
       <img src="/api/corps/<%= corporation.id %>/icon" style="width:28px;height:28px;border-radius:5px;object-fit:cover">
     <% } else if (corporation.icon_url) { %>
       <img src="<%= corporation.icon_url %>" style="width:28px;height:28px;border-radius:5px;object-fit:cover">
     <% } %>
     <h1><%= corporation.name %></h1>
-    <span style="color:#7a8ba5;font-size:0.8rem">slug: <%= corporation.slug %></span>
+    <span style="color:#8A94A0;font-size:0.8rem;margin-left:auto">slug: <%= corporation.slug %></span>
   </div>
 
   <div class="main">
@@ -98,8 +100,8 @@
        var EH_STAFF_ALTO = (typeof ehStaffAlto !== 'undefined') && ehStaffAlto; %>
     <div id="alert-container"></div>
 
-    <div style="margin-bottom:1rem;color:#7a8ba5;font-size:0.8rem">
-      Você entra aqui como <strong style="color:#00d4ff"><%= MEU_PAPEL %></strong><% if (MEU_NIVEL !== null) { %> · seu nível de cargo: <%= MEU_NIVEL %><% } %>
+    <div style="margin-bottom:1rem;color:#5B6573;font-size:0.8rem">
+      Você entra aqui como <strong style="color:#1D3F94"><%= MEU_PAPEL %></strong><% if (MEU_NIVEL !== null) { %> · seu nível de cargo: <%= MEU_NIVEL %><% } %>
     </div>
 
     <div class="tabs">
@@ -143,7 +145,7 @@
           <input type="text" id="rank-name" placeholder="Ex: Soldado">
         </div>
         <div class="form-group" style="max-width:170px">
-          <label>Carreira <span style="color:#7a8ba5;font-weight:400">(opcional)</span></label>
+          <label>Carreira <span style="color:#5B6573;font-weight:400">(opcional)</span></label>
           <input type="text" id="rank-carreira" placeholder="Ex: Delegados" list="lista-carreiras">
           <datalist id="lista-carreiras"><% CARREIRAS.forEach(function (c) { if (c) { %><option value="<%= c %>"><% } }) %></datalist>
         </div>
@@ -166,7 +168,7 @@
           <div class="empty">Nenhum cargo criado ainda.</div>
         <% } else { %>
           <% CARREIRAS.forEach(function (carr) { %>
-          <% if (TEM_CARREIRA) { %><div style="margin:.6rem 0 .1rem;color:#00d4ff;font-size:.75rem;font-weight:700;letter-spacing:.06em;text-transform:uppercase">Carreira · <%= carr || 'Sem carreira' %></div><% } %>
+          <% if (TEM_CARREIRA) { %><div style="margin:.6rem 0 .1rem;color:#1D3F94;font-size:.75rem;font-weight:700;">Carreira · <%= carr || 'Sem carreira' %></div><% } %>
           <% porC[carr].forEach(rank => { %>
             <div class="rank-item" data-rank-id="<%= rank.id %>">
               <div class="rank-info">
@@ -174,7 +176,7 @@
                 <span class="rank-name"><%= rank.name %></span>
                 <span class="rank-salary">R$<%= rank.salary %></span>
                 <% var gmOn = rank.permissions && rank.permissions.gerir_membros === true; %>
-                <% if (gmOn) { %><span style="color:#00d4ff;font-size:0.75rem" title="Pode adicionar, remover e trocar o cargo de quem está ABAIXO deste cargo">✓ gere membros abaixo</span><% } %>
+                <% if (gmOn) { %><span style="color:#1D3F94;font-size:0.75rem" title="Pode adicionar, remover e trocar o cargo de quem está ABAIXO deste cargo"><svg class="ic" aria-hidden="true"><use href="/icones.svg#check"/></svg>gere membros abaixo</span><% } %>
               </div>
               <div class="rank-actions">
                 <%# [06/10] liga/desliga "gere membros abaixo" no cargo (ranks.permissions.gerir_membros) %>
@@ -263,8 +265,8 @@
                   </td>
                   <td><%= new Date(m.joined_at).toLocaleDateString('pt-BR') %></td>
                   <td>
-                    <% if (m.eh_dono_da_corp) { %><span style="color:#f59e0b;font-size:0.75rem;margin-right:.4rem" title="Criou esta corporação no painel. Não tem relação com admin do site.">dono</span><% } %>
-                    <% if (m.sou_eu && !m.eh_dono_da_corp) { %><span style="color:#7a8ba5;font-size:0.75rem;margin-right:.4rem">você</span><% } %>
+                    <% if (m.eh_dono_da_corp) { %><span style="color:#A86400;font-size:0.75rem;margin-right:.4rem" title="Criou esta corporação no painel. Não tem relação com admin do site.">dono</span><% } %>
+                    <% if (m.sou_eu && !m.eh_dono_da_corp) { %><span style="color:#5B6573;font-size:0.75rem;margin-right:.4rem">você</span><% } %>
                     <% if (!travado) { %><button class="btn-sm danger" onclick="deleteMember(<%= m.id %>)">Remover</button><% } %>
                     <%# Passar a posse. So quem poderia apagar a corp inteira mexe nisto. %>
                     <% if (P.excluir_corp && !m.eh_dono_da_corp) { %>
@@ -290,20 +292,20 @@
     <div class="panel" id="panel-caixa">
       <div style="display:flex;gap:2rem;align-items:baseline;margin-bottom:1.25rem;flex-wrap:wrap">
         <div>
-          <div style="color:#7a8ba5;font-size:0.75rem;text-transform:uppercase;letter-spacing:0.05em">Caixa da corporação</div>
-          <div id="cx-saldo" style="color:#00d4ff;font-size:2rem;font-weight:700;font-variant-numeric:tabular-nums">—</div>
+          <div style="color:#5B6573;font-size:0.75rem;">Caixa da corporação</div>
+          <div id="cx-saldo" style="color:#1D3F94;font-size:2rem;font-weight:700;font-variant-numeric:tabular-nums">—</div>
         </div>
         <div>
-          <div style="color:#7a8ba5;font-size:0.75rem;text-transform:uppercase;letter-spacing:0.05em">Entrou</div>
-          <div id="cx-entrou" style="color:#3ddc84;font-size:1.1rem;font-weight:600;font-variant-numeric:tabular-nums">—</div>
+          <div style="color:#5B6573;font-size:0.75rem;">Entrou</div>
+          <div id="cx-entrou" style="color:#1D7A45;font-size:1.1rem;font-weight:600;font-variant-numeric:tabular-nums">—</div>
         </div>
         <div>
-          <div style="color:#7a8ba5;font-size:0.75rem;text-transform:uppercase;letter-spacing:0.05em">Saiu</div>
-          <div id="cx-saiu" style="color:#ff6b6b;font-size:1.1rem;font-weight:600;font-variant-numeric:tabular-nums">—</div>
+          <div style="color:#5B6573;font-size:0.75rem;">Saiu</div>
+          <div id="cx-saiu" style="color:#B23227;font-size:1.1rem;font-weight:600;font-variant-numeric:tabular-nums">—</div>
         </div>
         <div>
-          <div style="color:#7a8ba5;font-size:0.75rem;text-transform:uppercase;letter-spacing:0.05em">Equipamento perdido</div>
-          <div id="cx-perdas" style="color:#ffb347;font-size:1.1rem;font-weight:600;font-variant-numeric:tabular-nums">—</div>
+          <div style="color:#5B6573;font-size:0.75rem;">Equipamento perdido</div>
+          <div id="cx-perdas" style="color:#A86400;font-size:1.1rem;font-weight:600;font-variant-numeric:tabular-nums">—</div>
         </div>
       </div>
 
@@ -312,14 +314,14 @@
            apreende e não cobra dívida. O bloco some sozinho se a rota não mandar
            o resumo (banco velho, erro na leitura): painel sem bloco é melhor que
            painel quebrado. -->
-      <div id="cx-orcamento" style="display:none;margin-bottom:1.25rem;padding:0.75rem 1rem;border-left:3px solid #00d4ff;background:rgba(0,212,255,0.06);border-radius:4px;color:#b9c7d9;font-size:0.85rem;line-height:1.6"></div>
+      <div id="cx-orcamento" style="display:none;margin-bottom:1.25rem;padding:0.75rem 1rem;border-left:3px solid #1D3F94;background:rgba(0,212,255,0.06);border-radius:4px;color:#46505C;font-size:0.85rem;line-height:1.6"></div>
 
       <% if (P.gerir_estoque) { %>
       <div class="form-row">
         <div class="form-group">
           <label>Comprar pro vestiário</label>
           <select id="cx-item"><option value="">Carregando preços…</option></select>
-          <div style="margin-top:0.35rem;color:#7a8ba5;font-size:0.78rem;line-height:1.5">
+          <div style="margin-top:0.35rem;color:#5B6573;font-size:0.78rem;line-height:1.5">
             Só arma e algema gastam caixa. Colete, capacete, uniforme e acessório
             são infinitos no vestiário — não acabam, não se perdem e não aparecem aqui.
           </div>
@@ -340,7 +342,7 @@
            repasse do governo + multa/pátio/dívida. -->
       <div class="form-row">
         <div class="form-group" style="max-width:200px">
-          <label>Aporte no caixa <span style="color:#7a8ba5;font-weight:400">(staff)</span></label>
+          <label>Aporte no caixa <span style="color:#5B6573;font-weight:400">(staff)</span></label>
           <input type="number" id="cx-aporte" placeholder="R$" min="1">
         </div>
         <div class="form-group" style="max-width:160px">
@@ -380,18 +382,18 @@
           <button class="btn" onclick="pagarBonus()">Pagar</button>
         </div>
       </div>
-      <div style="color:#7a8ba5;font-size:0.75rem;margin:-0.5rem 0 1rem">
+      <div style="color:#5B6573;font-size:0.75rem;margin:-0.5rem 0 1rem">
         Sai do caixa na hora. Cai na conta do jogador quando ele estiver num servidor.
       </div>
       <% } %>
 
-      <h3 style="color:#f0f4f8;font-size:0.9rem;margin:1.5rem 0 0.5rem">Estoque do vestiário</h3>
+      <h3 style="color:#161A1F;font-size:0.9rem;margin:1.5rem 0 0.5rem">Estoque do vestiário</h3>
       <table class="member-table">
         <thead><tr><th>Item</th><th>Na prateleira</th><th>Na rua</th><th>Perdidos</th><% if (P.gerir_estoque) { %><th></th><% } %></tr></thead>
         <tbody id="cx-estoque"><tr><td colspan="5" class="empty">Carregando…</td></tr></tbody>
       </table>
 
-      <h3 style="color:#f0f4f8;font-size:0.9rem;margin:1.5rem 0 0.5rem">Com quem está agora</h3>
+      <h3 style="color:#161A1F;font-size:0.9rem;margin:1.5rem 0 0.5rem">Com quem está agora</h3>
       <table class="member-table">
         <thead><tr><th>Policial</th><th>Item</th><th>Desde</th></tr></thead>
         <tbody id="cx-emprestimos"><tr><td colspan="3" class="empty">Carregando…</td></tr></tbody>
@@ -400,13 +402,13 @@
       <!-- [29/09] PERDAS: só o NÚMERO, sem nome. O comandante vê quantas peças
            sumiram na rua em cada dia e cobra a equipe; quem desviou ele tem que
            descobrir. Baixa dada pelo próprio comando não entra aqui. -->
-      <h3 style="color:#f0f4f8;font-size:0.9rem;margin:1.5rem 0 0.5rem">Equipamento perdido por dia</h3>
+      <h3 style="color:#161A1F;font-size:0.9rem;margin:1.5rem 0 0.5rem">Equipamento perdido por dia</h3>
       <table class="member-table">
         <thead><tr><th>Dia</th><th>Item</th><th style="text-align:right">Perdidas</th></tr></thead>
         <tbody id="cx-perdas-dia"><tr><td colspan="3" class="empty">Carregando…</td></tr></tbody>
       </table>
 
-      <h3 style="color:#f0f4f8;font-size:0.9rem;margin:1.5rem 0 0.5rem">Extrato do caixa</h3>
+      <h3 style="color:#161A1F;font-size:0.9rem;margin:1.5rem 0 0.5rem">Extrato do caixa</h3>
       <table class="member-table">
         <thead><tr><th>Quando</th><th>O quê</th><th>Quem</th><th>Autorizou</th><th style="text-align:right">Valor</th><th style="text-align:right">Saldo</th></tr></thead>
         <tbody id="cx-extrato"><tr><td colspan="6" class="empty">Carregando…</td></tr></tbody>
@@ -443,18 +445,18 @@
       </div>
       <% if (corporation.has_icon_file) { %>
         <div style="margin-bottom:1rem;display:flex;align-items:center;gap:0.75rem">
-          <img src="/api/corps/<%= corporation.id %>/icon" style="width:64px;height:64px;border-radius:8px;object-fit:cover;border:1px solid #1e2a40">
+          <img src="/api/corps/<%= corporation.id %>/icon" style="width:64px;height:64px;border-radius:8px;object-fit:cover;border:1px solid #D6DADF">
           <button class="btn-sm danger" onclick="removeIcon()">Remover imagem</button>
         </div>
       <% } else if (corporation.icon_url) { %>
         <div style="margin-bottom:1rem">
-          <img src="<%= corporation.icon_url %>" style="width:64px;height:64px;border-radius:8px;object-fit:cover;border:1px solid #1e2a40">
+          <img src="<%= corporation.icon_url %>" style="width:64px;height:64px;border-radius:8px;object-fit:cover;border:1px solid #D6DADF">
         </div>
       <% } %>
       <div class="form-row">
         <div class="form-group" style="max-width:160px">
           <label>Cor</label>
-          <input type="color" id="cfg-color" value="<%= corporation.color || '#3B82F6' %>" style="height:36px;padding:2px">
+          <input type="color" id="cfg-color" value="<%= corporation.color || '#2F5BBF' %>" style="height:36px;padding:2px">
         </div>
         <div class="form-group" style="max-width:160px">
           <label>Máx. Membros</label>
@@ -465,8 +467,8 @@
       <% } %>
 
       <% if (P.gerir_gerentes) { %>
-      <div style="margin-top:2rem;padding-top:1.5rem;border-top:1px solid #1e2a40">
-        <h3 style="font-size:0.9rem;margin-bottom:1rem;color:#00d4ff">Co-Gerentes</h3>
+      <div style="margin-top:2rem;padding-top:1.5rem;border-top:1px solid #D6DADF">
+        <h3 style="font-size:0.9rem;margin-bottom:1rem;color:#1D3F94">Co-Gerentes</h3>
         <div class="form-row">
           <div class="form-group" style="flex:2">
             <label>Usuário registrado</label>
@@ -610,8 +612,8 @@
         const u = ALL_USERS.find(x => String(x.id) === item.dataset.id);
         state.selected = u;
         input.value = userLabel(u);
-        picked.innerHTML = '✓ Selecionado: <strong>' + userLabel(u) + '</strong>' + (u.roblox_id ? ' (Roblox ' + u.roblox_id + ')' : ' — <span style="color:#f59e0b">sem Roblox vinculado, não vai funcionar no jogo ainda</span>') +
-          ' <button onclick="pickers.' + prefix + '.clear()">✕</button>';
+        picked.innerHTML = '<svg class="ic" aria-hidden="true"><use href="/icones.svg#check"/></svg>Selecionado: <strong>' + userLabel(u) + '</strong>' + (u.roblox_id ? ' (Roblox ' + u.roblox_id + ')' : ' — <span style="color:#A86400">sem Roblox vinculado, não vai funcionar no jogo ainda</span>') +
+          ' <button onclick="pickers.' + prefix + '.clear()"><svg class="ic" aria-hidden="true"><use href="/icones.svg#x"/></svg></button>';
         list.classList.remove('open');
       });
       document.addEventListener('click', e => { if (!e.target.closest('#' + prefix + '-picker')) list.classList.remove('open'); });
@@ -721,7 +723,7 @@
         return '<div class="rank-item">' +
           '<div class="rank-info">' +
             '<span class="rank-name">' + (m.discord_username || m.roblox_username || 'User #' + m.user_id) + '</span>' +
-            '<span class="rank-salary" style="color:#7a8ba5">ID: ' + m.user_id + '</span>' +
+            '<span class="rank-salary" style="color:#5B6573">ID: ' + m.user_id + '</span>' +
           '</div>' +
           '<div class="rank-actions">' +
             '<button class="btn-sm danger" onclick="removeManager(' + m.id + ')">Remover</button>' +
@@ -807,7 +809,7 @@
             ? ('último: ' + dinheiro(orc.ultimo.valor) + ' em ' + quando(orc.ultimo.em))
             : 'nenhum repasse ainda';
           elOrc.innerHTML =
-            '<b style="color:#00d4ff">Repasse do governo</b> · a cada ' + orc.dias + ' dias · próximo em <b>' + falta + '</b><br>' +
+            '<b style="color:#1D3F94">Repasse do governo</b> · a cada ' + orc.dias + ' dias · próximo em <b>' + falta + '</b><br>' +
             'previsto <b>' + dinheiro(orc.previsto.total) + '</b> = base ' + dinheiro(orc.previsto.base) +
             ' + ' + orc.atividade_periodo + ' ocorrência(s) no período · ' + ult;
         }
@@ -833,7 +835,7 @@
             return '<tr><td>' + i.item + '</td>' +
               '<td style="font-variant-numeric:tabular-nums">' + i.prateleira + '</td>' +
               '<td style="font-variant-numeric:tabular-nums">' + i.rua + '</td>' +
-              '<td style="font-variant-numeric:tabular-nums;color:' + (i.perdido ? '#ffb347' : '#7a8ba5') + '">' + i.perdido + '</td>' +
+              '<td style="font-variant-numeric:tabular-nums;color:' + (i.perdido ? '#A86400' : '#5B6573') + '">' + i.perdido + '</td>' +
               (d.pode_estoque ? '<td><button class="btn-sm danger" onclick="darBaixa(\'' + i.item.replace(/'/g, "\\'") + '\')">Dar baixa</button></td>' : '') +
               '</tr>';
           }).join('')
@@ -842,7 +844,7 @@
       var te = document.getElementById('cx-emprestimos');
       te.innerHTML = (d.emprestimos && d.emprestimos.length)
         ? d.emprestimos.map(function (e) {
-            return '<tr><td>' + e.nome + '</td><td>' + e.item + '</td><td style="color:#7a8ba5">' + quando(e.pego_em) + '</td></tr>';
+            return '<tr><td>' + e.nome + '</td><td>' + e.item + '</td><td style="color:#5B6573">' + quando(e.pego_em) + '</td></tr>';
           }).join('')
         : '<tr><td colspan="3" class="empty">Ninguém está com equipamento da corp agora.</td></tr>';
 
@@ -852,9 +854,9 @@
         tp.innerHTML = (d.perdas_dia && d.perdas_dia.length)
           ? d.perdas_dia.map(function (p) {
               var dia = new Date(p.dia).toLocaleDateString('pt-BR');
-              return '<tr><td style="color:#7a8ba5;white-space:nowrap">' + dia + '</td>' +
+              return '<tr><td style="color:#5B6573;white-space:nowrap">' + dia + '</td>' +
                 '<td>' + p.item + '</td>' +
-                '<td style="text-align:right;font-variant-numeric:tabular-nums;color:#ffb347">' + p.qtd + '</td></tr>';
+                '<td style="text-align:right;font-variant-numeric:tabular-nums;color:#A86400">' + p.qtd + '</td></tr>';
             }).join('')
           : '<tr><td colspan="3" class="empty">Nenhuma peça perdida ainda.</td></tr>';
       }
@@ -864,12 +866,12 @@
       tx.innerHTML = (d.extrato && d.extrato.length)
         ? d.extrato.map(function (l) {
             var desc = l.tipo + (l.item ? ' · ' + l.item + (l.qtd > 1 ? ' x' + l.qtd : '') : '');
-            var cor = l.valor > 0 ? '#3ddc84' : (l.valor < 0 ? '#ff6b6b' : '#7a8ba5');
-            return '<tr><td style="color:#7a8ba5;white-space:nowrap">' + quando(l.criado_em) + '</td>' +
+            var cor = l.valor > 0 ? '#1D7A45' : (l.valor < 0 ? '#B23227' : '#5B6573');
+            return '<tr><td style="color:#5B6573;white-space:nowrap">' + quando(l.criado_em) + '</td>' +
               '<td>' + desc + '</td>' +
-              '<td>' + (l.quem || '—') + '</td><td style="color:#7a8ba5">' + (l.por || '—') + '</td>' +
+              '<td>' + (l.quem || '—') + '</td><td style="color:#5B6573">' + (l.por || '—') + '</td>' +
               '<td style="text-align:right;font-variant-numeric:tabular-nums;color:' + cor + '">' + (l.valor ? dinheiro(l.valor) : '—') + '</td>' +
-              '<td style="text-align:right;font-variant-numeric:tabular-nums;color:#7a8ba5">' + (l.saldo_depois === null ? '—' : dinheiro(l.saldo_depois)) + '</td></tr>';
+              '<td style="text-align:right;font-variant-numeric:tabular-nums;color:#5B6573">' + (l.saldo_depois === null ? '—' : dinheiro(l.saldo_depois)) + '</td></tr>';
           }).join('')
         : '<tr><td colspan="6" class="empty">Nenhum movimento ainda.</td></tr>';
     }

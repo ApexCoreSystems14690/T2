@@ -6,51 +6,53 @@
   <title>Facções — Santa Fé</title>
   <style>
     * { margin: 0; padding: 0; box-sizing: border-box; }
-    body { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif; background: #0a0e17; color: #f0f4f8; min-height: 100vh; }
-    .topbar { background: #131a2b; border-bottom: 1px solid #1e2a40; padding: 0.75rem 1.5rem; display: flex; align-items: center; justify-content: space-between; }
-    .topbar h1 { font-size: 1rem; color: #e0533d; letter-spacing: 0.04em; }
-    .topbar .user { display: flex; align-items: center; gap: 0.75rem; font-size: 0.85rem; color: #7a8ba5; }
-    .topbar a { color: #7a8ba5; text-decoration: none; font-size: 0.8rem; }
-    .topbar a:hover { color: #e0533d; }
+    body { font-family: var(--sans); background: #E7E9EC; color: #161A1F; min-height: 100vh; }
+    .topbar { background: #FFFFFF; border-bottom: 1px solid #D6DADF; padding: 0.75rem 1.5rem; display: flex; align-items: center; justify-content: space-between; }
+    .topbar h1 { font-size: 1rem; color: #8F3B1F;  }
+    .topbar .user { display: flex; align-items: center; gap: 0.75rem; font-size: 0.85rem; color: #5B6573; }
+    .topbar a { color: #5B6573; text-decoration: none; font-size: 0.8rem; }
+    .topbar a:hover { color: #8F3B1F; }
     .main { max-width: 800px; margin: 0 auto; padding: 2rem 1.25rem; }
     .section-title { font-size: 1.1rem; font-weight: 600; margin-bottom: 1rem; display: flex; align-items: center; justify-content: space-between; }
-    .nota { background: #1e2a40; border: 1px solid #2d3a52; border-left: 3px solid #e0533d; border-radius: 6px; padding: 0.9rem 1rem; margin-bottom: 1.5rem; font-size: 0.82rem; color: #9fb0c8; line-height: 1.5; }
-    .corp-card { background: #131a2b; border: 1px solid #1e2a40; border-radius: 8px; padding: 1rem 1.25rem; margin-bottom: 0.75rem; display: flex; align-items: center; justify-content: space-between; transition: border-color 0.15s; }
-    .corp-card:hover { border-color: #3d4a62; }
+    .nota { background: #D6DADF; border: 1px solid #C1C7CF; border-left: 3px solid #8F3B1F; border-radius: 6px; padding: 0.9rem 1rem; margin-bottom: 1.5rem; font-size: 0.82rem; color: #46505C; line-height: 1.5; }
+    .corp-card { background: #FFFFFF; border: 1px solid #D6DADF; border-radius: 8px; padding: 1rem 1.25rem; margin-bottom: 0.75rem; display: flex; align-items: center; justify-content: space-between; transition: border-color 0.15s; }
+    .corp-card:hover { border-color: #8A94A0; }
     .corp-info { display: flex; align-items: center; gap: 0.75rem; }
     .corp-color { width: 12px; height: 12px; border-radius: 3px; flex-shrink: 0; }
-    .corp-icon { width: 36px; height: 36px; border-radius: 6px; object-fit: cover; flex-shrink: 0; background: #0a0e17; }
+    .corp-icon { width: 36px; height: 36px; border-radius: 6px; object-fit: cover; flex-shrink: 0; background: #E7E9EC; }
     .corp-name { font-weight: 600; font-size: 0.95rem; }
-    .corp-members { color: #7a8ba5; font-size: 0.8rem; }
-    .corp-btn { color: #e0533d; text-decoration: none; font-size: 0.8rem; font-weight: 600; padding: 0.4rem 0.8rem; border: 1px solid #e0533d33; border-radius: 4px; }
-    .corp-btn:hover { background: #e0533d11; }
-    .empty { color: #7a8ba5; font-size: 0.9rem; text-align: center; padding: 2rem; }
-    .create-btn { background: #e0533d; color: #0a0e17; border: none; padding: 0.4rem 0.8rem; border-radius: 4px; font-size: 0.8rem; font-weight: 700; cursor: pointer; text-decoration: none; }
-    .create-btn:hover { background: #c74532; }
+    .corp-members { color: #5B6573; font-size: 0.8rem; }
+    .corp-btn { color: #8F3B1F; text-decoration: none; font-size: 0.8rem; font-weight: 600; padding: 0.4rem 0.8rem; border: 1px solid #8F3B1F33; border-radius: 4px; }
+    .corp-btn:hover { background: #8F3B1F11; }
+    .empty { color: #5B6573; font-size: 0.9rem; text-align: center; padding: 2rem; }
+    .create-btn { background: #8F3B1F; color: #E7E9EC; border: none; padding: 0.4rem 0.8rem; border-radius: 4px; font-size: 0.8rem; font-weight: 700; cursor: pointer; text-decoration: none; }
+    .create-btn:hover { background: #8F3B1F; }
     .modal-overlay { display: none; position: fixed; top: 0; left: 0; width: 100%; height: 100%; background: rgba(0,0,0,0.6); z-index: 100; align-items: center; justify-content: center; }
     .modal-overlay.active { display: flex; }
-    .modal { background: #131a2b; border: 1px solid #2d3a52; border-radius: 10px; padding: 1.5rem; width: 90%; max-width: 420px; }
-    .modal h2 { font-size: 1rem; margin-bottom: 1rem; color: #e0533d; }
-    .modal label { display: block; font-size: 0.8rem; color: #7a8ba5; margin-bottom: 0.25rem; margin-top: 0.75rem; }
-    .modal input, .modal textarea { width: 100%; background: #0a0e17; border: 1px solid #2d3a52; border-radius: 4px; padding: 0.5rem; color: #f0f4f8; font-size: 0.85rem; }
+    .modal { background: #FFFFFF; border: 1px solid #C1C7CF; border-radius: 8px; padding: 1.5rem; width: 90%; max-width: 420px; }
+    .modal h2 { font-size: 1rem; margin-bottom: 1rem; color: #8F3B1F; }
+    .modal label { display: block; font-size: 0.8rem; color: #5B6573; margin-bottom: 0.25rem; margin-top: 0.75rem; }
+    .modal input, .modal textarea { width: 100%; background: #E7E9EC; border: 1px solid #C1C7CF; border-radius: 4px; padding: 0.5rem; color: #161A1F; font-size: 0.85rem; }
     .modal textarea { height: 60px; resize: vertical; }
     .modal .actions { display: flex; gap: 0.5rem; margin-top: 1rem; justify-content: flex-end; }
-    .modal .cancel-btn { background: none; border: 1px solid #2d3a52; color: #7a8ba5; padding: 0.4rem 0.8rem; border-radius: 4px; cursor: pointer; font-size: 0.8rem; }
-    .modal .cancel-btn:hover { border-color: #3d4a62; color: #f0f4f8; }
-    .modal .error-msg { color: #ff4444; font-size: 0.8rem; margin-top: 0.5rem; display: none; }
+    .modal .cancel-btn { background: none; border: 1px solid #C1C7CF; color: #5B6573; padding: 0.4rem 0.8rem; border-radius: 4px; cursor: pointer; font-size: 0.8rem; }
+    .modal .cancel-btn:hover { border-color: #8A94A0; color: #161A1F; }
+    .modal .error-msg { color: #B23227; font-size: 0.8rem; margin-top: 0.5rem; display: none; }
   </style>
+  <link rel="stylesheet" href="/sf.css">
+
 </head>
 <body>
   <div class="topbar">
     <div style="display:flex;align-items:center;gap:1rem">
-      <a href="/" title="Voltar ao início" style="font-size:1.1rem;line-height:1">&larr; Início</a>
-      <h1>SANTA FÉ — FACÇÕES</h1>
+      <%- include('partials/placa') %>
+      <h1>Facções</h1>
     </div>
     <div class="user">
-      <a href="/empresas" style="color:#22c55e">Empresas Oficiais</a>
+      <a href="/empresas">Empresas Oficiais</a>
       <a href="/dashboard">Corporações</a>
-      <% if (typeof ehDiretor !== 'undefined' && ehDiretor) { %><a href="/organizacoes" style="color:#f59e0b">Todas</a><% } %>
-      <% if (typeof ehStaff !== 'undefined' && ehStaff) { %><a href="/admin" style="color:#ef4444">Painel Admin</a><% } %>
+      <% if (typeof ehDiretor !== 'undefined' && ehDiretor) { %><a href="/organizacoes">Todas</a><% } %>
+      <% if (typeof ehStaff !== 'undefined' && ehStaff) { %><a href="/admin">Painel Admin</a><% } %>
       <span><%= user.discord_username %></span>
       <a href="/auth/logout">Sair</a>
     </div>
@@ -97,10 +99,10 @@
             <a href="/dashboard/corp/<%= corp.id %>" class="corp-btn">Gerenciar</a>
             <% } %>
             <% if ((corp.sou_membro || corp.sou_gerente) && !corp.sou_dono) { %>
-            <button class="corp-btn" style="color:#f59e0b;border-color:#f59e0b33;cursor:pointer;background:none" onclick="sairCorp(<%= corp.id %>, '<%= corp.name.replace(/'/g, "\\'") %>')">Sair</button>
+            <button class="corp-btn" style="color:#A86400;border-color:#A8640033;cursor:pointer;background:none" onclick="sairCorp(<%= corp.id %>, '<%= corp.name.replace(/'/g, "\\'") %>')">Sair</button>
             <% } %>
             <% if ((typeof podeCorp !== 'undefined' && podeCorp) || corp.owner_id === user.id) { %>
-            <button class="corp-btn" style="color:#ef4444;border-color:#ef444433;cursor:pointer;background:none" onclick="excluirCorp(<%= corp.id %>, '<%= corp.name.replace(/'/g, "\\'") %>')">Excluir</button>
+            <button class="corp-btn" style="color:#B23227;border-color:#B2322733;cursor:pointer;background:none" onclick="excluirCorp(<%= corp.id %>, '<%= corp.name.replace(/'/g, "\\'") %>')">Excluir</button>
             <% } %>
           </div>
         </div>
@@ -122,7 +124,7 @@
       <input type="file" id="corpIconFile" accept="image/png,image/jpeg,image/gif,image/webp" style="margin-bottom:0.5rem">
       <input type="text" id="corpIcon" placeholder="Ou cole uma URL de imagem" style="font-size:0.8rem">
       <label>Cor</label>
-      <input type="color" id="corpColor" value="#8B1A1A" style="height: 36px; padding: 2px;">
+      <input type="color" id="corpColor" value="#8F271E" style="height: 36px; padding: 2px;">
       <div class="error-msg" id="createError"></div>
       <div class="actions">
         <button class="cancel-btn" onclick="document.getElementById('createModal').classList.remove('active')">Cancelar</button>

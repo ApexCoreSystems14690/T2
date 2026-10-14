@@ -3,92 +3,109 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>Santa Fé — Corporações</title>
+  <title>Santa Fé — Sistema da cidade</title>
+  <meta name="theme-color" content="#1C2127">
   <style>
-    * { margin: 0; padding: 0; box-sizing: border-box; }
-    body { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif; background: #0a0e17; color: #f0f4f8; min-height: 100vh; display: flex; align-items: center; justify-content: center; }
-    .container { text-align: center; padding: 2rem; }
-    h1 { font-size: 2.5rem; font-weight: 800; letter-spacing: 0.04em; color: #00d4ff; margin-bottom: 0.5rem; }
-    .subtitle { color: #7a8ba5; font-size: 1rem; margin-bottom: 2rem; }
-    .btn { display: inline-block; padding: 0.75rem 2rem; background: #5865F2; color: white; text-decoration: none; border-radius: 6px; font-weight: 600; font-size: 0.95rem; transition: opacity 0.15s; }
-    .btn:hover { opacity: 0.85; }
-    .user-info { margin-top: 1.5rem; }
-    .user-info a { color: #00d4ff; text-decoration: none; margin: 0 0.5rem; }
-    .opcoes { display: flex; gap: 1rem; justify-content: center; margin: 1.5rem 0 1rem; flex-wrap: wrap; }
-    .card { width: 240px; background: #131a2b; border: 1px solid #1e2a40; border-radius: 10px; padding: 1.25rem 1rem; text-decoration: none; color: #f0f4f8; text-align: left; transition: border-color .15s, transform .15s; }
-    .card:hover { border-color: #00d4ff; transform: translateY(-2px); }
-    .card .ic { font-size: 1.4rem; margin-bottom: .5rem; }
-    .card .t { font-weight: 700; font-size: .95rem; }
-    .card .d { color: #7a8ba5; font-size: .78rem; margin-top: .25rem; line-height: 1.35; }
-    .card.adm { border-color: #ef444455; }
-    .card.adm:hover { border-color: #ef4444; }
-    .card.adm .t { color: #ef4444; }
-    .card.emp { border-color: #22c55e55; }
-    .card.emp:hover { border-color: #22c55e; }
-    .card.emp .t { color: #22c55e; }
-    .card.fac { border-color: #e0533d55; }
-    .card.fac:hover { border-color: #e0533d; }
-    .card.fac .t { color: #e0533d; }
-    .card.off { opacity: .45; pointer-events: none; }
-    .card.tudo { border-color: #f59e0b55; }
-    .card.tudo:hover { border-color: #f59e0b; }
-    .card.tudo .t { color: #f59e0b; }
+    body { margin: 0; min-height: 100vh; }
+    .faixa-topo { height: 6px; background: var(--placa); }
+    .casa { max-width: 760px; margin: 0 auto; padding: 4.5rem 1.25rem 3rem; }
+    /* a placa grande: a única peça "alta" do site inteiro */
+    .placa-grande { display: inline-flex; flex-direction: column; background: #fff; border: 3px solid #10131A; border-radius: 10px; overflow: hidden; box-shadow: 0 2px 0 #10131A, 0 14px 30px rgba(22,26,31,.16); }
+    .placa-grande .faixa { background: var(--placa); color: #fff; display: flex; justify-content: space-between; align-items: center; padding: 6px 14px; font-size: 12px; font-weight: 700; letter-spacing: .2em; }
+    .placa-grande .bandeirinha { width: 18px; height: 12px; border-radius: 2px; background: linear-gradient(#1D7A45 0 50%, #F2B705 50% 100%); }
+    .placa-grande .chars { font-stretch: 75%; font-variation-settings: "wdth" 75; font-weight: 800; color: #10131A; font-size: clamp(48px, 11vw, 84px); letter-spacing: .06em; line-height: 1; padding: 10px 26px 12px; }
+    h1 { font-size: clamp(2rem, 5.2vw, 3.1rem); line-height: 1.02; margin: 2.2rem 0 .8rem; color: var(--asfalto); max-width: 16ch; }
+    .lede { color: var(--tinta-2); font-size: 1.05rem; max-width: 52ch; margin: 0 0 2rem; }
+    .entrar { min-height: 46px !important; padding: .6rem 1.2rem !important; font-size: .98rem !important; background: #5865F2 !important; border-color: #5865F2 !important; }
+    .entrar:hover { background: #4752C4 !important; }
+    .entrar .ic { width: 1.3em; height: 1.3em; }
+    .quem { display: flex; align-items: center; gap: .8rem; flex-wrap: wrap; color: var(--tinta-2); font-size: .92rem; margin: 0 0 1.1rem; }
+    .quem strong { color: var(--tinta); }
+    .quem a { margin-left: auto; color: var(--tinta-2); text-decoration: none; display: inline-flex; align-items: center; gap: .3rem; }
+    .quem a:hover { color: var(--perigo); }
+    .lista { background: var(--papel); border: 1px solid var(--linha); border-radius: var(--r); overflow: hidden; }
+    .item { display: grid; grid-template-columns: 44px 1fr; gap: .2rem 1rem; align-items: center; padding: 1rem 1.1rem; text-decoration: none; color: var(--tinta); border-top: 1px solid var(--linha); }
+    .item:first-child { border-top: 0; }
+    a.item:hover { background: var(--papel-2); }
+    a.item:hover .t { color: var(--placa); }
+    .item .selo { grid-row: span 2; width: 44px; height: 44px; border-radius: var(--rs); display: grid; place-items: center; color: #fff; }
+    .item .selo .ic { width: 22px; height: 22px; margin: 0; }
+    .item .t { font-weight: 700; font-size: 1.02rem; }
+    .item .d { color: var(--tinta-3); font-size: .88rem; line-height: 1.4; }
+    .corp .selo { background: var(--placa); }
+    .emp .selo { background: var(--ok); }
+    .fac .selo { background: var(--faccao); }
+    .adm .selo { background: var(--asfalto); }
+    .tudo .selo { background: var(--alerta); }
+    .item.off { color: var(--tinta-3); }
+    .item.off .selo { background: var(--linha-2); }
+    .rodape { margin-top: 2.5rem; color: var(--tinta-3); font-size: .82rem; }
+    @media (max-width: 560px) { .casa { padding-top: 2.5rem; } }
   </style>
+  <link rel="stylesheet" href="/sf.css">
 </head>
 <body>
-  <div class="container">
-    <h1>SANTA FÉ</h1>
-    <p class="subtitle">Sistema de Corporações</p>
+  <div class="faixa-topo"></div>
+  <main class="casa">
+    <div class="placa-grande" aria-label="Placa Santa Fé RP">
+      <div class="faixa"><span>SANTA FÉ</span><span class="bandeirinha"></span></div>
+      <div class="chars">SFE·RP</div>
+    </div>
+
+    <h1>Sistema da cidade de Santa Fé</h1>
     <% if (!user) { %>
-      <a href="/auth/discord" class="btn">Entrar com Discord</a>
+      <p class="lede">Cargos, membros, caixa e salários das corporações, facções e empresas do Santa Fé RP. Entre com a mesma conta do Discord do servidor.</p>
+      <a href="/auth/discord" class="btn entrar"><svg class="ic" aria-hidden="true"><use href="/icones.svg#discord"/></svg>Entrar com Discord</a>
     <% } else { %>
-      <div class="user-info">
-        <p>Olá, <strong><%= user.discord_username %></strong></p>
+      <p class="lede">Escolha o que você vai gerenciar hoje.</p>
+      <div class="quem">
+        <span>Conectado como <strong><%= user.discord_username %></strong></span>
+        <a href="/auth/logout"><svg class="ic" aria-hidden="true"><use href="/icones.svg#sair"/></svg>Sair</a>
       </div>
-      <div class="opcoes">
-        <%# [30/09, pedido do Julio] "Adm deveria conseguir ver facilmente todas as
-            empresas, corporacoes (so para adm Diretor ou owner)". Este card e o
-            atalho, e so aparece pro Diretor Geral pra cima. %>
+      <nav class="lista" aria-label="Painéis">
+        <a class="item corp" href="/dashboard">
+          <span class="selo"><svg class="ic" aria-hidden="true"><use href="/icones.svg#predio"/></svg></span>
+          <span class="t">Corporações</span>
+          <span class="d">Cargos, membros, caixa e configurações das corporações que você faz parte ou gerencia.</span>
+        </a>
+        <%# [30/09, pedido do Julio] Empresas Oficiais (tipo = 'empresa') %>
+        <a class="item emp" href="/empresas">
+          <span class="selo"><svg class="ic" aria-hidden="true"><use href="/icones.svg#loja"/></svg></span>
+          <span class="t">Empresas oficiais</span>
+          <span class="d">Caixa, estoque, cargos e CNPJ. Empresa não recebe repasse do governo.</span>
+        </a>
+        <%# [20/09] faccoes (corporations com tipo = 'faccao') %>
+        <a class="item fac" href="/faccoes">
+          <span class="selo"><svg class="ic" aria-hidden="true"><use href="/icones.svg#bandeira"/></svg></span>
+          <span class="t">Facções</span>
+          <span class="d">Cargos, membros e salários das facções.</span>
+        </a>
+        <%# [30/09, pedido do Julio] atalho de todas as organizacoes, so Diretor Geral pra cima %>
         <% if (typeof ehDiretor !== 'undefined' && ehDiretor) { %>
-        <a class="card tudo" href="/organizacoes">
-          <div class="ic">🗂️</div>
-          <div class="t">Todas as Organizações</div>
-          <div class="d">Corporações, facções e empresas numa lista só, com dono, membros e caixa. Direto pra gerenciar qualquer uma.</div>
+        <a class="item tudo" href="/organizacoes">
+          <span class="selo"><svg class="ic" aria-hidden="true"><use href="/icones.svg#pasta"/></svg></span>
+          <span class="t">Todas as organizações</span>
+          <span class="d">Corporações, facções e empresas numa lista só, com dono, membros e caixa.</span>
         </a>
         <% } %>
-        <%# [30/09, pedido do Julio] PRIMEIRO card: Empresas Oficiais (tipo = 'empresa') %>
-        <a class="card emp" href="/empresas">
-          <div class="ic">🏪</div>
-          <div class="t">Empresas Oficiais</div>
-          <div class="d">Caixa, estoque, cargos e CNPJ das empresas. Empresa não recebe repasse do governo.</div>
-        </a>
-        <a class="card" href="/dashboard">
-          <div class="ic">🏛️</div>
-          <div class="t">Painel de Corporações</div>
-          <div class="d">Cargos, membros e configurações das corporações que você gerencia.</div>
-        </a>
-        <%# [20/09] terceiro painel: as faccoes (corporations com tipo = 'faccao') %>
-        <a class="card fac" href="/faccoes">
-          <div class="ic">🏴</div>
-          <div class="t">Painel de Facções</div>
-          <div class="d">Cargos, membros e salários das facções. A Pavuna já está aqui.</div>
-        </a>
         <% if (user.is_admin) { %>
-        <a class="card adm" href="/admin">
-          <div class="ic">🛡️</div>
-          <div class="t">Painel Admin</div>
-          <div class="d">Controle total do servidor: jogadores, dinheiro, itens, teleporte, logs, hora e banimentos.</div>
+        <a class="item adm" href="/admin">
+          <span class="selo"><svg class="ic" aria-hidden="true"><use href="/icones.svg#escudo"/></svg></span>
+          <span class="t">Painel admin</span>
+          <span class="d">Jogadores, dinheiro, itens, teleporte, logs, horário do servidor, banimentos e segurança.</span>
         </a>
         <% } else { %>
-        <div class="card adm off" title="Somente administradores">
-          <div class="ic">🛡️</div>
-          <div class="t">Painel Admin</div>
-          <div class="d">Somente administradores.</div>
+        <div class="item adm off" title="Somente administradores">
+          <span class="selo"><svg class="ic" aria-hidden="true"><use href="/icones.svg#cadeado"/></svg></span>
+          <span class="t">Painel admin</span>
+          <span class="d">Só para a staff do servidor.</span>
         </div>
         <% } %>
-      </div>
-      <div class="user-info"><a href="/auth/logout">Sair</a></div>
+      </nav>
+      <% if (!user.roblox_id) { %>
+      <p class="rodape">Sua conta Roblox ainda não está vinculada. <a href="/dashboard/link-roblox">Vincular agora</a></p>
+      <% } %>
     <% } %>
-  </div>
+  </main>
 </body>
 </html>

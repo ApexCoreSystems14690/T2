@@ -6,30 +6,33 @@
   <title>Vincular Roblox — Santa Fé</title>
   <style>
     * { margin: 0; padding: 0; box-sizing: border-box; }
-    body { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif; background: #0a0e17; color: #f0f4f8; min-height: 100vh; display: flex; align-items: center; justify-content: center; }
-    .card { background: #131a2b; border: 1px solid #1e2a40; border-radius: 8px; padding: 2rem; max-width: 400px; width: 100%; }
+    body { font-family: var(--sans); background: #E7E9EC; color: #161A1F; min-height: 100vh; display: flex; align-items: center; justify-content: center; }
+    .card { background: #FFFFFF; border: 1px solid #D6DADF; border-radius: 8px; padding: 2rem; max-width: 400px; width: 100%; }
     h2 { font-size: 1.2rem; margin-bottom: 0.5rem; }
-    .hint { color: #7a8ba5; font-size: 0.8rem; margin-bottom: 1.5rem; }
+    .hint { color: #5B6573; font-size: 0.8rem; margin-bottom: 1.5rem; }
     .form-group { margin-bottom: 1rem; }
-    .form-group label { display: block; font-size: 0.8rem; color: #7a8ba5; font-weight: 600; margin-bottom: 0.25rem; }
-    .form-group input { width: 100%; background: #0a0e17; border: 1px solid #1e2a40; color: #f0f4f8; padding: 0.6rem 0.75rem; border-radius: 4px; font-size: 0.9rem; }
-    .form-group input:focus { outline: none; border-color: #00d4ff; }
-    .btn { width: 100%; padding: 0.6rem; background: #00d4ff; color: #0a0e17; border: none; border-radius: 4px; font-weight: 600; cursor: pointer; font-size: 0.9rem; }
+    .form-group label { display: block; font-size: 0.8rem; color: #5B6573; font-weight: 600; margin-bottom: 0.25rem; }
+    .form-group input { width: 100%; background: #E7E9EC; border: 1px solid #D6DADF; color: #161A1F; padding: 0.6rem 0.75rem; border-radius: 4px; font-size: 0.9rem; }
+    .form-group input:focus { outline: none; border-color: #1D3F94; }
+    .btn { width: 100%; padding: 0.6rem; background: #1D3F94; color: #E7E9EC; border: none; border-radius: 4px; font-weight: 600; cursor: pointer; font-size: 0.9rem; }
     .btn:hover { opacity: 0.85; }
-    .back { display: block; text-align: center; margin-top: 1rem; color: #7a8ba5; text-decoration: none; font-size: 0.85rem; }
-    .error { background: #ef444422; color: #ef4444; padding: 0.5rem; border-radius: 4px; font-size: 0.8rem; margin-bottom: 1rem; text-align: center; }
-    .ok { background: #22c55e22; color: #4ade80; padding: 0.5rem; border-radius: 4px; font-size: 0.8rem; margin-bottom: 1rem; text-align: center; }
-    .verif { margin-top: 1.4rem; padding-top: 1.2rem; border-top: 1px solid #1e2a40; }
+    .back { display: block; text-align: center; margin-top: 1rem; color: #5B6573; text-decoration: none; font-size: 0.85rem; }
+    .error { background: #B2322722; color: #B23227; padding: 0.5rem; border-radius: 4px; font-size: 0.8rem; margin-bottom: 1rem; text-align: center; }
+    .ok { background: #1D7A4522; color: #1D7A45; padding: 0.5rem; border-radius: 4px; font-size: 0.8rem; margin-bottom: 1rem; text-align: center; }
+    .verif { margin-top: 1.4rem; padding-top: 1.2rem; border-top: 1px solid #D6DADF; }
     .selo { display: inline-block; padding: .15rem .5rem; border-radius: 99px; font-size: .75rem; font-weight: 700; }
-    .selo.sim { background: #22c55e22; color: #4ade80; } .selo.nao { background: #f59e0b22; color: #fbbf24; }
-    .codigo { font-family: ui-monospace, Consolas, monospace; font-size: 1.5rem; letter-spacing: .2rem; text-align: center; background: #0a0e17; border: 1px dashed #00d4ff; border-radius: 6px; padding: .6rem; margin: .6rem 0; user-select: all; }
-    .passos { color: #7a8ba5; font-size: .8rem; line-height: 1.5; margin: .4rem 0 .8rem 1rem; }
-    .btn.sec { background: #1e2a40; color: #f0f4f8; margin-top: .4rem; }
+    .selo.sim { background: #1D7A4522; color: #1D7A45; } .selo.nao { background: #A8640022; color: #A86400; }
+    .codigo { font-stretch: 75%; font-variation-settings: 'wdth' 75; font-weight: 800; font-size: 2rem; letter-spacing: .12em; text-align: center; background: #fff; color: #10131A; border: 2px solid #10131A; border-top: 8px solid var(--placa); border-radius: 6px; padding: .35rem .6rem; margin: .6rem 0; user-select: all; }
+    .passos { color: #5B6573; font-size: .8rem; line-height: 1.5; margin: .4rem 0 .8rem 1rem; }
+    .btn.sec { background: #D6DADF; color: #161A1F; margin-top: .4rem; }
   </style>
+  <link rel="stylesheet" href="/sf.css">
+
 </head>
 <body>
   <div class="card">
-    <h2>Vincular Conta Roblox</h2>
+    <div style="margin-bottom:1.1rem"><%- include('partials/placa') %></div>
+    <h2>Vincular conta Roblox</h2>
     <p class="hint">É isto que liga a sua conta do site ao seu personagem no jogo. Sem vincular,
       as corporações em que você já entrou dentro do jogo não aparecem no painel.</p>
     <% if (typeof error !== 'undefined' && error) { %>
@@ -43,7 +46,7 @@
         <% if (error === 'roblox_fora') { %>O Roblox não respondeu agora. Tenta de novo daqui a pouco.<% } %>
       </div>
     <% } %>
-    <% if (typeof ok !== 'undefined' && ok === 'verificado') { %><div class="ok">Conta Roblox VERIFICADA ✔</div><% } %>
+    <% if (typeof ok !== 'undefined' && ok === 'verificado') { %><div class="ok">Conta Roblox verificada.</div><% } %>
     <form method="POST" action="/dashboard/link-roblox">
       <div class="form-group">
         <label>Seu nome de usuário do Roblox</label>

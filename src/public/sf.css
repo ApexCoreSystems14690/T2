@@ -1,0 +1,276 @@
+/* =====================================================================
+   SANTA FÉ — sistema visual do site (14/10)
+   Ideia: o "sistema da cidade". A marca é a PLACA (padrão Mercosul):
+   faixa azul institucional sobre chapa branca, letra condensada.
+   Asfalto em cima, concreto no fundo, papel nas superfícies.
+   Um acento só (faixa amarela de pista) pra dizer "você está aqui".
+   Este arquivo entra DEPOIS do <style> de cada página: ele manda no que
+   é comum (tipografia, barra do topo, botões, campos, tabelas, abas).
+   ===================================================================== */
+/* Archivo (variável em largura 62–125% e peso 100–900), servida daqui mesmo:
+   sem depender do Google Fonts. Licença OFL em /fontes/LICENSE-archivo.txt */
+@font-face {
+  font-family: 'Archivo';
+  font-style: normal; font-display: swap;
+  font-weight: 100 900; font-stretch: 62% 125%;
+  src: url(/fontes/archivo-wdth.woff2) format('woff2-variations'), url(/fontes/archivo-wdth.woff2) format('woff2');
+}
+:root {
+  --concreto: #E7E9EC;      /* fundo da página */
+  --papel: #FFFFFF;         /* superfícies */
+  --papel-2: #F4F5F7;       /* superfície rebaixada / hover */
+  --asfalto: #1C2127;       /* barra do topo, texto forte */
+  --asfalto-2: #2A3139;
+  --tinta: #161A1F;
+  --tinta-2: #46505C;
+  --tinta-3: #6B7480;
+  --linha: #D6DADF;
+  --linha-2: #C1C7CF;
+  --placa: #1D3F94;         /* azul da faixa da placa = ação principal */
+  --placa-2: #163275;
+  --placa-claro: #E6ECF8;
+  --pista: #F2B705;         /* faixa amarela: aba ativa, foco */
+  --ok: #1D7A45;   --ok-bg: #E3F2E9;
+  --alerta: #A86400; --alerta-bg: #FBF0DD;
+  --perigo: #B23227; --perigo-bg: #FBE7E5;
+  --faccao: #8F3B1F;
+  --r: 8px; --rs: 6px;
+  --sans: 'Archivo', system-ui, -apple-system, 'Segoe UI', sans-serif;
+  --sombra-modal: 0 18px 48px rgba(22,26,31,.22), 0 2px 6px rgba(22,26,31,.12);
+}
+
+* { box-sizing: border-box; }
+html { -webkit-text-size-adjust: 100%; }
+body {
+  font-family: var(--sans) !important;
+  font-variation-settings: "wdth" 100;
+  background: var(--concreto) !important;
+  color: var(--tinta) !important;
+  font-size: 15px; line-height: 1.45;
+  font-feature-settings: "tnum" 1;
+  -webkit-font-smoothing: antialiased;
+}
+button, input, select, textarea { font-family: inherit; }
+a { color: var(--placa); }
+::selection { background: var(--pista); color: var(--tinta); }
+:focus-visible { outline: 2px solid var(--pista) !important; outline-offset: 2px; }
+
+/* --------- tipografia de título: a letra da placa --------- */
+h1, h2, .titulo-placa {
+  font-family: var(--sans);
+  font-stretch: 75%;
+  font-variation-settings: "wdth" 75;
+  font-weight: 800;
+  letter-spacing: .005em;
+  text-transform: none;
+}
+h3, h4 { font-weight: 700; letter-spacing: 0; text-transform: none !important; }
+
+/* ===================== BARRA DO TOPO (asfalto) ===================== */
+.topbar {
+  background: var(--asfalto) !important;
+  border-bottom: 3px solid var(--placa) !important;
+  color: #C9D0D8;
+  padding: .55rem 1.25rem !important;
+  min-height: 56px;
+  position: sticky; top: 0; z-index: 50;
+  gap: 1rem; flex-wrap: wrap;
+}
+.topbar h1 {
+  color: #FFFFFF !important;
+  font-size: 1.35rem !important;
+  letter-spacing: .01em !important;
+  display: flex; align-items: center; gap: .65rem;
+  margin: 0;
+}
+.topbar a { color: #AEB7C2 !important; text-decoration: none; font-size: .88rem; display: inline-flex; align-items: center; gap: .35rem; }
+.topbar a:hover { color: #FFFFFF !important; }
+.topbar .user, .topbar .left { color: #AEB7C2; }
+.topbar .muted { color: #8A94A0 !important; }
+
+/* a placa (marca) */
+.placa {
+  display: inline-flex; flex-direction: column; align-items: stretch;
+  background: #FFFFFF; border: 1.5px solid #10131A; border-radius: 4px;
+  overflow: hidden; line-height: 1; text-decoration: none !important;
+  box-shadow: 0 1px 0 rgba(0,0,0,.35);
+  flex-shrink: 0;
+}
+.placa .faixa {
+  background: var(--placa); color: #fff;
+  font-size: 7px; font-weight: 700; letter-spacing: .14em;
+  padding: 2px 6px; display: flex; justify-content: space-between; gap: 8px;
+}
+.placa .chars {
+  color: #10131A; font-stretch: 75%; font-variation-settings: "wdth" 75;
+  font-weight: 800; font-size: 17px; letter-spacing: .06em;
+  padding: 3px 8px 3px; text-align: center;
+}
+.topbar .placa { color: inherit !important; }
+
+/* ===================== ÍCONES ===================== */
+.ic { width: 1.05em; height: 1.05em; flex-shrink: 0; vertical-align: -.16em; stroke: currentColor; fill: none; stroke-width: 2; stroke-linecap: round; stroke-linejoin: round; display: inline-block; }
+button .ic, .btn .ic { margin-right: .35em; }
+
+/* ===================== ABAS ===================== */
+.tabs { border-bottom: 1px solid var(--linha) !important; gap: .25rem !important; }
+.tab {
+  color: var(--tinta-2) !important; font-weight: 600 !important; font-size: .9rem !important;
+  border-bottom: 3px solid transparent !important; margin-bottom: -1px;
+  padding: .65rem .9rem !important; border-radius: 0 !important; background: none !important;
+}
+.tab:hover { color: var(--tinta) !important; }
+.tab.active { color: var(--tinta) !important; border-bottom-color: var(--pista) !important; }
+
+/* ===================== CAMPOS ===================== */
+input:not([type=checkbox]):not([type=radio]):not([type=color]):not([type=file]), select, textarea {
+  background: var(--papel) !important; color: var(--tinta) !important;
+  border: 1px solid var(--linha-2) !important; border-radius: var(--rs) !important;
+  font-size: .9rem; min-height: 38px;
+}
+textarea { min-height: 70px; }
+input::placeholder, textarea::placeholder { color: #9AA2AC !important; }
+input:focus, select:focus, textarea:focus { border-color: var(--placa) !important; box-shadow: 0 0 0 3px var(--placa-claro); outline: none; }
+input[type=checkbox], input[type=radio] { accent-color: var(--placa); width: 16px; height: 16px; vertical-align: -3px; }
+label { text-transform: none !important; letter-spacing: 0 !important; }
+.fg label, .modal label, .form-group label { color: var(--tinta-2) !important; font-size: .8rem !important; font-weight: 600 !important; }
+
+/* ===================== BOTÕES ===================== */
+.btn, .create-btn {
+  background: var(--placa) !important; color: #FFFFFF !important;
+  border: 1px solid var(--placa) !important; border-radius: var(--rs) !important;
+  font-weight: 600 !important; font-size: .86rem !important; letter-spacing: 0 !important;
+  padding: .5rem .95rem; min-height: 36px;
+  display: inline-flex; align-items: center; justify-content: center; gap: .1rem;
+  text-decoration: none; cursor: pointer; transition: background .12s; opacity: 1 !important; text-transform: none !important;
+}
+.btn:hover, .create-btn:hover { background: var(--placa-2) !important; }
+.btn.sec { background: var(--papel) !important; color: var(--tinta) !important; border-color: var(--linha-2) !important; }
+.btn.sec:hover { background: var(--papel-2) !important; border-color: var(--tinta-3) !important; }
+.btn.danger { background: var(--perigo) !important; border-color: var(--perigo) !important; color: #fff !important; }
+.btn.danger:hover { background: #8F271E !important; }
+.btn.sm { min-height: 30px; padding: .25rem .6rem; font-size: .78rem !important; }
+.btn:disabled, button:disabled { opacity: .45 !important; cursor: not-allowed; }
+.cancel-btn { background: var(--papel) !important; color: var(--tinta-2) !important; border: 1px solid var(--linha-2) !important; border-radius: var(--rs) !important; min-height: 36px; padding: .4rem .9rem !important; font-weight: 600; }
+.cancel-btn:hover { color: var(--tinta) !important; border-color: var(--tinta-3) !important; }
+
+/* botões pequenos de linha (tabela de jogadores, registro, cargos) */
+.acts button, .corp-btn, .btn-sm {
+  background: var(--papel); color: var(--tinta);
+  border: 1px solid var(--linha-2); border-radius: var(--rs) !important;
+  font-weight: 600; font-size: .78rem !important; padding: .3rem .6rem !important; min-height: 30px;
+  display: inline-flex; align-items: center; gap: .1rem; cursor: pointer; text-decoration: none;
+}
+.acts button:hover, .corp-btn:hover, .btn-sm:hover { border-color: var(--placa) !important; color: var(--placa) !important; background: var(--placa-claro) !important; }
+.acts button.d, .btn-sm.danger { color: var(--perigo) !important; border-color: #E2B4AF !important; }
+.acts button.d:hover { background: var(--perigo-bg) !important; border-color: var(--perigo) !important; color: var(--perigo) !important; }
+
+/* ===================== TABELAS ===================== */
+table { border-collapse: collapse; width: 100%; background: var(--papel); }
+th {
+  text-transform: none !important; letter-spacing: 0 !important;
+  color: var(--tinta-2) !important; font-size: .78rem !important; font-weight: 700 !important;
+  background: var(--papel-2); border-bottom: 1px solid var(--linha) !important; white-space: nowrap;
+}
+td { border-bottom: 1px solid #E6E9ED !important; }
+tr:hover td { background: #F7F8FA !important; }
+
+/* ===================== ETIQUETAS ===================== */
+.pill {
+  text-transform: none !important; letter-spacing: 0 !important; font-weight: 700 !important;
+  font-size: .72rem !important; border-radius: 4px !important; padding: .12rem .45rem !important;
+  background: var(--papel-2) !important; color: var(--tinta-2) !important; border: 1px solid var(--linha);
+}
+.pill.ok { background: var(--ok-bg) !important; color: var(--ok) !important; border-color: #BFE0CC; }
+.pill.err { background: var(--perigo-bg) !important; color: var(--perigo) !important; border-color: #EBC2BE; }
+.pill.warn { background: var(--alerta-bg) !important; color: var(--alerta) !important; border-color: #EDD3A8; }
+.pill.info { background: var(--placa-claro) !important; color: var(--placa) !important; border-color: #C5D2EE; }
+
+/* ===================== SUPERFÍCIES ===================== */
+.card, .corp-card, .modal, .roblox-link {
+  border-radius: var(--r) !important;
+}
+.card h3 { color: var(--tinta) !important; font-size: .95rem !important; letter-spacing: 0 !important; }
+.modal-overlay { background: rgba(22,26,31,.5) !important; backdrop-filter: blur(2px); }
+.modal { box-shadow: var(--sombra-modal); border: 1px solid var(--linha) !important; background: var(--papel) !important; }
+.modal h2 { color: var(--tinta) !important; font-size: 1.35rem !important; }
+.empty { color: var(--tinta-3) !important; }
+.muted { color: var(--tinta-3) !important; }
+
+/* aviso flutuante */
+.alert { border-radius: var(--rs) !important; box-shadow: var(--sombra-modal); font-weight: 600; }
+.alert.success { background: var(--ok) !important; color: #fff !important; }
+.alert.error { background: var(--perigo) !important; color: #fff !important; }
+
+/* rolagem discreta */
+* { scrollbar-width: thin; scrollbar-color: var(--linha-2) transparent; }
+
+@media (max-width: 640px) {
+  body { font-size: 14px; }
+  .topbar { padding: .5rem .9rem !important; }
+  .topbar h1 { font-size: 1.15rem !important; }
+  .main { padding-left: 1rem !important; padding-right: 1rem !important; }
+}
+@media (prefers-reduced-motion: reduce) { * { transition: none !important; animation: none !important; } }
+
+/* ponto de estado (SSU aberto/fechado) */
+.ponto { display: inline-block; width: 8px; height: 8px; border-radius: 50%; background: var(--tinta-3); margin-right: .4rem; vertical-align: 1px; }
+.ponto.ok { background: var(--ok); }
+
+/* ===================== LISTAS EMENDADAS =====================
+   Linhas da mesma lista viram um bloco só (não uma pilha de cartões soltos). */
+.corp-card, .rank-item {
+  border-radius: 0 !important; margin: 0 !important; margin-top: -1px !important;
+  background: var(--papel) !important; border: 1px solid var(--linha) !important; box-shadow: none !important;
+}
+.corp-card:not(.corp-card + .corp-card), .rank-item:first-child { border-top-left-radius: var(--r) !important; border-top-right-radius: var(--r) !important; margin-top: 0 !important; }
+.corp-card:not(:has(+ .corp-card)), .rank-item:last-child { border-bottom-left-radius: var(--r) !important; border-bottom-right-radius: var(--r) !important; margin-bottom: 1rem !important; }
+.corp-card:hover, .rank-item:hover { background: #F9FAFB !important; transform: none !important; }
+.rank-list { gap: 0 !important; }
+
+/* nível do cargo = mini placa */
+.rank-level {
+  background: #fff !important; color: var(--tinta) !important; border: 1.5px solid var(--tinta);
+  border-top: 4px solid var(--placa); border-radius: 3px !important;
+  font-stretch: 75%; font-variation-settings: "wdth" 75; font-weight: 800 !important; font-size: .82rem !important;
+  padding: .05rem .45rem !important; letter-spacing: .03em;
+}
+.rank-salary { font-weight: 600; }
+
+/* aviso de vínculo / notas */
+.roblox-link, .nota {
+  background: var(--papel) !important; border: 1px solid var(--linha) !important;
+  border-left: 4px solid var(--placa) !important; border-radius: var(--rs) !important; color: var(--tinta-2) !important;
+}
+.member-table tr:hover td { background: #F7F8FA !important; }
+.section-title { font-stretch: 75%; font-variation-settings: "wdth" 75; font-weight: 800 !important; font-size: 1.35rem !important; color: var(--asfalto); }
+
+/* variantes vindas das páginas antigas */
+.btn.ghost, .btn.secondary { background: var(--papel) !important; color: var(--tinta) !important; border-color: var(--linha-2) !important; }
+.btn.ghost:hover, .btn.secondary:hover { background: var(--papel-2) !important; border-color: var(--tinta-3) !important; }
+.btn.ok { background: var(--ok) !important; border-color: var(--ok) !important; }
+.btn.ok:hover { background: #165F36 !important; }
+.btn.small { min-height: 30px; padding: .25rem .65rem !important; font-size: .8rem !important; }
+
+/* botão solto dentro de tabela (ex.: Desbanir) */
+td > button:not(.btn):not(.corp-btn):not(.btn-sm) {
+  background: var(--papel); color: var(--tinta); border: 1px solid var(--linha-2); border-radius: var(--rs);
+  font-weight: 600; font-size: .78rem; padding: .3rem .6rem; min-height: 30px; cursor: pointer; display: inline-flex; align-items: center;
+}
+td > button:not(.btn):not(.corp-btn):not(.btn-sm):hover { border-color: var(--placa); color: var(--placa); background: var(--placa-claro); }
+
+/* CNPJ, slug e ids: letra da placa, não "fonte de terminal" */
+.cnpj, .sub[style*="monospace"] { font-family: var(--sans) !important; font-stretch: 75%; font-variation-settings: "wdth" 75; font-weight: 700; letter-spacing: .04em; }
+td > a.btn { background: var(--papel) !important; color: var(--tinta) !important; border-color: var(--linha-2) !important; min-height: 30px; padding: .25rem .7rem; font-size: .8rem !important; }
+td > a.btn:hover { border-color: var(--placa) !important; color: var(--placa) !important; background: var(--placa-claro) !important; }
+
+.topbar a, .acts button, .corp-btn, .btn-sm, .btn { white-space: nowrap; }
+.rank-item, .corp-card { flex-wrap: wrap; gap: .6rem; }
+.rank-actions { flex-wrap: wrap; }
+@media (max-width: 760px) {
+  /* tabela larga rola de lado em vez de espremer a coluna */
+  table { display: block; overflow-x: auto; white-space: nowrap; }
+  .acts { flex-wrap: nowrap !important; }
+  .topbar > div:last-child, .topbar .user { width: 100%; overflow-x: auto; flex-wrap: nowrap !important; gap: .9rem !important; padding-bottom: 2px; }
+  .topbar h1 { font-size: 1.15rem !important; }
+}

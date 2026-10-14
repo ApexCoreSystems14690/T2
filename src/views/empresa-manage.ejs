@@ -15,60 +15,63 @@
   <title><%= empresa.name %> — Empresa</title>
   <style>
     * { margin:0; padding:0; box-sizing:border-box; }
-    body { font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif; background:#0a0e17; color:#f0f4f8; min-height:100vh; }
-    .topbar { background:#131a2b; border-bottom:1px solid #1e2a40; padding:.75rem 1.5rem; display:flex; align-items:center; justify-content:space-between; flex-wrap:wrap; gap:.5rem; }
-    .topbar h1 { font-size:1rem; color:#22c55e; letter-spacing:.04em; }
-    .topbar .user { display:flex; align-items:center; gap:.75rem; font-size:.85rem; color:#7a8ba5; flex-wrap:wrap; }
-    .topbar a { color:#7a8ba5; text-decoration:none; font-size:.8rem; }
-    .topbar a:hover { color:#22c55e; }
+    body { font-family: var(--sans); background:#E7E9EC; color:#161A1F; min-height:100vh; }
+    .topbar { background:#FFFFFF; border-bottom:1px solid #D6DADF; padding:.75rem 1.5rem; display:flex; align-items:center; justify-content:space-between; flex-wrap:wrap; gap:.5rem; }
+    .topbar h1 { font-size:1rem; color:#1D7A45;  }
+    .topbar .user { display:flex; align-items:center; gap:.75rem; font-size:.85rem; color:#5B6573; flex-wrap:wrap; }
+    .topbar a { color:#5B6573; text-decoration:none; font-size:.8rem; }
+    .topbar a:hover { color:#1D7A45; }
     .main { max-width:1000px; margin:0 auto; padding:1.5rem 1.25rem 3rem; }
-    .cabeca { display:flex; align-items:center; gap:1rem; flex-wrap:wrap; background:#131a2b; border:1px solid #1e2a40; border-radius:10px; padding:1rem 1.25rem; margin-bottom:1rem; }
-    .cabeca .marca { width:44px; height:44px; border-radius:9px; object-fit:cover; background:#0a0e17; flex-shrink:0; }
+    .cabeca { display:flex; align-items:center; gap:1rem; flex-wrap:wrap; background:#FFFFFF; border:1px solid #D6DADF; border-radius: 8px; padding:1rem 1.25rem; margin-bottom:1rem; }
+    .cabeca .marca { width:44px; height:44px; border-radius:9px; object-fit:cover; background:#E7E9EC; flex-shrink:0; }
     .cabeca .cor { width:14px; height:44px; border-radius:4px; flex-shrink:0; }
     .cabeca h2 { font-size:1.15rem; }
-    .cnpj { font-family:ui-monospace,Menlo,Consolas,monospace; font-size:.85rem; color:#9fb0c8; background:#0a0e17; border:1px solid #2d3a52; border-radius:6px; padding:.2rem .55rem; display:inline-block; margin-top:.3rem; }
-    .cnpj b { color:#22c55e; }
+    .cnpj { font-family:ui-monospace,Menlo,Consolas,monospace; font-size:.85rem; color:#46505C; background:#E7E9EC; border:1px solid #C1C7CF; border-radius:6px; padding:.2rem .55rem; display:inline-block; margin-top:.3rem; }
+    .cnpj b { color:#1D7A45; }
     .caixa-topo { margin-left:auto; text-align:right; }
-    .caixa-topo .rot { font-size:.72rem; color:#7a8ba5; text-transform:uppercase; letter-spacing:.05em; }
+    .caixa-topo .rot { font-size:.72rem; color:#5B6573;  }
     .caixa-topo .val { font-size:1.5rem; font-weight:800; font-variant-numeric:tabular-nums; }
-    .nota { background:#1e2a40; border:1px solid #2d3a52; border-left:3px solid #22c55e; border-radius:6px; padding:.75rem .9rem; margin-bottom:1rem; font-size:.8rem; color:#9fb0c8; line-height:1.5; }
+    .nota { background:#D6DADF; border:1px solid #C1C7CF; border-left:3px solid #1D7A45; border-radius:6px; padding:.75rem .9rem; margin-bottom:1rem; font-size:.8rem; color:#46505C; line-height:1.5; }
     .abas { display:flex; gap:.4rem; flex-wrap:wrap; margin-bottom:1rem; }
-    .abas button { background:#131a2b; border:1px solid #1e2a40; color:#7a8ba5; padding:.45rem .9rem; border-radius:7px; font-size:.82rem; cursor:pointer; }
-    .abas button.on { border-color:#22c55e; color:#22c55e; background:#22c55e11; }
+    .abas button { background:#FFFFFF; border:1px solid #D6DADF; color:#5B6573; padding:.45rem .9rem; border-radius:7px; font-size:.82rem; cursor:pointer; }
+    .abas button.on { border-color:#1D7A45; color:#1D7A45; background:#1D7A4511; }
     .painel { display:none; }
     .painel.on { display:block; }
-    .cartao { background:#131a2b; border:1px solid #1e2a40; border-radius:10px; padding:1rem 1.25rem; margin-bottom:1rem; }
+    .cartao { background:#FFFFFF; border:1px solid #D6DADF; border-radius: 8px; padding:1rem 1.25rem; margin-bottom:1rem; }
     .cartao h3 { font-size:.95rem; margin-bottom:.75rem; }
     table { width:100%; border-collapse:collapse; font-size:.85rem; }
-    thead th { text-align:left; color:#7a8ba5; font-size:.7rem; text-transform:uppercase; letter-spacing:.05em; padding:.45rem .5rem; border-bottom:1px solid #1e2a40; white-space:nowrap; }
-    tbody tr { border-bottom:1px solid #141c2c; }
+    thead th { text-align:left; color:#5B6573; font-size:.7rem;  padding:.45rem .5rem; border-bottom:1px solid #D6DADF; white-space:nowrap; }
+    tbody tr { border-bottom:1px solid #E6E9ED; }
     td { padding:.55rem .5rem; vertical-align:middle; }
     .num { text-align:right; font-variant-numeric:tabular-nums; white-space:nowrap; }
-    .vazio { color:#7a8ba5; text-align:center; padding:1.5rem; font-size:.85rem; }
-    input, select { background:#0a0e17; border:1px solid #2d3a52; border-radius:6px; padding:.45rem .55rem; color:#f0f4f8; font-size:.85rem; }
+    .vazio { color:#5B6573; text-align:center; padding:1.5rem; font-size:.85rem; }
+    input, select { background:#E7E9EC; border:1px solid #C1C7CF; border-radius:6px; padding:.45rem .55rem; color:#161A1F; font-size:.85rem; }
     input[type=number] { width:90px; }
-    .btn { background:#22c55e; color:#0a0e17; border:none; padding:.45rem .9rem; border-radius:6px; font-size:.8rem; font-weight:700; cursor:pointer; }
-    .btn:hover { background:#16a34a; }
-    .btn-sm { background:none; border:1px solid #2d3a52; color:#9fb0c8; padding:.3rem .6rem; border-radius:5px; font-size:.75rem; cursor:pointer; }
-    .btn-sm:hover { border-color:#3d4a62; color:#f0f4f8; }
-    .btn-sm.danger { border-color:#ef444455; color:#ef4444; }
+    .btn { background:#1D7A45; color:#E7E9EC; border:none; padding:.45rem .9rem; border-radius:6px; font-size:.8rem; font-weight:700; cursor:pointer; }
+    .btn:hover { background:#1D7A45; }
+    .btn-sm { background:none; border:1px solid #C1C7CF; color:#46505C; padding:.3rem .6rem; border-radius:5px; font-size:.75rem; cursor:pointer; }
+    .btn-sm:hover { border-color:#8A94A0; color:#161A1F; }
+    .btn-sm.danger { border-color:#B2322755; color:#B23227; }
     .linha-form { display:flex; gap:.5rem; align-items:center; flex-wrap:wrap; }
-    .pos { color:#22c55e; } .neg { color:#ef4444; }
+    .pos { color:#1D7A45; } .neg { color:#B23227; }
     .aviso { display:none; padding:.6rem .8rem; border-radius:7px; font-size:.82rem; margin-bottom:.75rem; }
-    .aviso.ok { display:block; background:#22c55e22; color:#22c55e; }
-    .aviso.err { display:block; background:#ef444422; color:#ef4444; }
+    .aviso.ok { display:block; background:#1D7A4522; color:#1D7A45; }
+    .aviso.err { display:block; background:#B2322722; color:#B23227; }
     @media (max-width:700px) { .esconde-mob { display:none; } }
   </style>
+  <link rel="stylesheet" href="/sf.css">
+
 </head>
 <body>
   <div class="topbar">
     <div style="display:flex;align-items:center;gap:1rem">
-      <a href="/empresas">&larr; Empresas</a>
-      <h1>SANTA FÉ — EMPRESA</h1>
+      <%- include('partials/placa') %>
+      <a href="/empresas"><svg class="ic" aria-hidden="true"><use href="/icones.svg#voltar"/></svg>Empresas</a>
+      <h1>Empresa</h1>
     </div>
     <div class="user">
-      <% if (typeof ehDiretor !== 'undefined' && ehDiretor) { %><a href="/organizacoes" style="color:#f59e0b">Todas</a><% } %>
-      <% if (typeof ehStaff !== 'undefined' && ehStaff) { %><a href="/admin" style="color:#ef4444">Painel Admin</a><% } %>
+      <% if (typeof ehDiretor !== 'undefined' && ehDiretor) { %><a href="/organizacoes">Todas</a><% } %>
+      <% if (typeof ehStaff !== 'undefined' && ehStaff) { %><a href="/admin">Painel Admin</a><% } %>
       <span><%= user.discord_username %></span>
       <a href="/auth/logout">Sair</a>
     </div>
@@ -86,10 +89,10 @@
         <% if (empresa.cnpj) { %>
           <span class="cnpj">CNPJ <b><%= empresa.cnpj %></b></span>
         <% } else { %>
-          <span class="cnpj" style="color:#ef4444">sem CNPJ cadastrado</span>
+          <span class="cnpj" style="color:#B23227">sem CNPJ cadastrado</span>
         <% } %>
-        <div style="color:#7a8ba5;font-size:.75rem;margin-top:.35rem">
-          você entra aqui como <strong style="color:#22c55e"><%= papel %></strong>
+        <div style="color:#5B6573;font-size:.75rem;margin-top:.35rem">
+          você entra aqui como <strong style="color:#1D7A45"><%= papel %></strong>
         </div>
       </div>
       <div class="caixa-topo">
@@ -121,7 +124,7 @@
       <% if (poderes.gerir_estoque) { %>
       <div class="cartao">
         <h3>Comprar mercadoria</h3>
-        <p style="color:#7a8ba5;font-size:.8rem;margin-bottom:.75rem">
+        <p style="color:#5B6573;font-size:.8rem;margin-bottom:.75rem">
           O que você compra aqui é o que o entregador retira no estoque e leva pro cliente.
           Sem isso na prateleira, <strong>nenhum pedido sai</strong>.
         </p>
@@ -129,13 +132,13 @@
           <select id="cp-item"><option value="">carregando...</option></select>
           <input type="number" id="cp-qtd" min="1" value="10">
           <button class="btn" onclick="comprar()">Comprar</button>
-          <span id="cp-custo" style="color:#7a8ba5;font-size:.82rem"></span>
+          <span id="cp-custo" style="color:#5B6573;font-size:.82rem"></span>
         </div>
       </div>
       <% } else { %>
       <div class="cartao">
         <h3>Comprar mercadoria</h3>
-        <p style="color:#7a8ba5;font-size:.8rem;margin:0">
+        <p style="color:#5B6573;font-size:.8rem;margin:0">
           Quem compra mercadoria é o <strong>dono</strong> da empresa (ou um co-gerente).
           Você vê o estoque pra tocar a operação, mas a compra sai do caixa e não passa por aqui.
         </p>
@@ -152,7 +155,7 @@
 
       <div class="cartao">
         <h3>Quem está com mercadoria agora</h3>
-        <p style="color:#7a8ba5;font-size:.78rem;margin-bottom:.6rem">
+        <p style="color:#5B6573;font-size:.78rem;margin-bottom:.6rem">
           Saiu do estoque e ainda não foi entregue. Some daqui quando a entrega é concluída,
           quando a carga volta pro estoque, ou quando o funcionário some com ela.
         </p>
@@ -192,10 +195,10 @@
             <tr>
               <td>
                 <%= m.roblox_username || m.discord_username || '—' %>
-                <% if (m.eh_dono_da_corp) { %><span style="color:#f59e0b;font-size:.7rem"> · dono</span><% } %>
-                <% if (m.sou_eu) { %><span style="color:#7a8ba5;font-size:.7rem"> · você</span><% } %>
+                <% if (m.eh_dono_da_corp) { %><span style="color:#A86400;font-size:.7rem"> · dono</span><% } %>
+                <% if (m.sou_eu) { %><span style="color:#5B6573;font-size:.7rem"> · você</span><% } %>
               </td>
-              <td class="esconde-mob" style="color:#7a8ba5"><%= m.roblox_id || '—' %></td>
+              <td class="esconde-mob" style="color:#5B6573"><%= m.roblox_id || '—' %></td>
               <td>
                 <select <%= travado ? 'disabled' : '' %> onchange="mudarCargo(<%= m.id %>, this.value)">
                   <option value="" <%= !m.rank_id ? 'selected' : '' %>>Sem cargo</option>
@@ -203,7 +206,7 @@
                 </select>
               </td>
               <td class="num">R$ 500 + <strong class="<%= Number(m.adicional) > 0 ? 'pos' : '' %>"><%= Number(m.adicional).toLocaleString('pt-BR') %></strong></td>
-              <td class="esconde-mob" style="color:#7a8ba5"><%= new Date(m.joined_at).toLocaleDateString('pt-BR') %></td>
+              <td class="esconde-mob" style="color:#5B6573"><%= new Date(m.joined_at).toLocaleDateString('pt-BR') %></td>
               <td>
                 <% if (!travado) { %><button class="btn-sm danger" onclick="demitir(<%= m.id %>)">Demitir</button><% } %>
                 <% if (poderes.excluir_corp && !m.eh_dono_da_corp) { %>
@@ -221,7 +224,7 @@
     <div class="painel" id="p-cargos">
       <div class="cartao">
         <h3>Cargos</h3>
-        <p style="color:#7a8ba5;font-size:.8rem;margin-bottom:.75rem">
+        <p style="color:#5B6573;font-size:.8rem;margin-bottom:.75rem">
           O <strong>adicional</strong> é o que a empresa paga por cima dos R$ 500 de piso, e sai do caixa.
           Deixe em 0 e o funcionário recebe só o piso.
         </p>
@@ -232,7 +235,7 @@
             <% cargos.forEach(c => { %>
             <tr>
               <td><%= c.name %></td>
-              <td class="num" style="color:#7a8ba5"><%= c.level %></td>
+              <td class="num" style="color:#5B6573"><%= c.level %></td>
               <td class="num">
                 <% if (poderes.gerir_cargos) { %>
                   <input type="number" min="0" value="<%= Number(c.salary || 0) %>" id="ad-<%= c.id %>" style="width:110px;text-align:right">
@@ -270,9 +273,9 @@
             <% depositos.forEach(d => { %>
             <tr>
               <td><%= d.quem || '—' %></td>
-              <td class="esconde-mob" style="color:#7a8ba5"><%= d.roblox_id || '—' %></td>
+              <td class="esconde-mob" style="color:#5B6573"><%= d.roblox_id || '—' %></td>
               <td class="num pos">+ R$ <%= Number(d.valor).toLocaleString('pt-BR') %></td>
-              <td class="num" style="color:#7a8ba5"><%= new Date(d.em).toLocaleString('pt-BR') %></td>
+              <td class="num" style="color:#5B6573"><%= new Date(d.em).toLocaleString('pt-BR') %></td>
             </tr>
             <% }) %>
           </tbody>
@@ -326,7 +329,7 @@
         tr.innerHTML = '<td>' + i.item + '</td>' +
           '<td class="num' + (Number(i.prateleira) === 0 ? ' neg' : '') + '">' + i.prateleira + '</td>' +
           '<td class="num">' + i.rua + '</td>' +
-          '<td class="num esconde-mob" style="color:#7a8ba5">' + i.perdido + '</td>' +
+          '<td class="num esconde-mob" style="color:#5B6573">' + i.perdido + '</td>' +
           '<td>' + (PODE_ESTOQUE ? (
             '<button class="btn-sm danger" onclick="darBaixa(\'' + i.item.replace(/'/g, "\\'") + '\')">Baixa</button> ' +
             // some com a linha inteira. Só aparece quando não tem nada preso nela:
@@ -348,7 +351,7 @@
       d.emprestimos.forEach(function (e) {
         var tr = document.createElement('tr');
         tr.innerHTML = '<td>' + e.nome + '</td><td>' + e.item + '</td><td class="num">' + e.qtd + '</td>' +
-          '<td class="esconde-mob" style="color:#7a8ba5">' + new Date(e.pego_em).toLocaleString('pt-BR') + '</td>';
+          '<td class="esconde-mob" style="color:#5B6573">' + new Date(e.pego_em).toLocaleString('pt-BR') + '</td>';
         tr2.appendChild(tr);
       });
     }
@@ -362,11 +365,11 @@
       d.extrato.forEach(function (l) {
         var tr = document.createElement('tr');
         var v = Number(l.valor);
-        tr.innerHTML = '<td style="color:#7a8ba5">' + new Date(l.criado_em).toLocaleString('pt-BR') + '</td>' +
+        tr.innerHTML = '<td style="color:#5B6573">' + new Date(l.criado_em).toLocaleString('pt-BR') + '</td>' +
           '<td>' + (l.rotulo || l.tipo) + '</td>' +
-          '<td class="esconde-mob" style="color:#7a8ba5">' + (l.quem || '—') + '</td>' +
+          '<td class="esconde-mob" style="color:#5B6573">' + (l.quem || '—') + '</td>' +
           '<td class="num ' + (v >= 0 ? 'pos' : 'neg') + '">' + (v >= 0 ? '+ ' : '− ') + reais(Math.abs(v)) + '</td>' +
-          '<td class="num esconde-mob" style="color:#7a8ba5">' + (l.saldo_depois === null ? '—' : reais(l.saldo_depois)) + '</td>';
+          '<td class="num esconde-mob" style="color:#5B6573">' + (l.saldo_depois === null ? '—' : reais(l.saldo_depois)) + '</td>';
         te.appendChild(tr);
       });
     }

@@ -5,26 +5,26 @@
   <meta name="viewport" content="width=device-width, initial-scale=1">
   <title>Editais — Santa Fé Net</title>
   <style>
-    :root{ --bg:#0f1115; --card:#181b22; --card2:#20242e; --line:#2b303b; --txt:#eceef2; --fraco:#9aa1ad; --laranja:#ffaa00; --verde:#2aa564; --verm:#e94a3c; }
+    :root{ --bg:#E7E9EC; --card:#FFFFFF; --card2:#F4F5F7; --line:#D6DADF; --txt:#161A1F; --fraco:#5B6573; --laranja:#A86400; --verde:#1D7A45; --verm:#B23227; }
     *{ box-sizing:border-box; }
-    body{ margin:0; background:var(--bg); color:var(--txt); font-family:'Segoe UI',system-ui,Arial,sans-serif; }
+    body{ margin:0; background:var(--bg); color:var(--txt); font-family: var(--sans); }
     .wrap{ max-width:900px; margin:0 auto; padding:24px 16px 80px; }
     h1{ font-size:26px; margin:0 0 4px; }
     .sub{ color:var(--fraco); margin:0 0 24px; }
-    .card{ background:var(--card); border:1px solid var(--line); border-radius:12px; padding:18px; margin-bottom:16px; }
+    .card{ background:var(--card); border:1px solid var(--line); border-radius: 8px; padding:18px; margin-bottom:16px; }
     label{ display:block; font-size:13px; color:var(--fraco); margin:10px 0 4px; }
     input[type=text], textarea, select{ width:100%; background:var(--card2); border:1px solid var(--line); border-radius:8px; color:var(--txt); padding:10px; font-size:14px; font-family:inherit; }
     textarea{ min-height:60px; resize:vertical; }
-    .btn{ display:inline-block; border:0; border-radius:8px; padding:10px 16px; font-weight:600; font-size:14px; cursor:pointer; color:#111; background:var(--laranja); }
+    .btn{ display:inline-block; border:0; border-radius:8px; padding:10px 16px; font-weight:600; font-size:14px; cursor:pointer; color:#161A1F; background:var(--laranja); }
     .btn.ok{ background:var(--verde); color:#fff; }
     .btn.ghost{ background:var(--card2); color:var(--txt); border:1px solid var(--line); }
     .btn.small{ padding:6px 12px; font-size:13px; }
     .row{ display:flex; gap:8px; align-items:center; flex-wrap:wrap; }
     .q{ background:var(--card2); border:1px solid var(--line); border-radius:8px; padding:12px; margin:8px 0; }
     .q .row{ margin-top:6px; }
-    .tag{ font-size:11px; padding:3px 8px; border-radius:20px; background:var(--card2); color:var(--fraco); }
-    .tag.aberto{ background:rgba(42,165,100,.2); color:#57d08c; }
-    .tag.fechado{ background:rgba(233,74,60,.2); color:#f08a80; }
+    .tag{ font-size:11px; padding:3px 8px; border-radius: 8px; background:var(--card2); color:var(--fraco); }
+    .tag.aberto{ background:rgba(42,165,100,.2); color:#1D7A45; }
+    .tag.fechado{ background:rgba(233,74,60,.2); color:#B23227; }
     table{ width:100%; border-collapse:collapse; margin-top:12px; }
     th,td{ text-align:left; padding:8px 10px; border-bottom:1px solid var(--line); font-size:13px; vertical-align:top; }
     th{ color:var(--fraco); font-weight:600; }
@@ -32,14 +32,16 @@
     .lista-item{ display:flex; justify-content:space-between; align-items:center; padding:12px 0; border-bottom:1px solid var(--line); gap:10px; }
     .muted{ color:var(--fraco); font-size:13px; }
   </style>
+  <link rel="stylesheet" href="/sf.css">
+
 </head>
 <body>
-<div style="background:#131a2b;border-bottom:1px solid var(--line);padding:.75rem 1.5rem;display:flex;align-items:center;justify-content:space-between;">
+<div class="topbar" style="display:flex;align-items:center;justify-content:space-between;">
   <div style="display:flex;align-items:center;gap:1rem;">
-    <a href="/dashboard" style="color:var(--fraco);text-decoration:none;">&larr; Painel</a>
-    <strong style="color:var(--laranja);letter-spacing:.04em;">SANTA FÉ NET — EDITAIS</strong>
+    <%- include('partials/placa') %>
+    <a href="/dashboard"><svg class="ic" aria-hidden="true"><use href="/icones.svg#voltar"/></svg>Painel</a>
+    <h1>Editais da Santa Fé Net</h1>
   </div>
-  <a href="/" style="color:var(--fraco);text-decoration:none;font-size:.85rem;">Início</a>
 </div>
 <div class="wrap">
 
@@ -104,7 +106,7 @@
           <button type="button" class="btn ghost small" onclick="addPergunta('texto')">+ Resposta curta</button>
           <button type="button" class="btn ghost small" onclick="addPergunta('paragrafo')">+ Parágrafo</button>
           <button type="button" class="btn ghost small" onclick="addPergunta('opcoes')">+ Múltipla escolha</button>
-          <button type="button" class="btn small" style="background:var(--laranja);" onclick="novaPagina()">+ Nova página</button>
+          <button type="button" class="btn ghost small" onclick="novaPagina()">+ Nova página</button>
         </div>
         <p class="muted" style="margin-top:6px;">As perguntas obrigatórias (*) travam o avanço: o jogador só passa de página respondendo.</p>
 
@@ -132,7 +134,7 @@
                 <button class="btn ghost small" type="submit"><%= e.aberto ? 'Fechar' : 'Reabrir' %></button>
               </form>
               <form method="POST" action="/net/editais/<%= e.id %>/excluir" style="margin:0;" onsubmit="return confirm('Excluir este edital e todas as candidaturas? Não tem volta.');">
-                <button class="btn small" style="background:var(--verm);color:#fff;" type="submit">Excluir</button>
+                <button class="btn danger small" type="submit">Excluir</button>
               </form>
             </div>
           </div>
