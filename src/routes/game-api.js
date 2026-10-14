@@ -56,7 +56,8 @@ router.get('/acesso/:robloxId', async (req, res) => {
 // ===========================================================================
 // [14/10] ELEIÇÃO — o que a urna do jogo usa. Ver src/eleicao.js.
 //   POST /eleicao/config   lista de candidatos (Regras.Eleicao), mandada no boot
-//   GET  /eleicao/estado   { turno, aberto, fase, cargos, finalistas }
+//   GET  /eleicao/estado   { turno, aberto, fase, cargos, finalistas, rodada }
+//   GET  /eleicao/votou?userId=N&turno=N   { cargos: [...] }
 //   POST /eleicao/voto     { userId, nome, turno, cargo, numero, zona, contaDias }
 //                          200 ok | 409 já votou | 503 turno fechado | 400 dado errado
 //   GET  /eleicao/apuracao?turno=N   parciais (só as zonas já liberadas)
@@ -77,8 +78,19 @@ router.get('/eleicao/estado', async (req, res) => {
   try {
     const est = await EL.lerEstado(pool);
     res.json({ turno: est.turno, aberto: !!est.aberto, fase: est.fase,
-      cargos: EL.cargosDoTurno(est.turno), finalistas: est.finalistas || null });
+      cargos: EL.cargosDoTurno(est.turno), finalistas: est.finalistas || null, rodada: Number(est.rodada) || 0 });
   } catch (err) { console.error('eleicao/estado:', err.message); res.status(500).json({ error: 'Erro interno' }); }
+});
+// GET /eleicao/votou?userId=N&turno=N -> { cargos: ['presidente', ...] } (vazio se não votou).
+// Lê só a tabela de QUEM votou: nunca diz em quem.
+router.get('/eleicao/votou', async (req, res) => {
+  const uid = Number(req.query.userId), turno = Number(req.query.turno);
+  if (!Number.isSafeInteger(uid) || uid <= 0 || !Number.isInteger(turno) || turno < 1 || turno > 2)
+    return res.status(400).json({ error: 'userId e turno (1 ou 2) obrigatórios' });
+  try {
+    const r = await pool.query('SELECT cargo FROM eleicao_votantes WHERE user_id = $1 AND turno = $2 ORDER BY cargo', [uid, turno]);
+    res.json({ cargos: r.rows.map(x => x.cargo) });
+  } catch (err) { console.error('eleicao/votou:', err.message); res.status(500).json({ error: 'Erro interno' }); }
 });
 router.post('/eleicao/voto', async (req, res) => {
   const b = req.body || {};

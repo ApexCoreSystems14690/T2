@@ -97,7 +97,7 @@ router.post('/staff/acao', soStaff, async (req, res) => {
         const v1 = await cli.query('DELETE FROM eleicao_votos');
         const v2 = await cli.query('DELETE FROM eleicao_votantes');
         await cli.query(`UPDATE eleicao_estado SET turno = 1, aberto = false, fase = 'preparo', fechado_em = NULL, ordem = NULL,
-                          cronograma = NULL, viradas = NULL, finalistas = NULL, atualizado_em = NOW() WHERE id = 1`);
+                          cronograma = NULL, viradas = NULL, finalistas = NULL, rodada = rodada + 1, atualizado_em = NOW() WHERE id = 1`);
         await cli.query('COMMIT');
         await audit(req, 'eleicao:zerar', { votos: v1.rowCount, votantes: v2.rowCount });
         return res.json({ ok: true, msg: 'Eleição zerada: ' + v1.rowCount + ' votos apagados.' });
