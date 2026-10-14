@@ -1,0 +1,289 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Apuração — Santa Fé</title>
+  <style>
+    body { margin: 0; min-height: 100vh; }
+    .topbar { display: flex; align-items: center; justify-content: space-between; }
+    .topbar .lado { display: flex; align-items: center; gap: 1rem; }
+    .main { max-width: 1080px; margin: 0 auto; padding: 1.6rem 1.25rem 4rem; }
+
+    /* situação + placar de zonas */
+    .situ { display: flex; align-items: baseline; gap: .8rem; flex-wrap: wrap; margin-bottom: 1rem; }
+    .situ h2 { font-size: 2rem; margin: 0; color: var(--asfalto); }
+    .situ .fase { color: var(--tinta-2); font-size: .95rem; }
+    .placar { background: var(--papel); border: 1px solid var(--linha); border-radius: var(--r); padding: 1.1rem 1.2rem; display: grid; grid-template-columns: auto 1fr; gap: .4rem 1.6rem; align-items: center; margin-bottom: 1.4rem; }
+    .pct-grande { font-stretch: 75%; font-variation-settings: "wdth" 75; font-weight: 800; font-size: 3.4rem; line-height: .95; color: var(--asfalto); grid-row: span 2; }
+    .pct-grande small { display: block; font-size: .85rem; font-weight: 600; color: var(--tinta-3); font-stretch: 100%; font-variation-settings: "wdth" 100; margin-top: .3rem; }
+    .zonas { display: grid; grid-template-columns: repeat(12, 1fr); gap: 4px; }
+    .zonas i { height: 14px; border-radius: 2px; background: var(--linha); transition: background .4s; }
+    .zonas i.on { background: var(--placa); }
+    .numeros { display: flex; gap: 1.6rem; flex-wrap: wrap; color: var(--tinta-2); font-size: .88rem; }
+    .numeros b { color: var(--tinta); font-size: 1.05rem; }
+
+    .abas { display: flex; gap: .25rem; border-bottom: 1px solid var(--linha); margin-bottom: 1rem; align-items: flex-end; }
+    .abas .tab { cursor: pointer; }
+    .abas .espaco { flex: 1; }
+    .painel { display: none; } .painel.on { display: block; }
+
+    /* presidência */
+    .cands { background: var(--papel); border: 1px solid var(--linha); border-radius: var(--r); overflow: hidden; }
+    .cand { display: grid; grid-template-columns: 6px 74px minmax(0, 1.2fr) minmax(0, 2fr) 120px; align-items: center; gap: 0 1rem; padding: .9rem 1.1rem .9rem 0; border-top: 1px solid var(--linha); }
+    .cand:first-child { border-top: 0; }
+    .cand .cor { align-self: stretch; }
+    .cand .num { font-stretch: 75%; font-variation-settings: "wdth" 75; font-weight: 800; font-size: 2.3rem; text-align: center; color: var(--asfalto); }
+    .cand .quem b { display: block; font-size: 1.02rem; }
+    .cand .quem span { color: var(--tinta-3); font-size: .84rem; }
+    .cand .quem .sigla { display: inline-block; font-weight: 700; font-size: .75rem; padding: .05rem .4rem; border-radius: 3px; margin-right: .35rem; }
+    .barra { position: relative; height: 18px; background: var(--papel-2); border: 1px solid var(--linha); border-radius: 3px; }
+    .barra i { position: absolute; left: 0; top: 0; bottom: 0; border-radius: 2px; transition: width 1.2s cubic-bezier(.2,.7,.2,1); }
+    .barra .l51 { position: absolute; top: -5px; bottom: -5px; width: 2px; background: var(--asfalto); }
+    .barra .l51::after { content: '51%'; position: absolute; top: -15px; left: 4px; font-size: .68rem; font-weight: 700; color: var(--tinta-2); }
+    .cands .cand:not(:first-child) .l51::after { display: none; }
+    .cand .val { text-align: right; }
+    .cand .val b { display: block; font-stretch: 75%; font-variation-settings: "wdth" 75; font-weight: 800; font-size: 1.6rem; }
+    .cand .val span { color: var(--tinta-3); font-size: .8rem; }
+    .selo { display: inline-block; margin-top: .3rem; font-size: .72rem; font-weight: 800; padding: .15rem .45rem; border-radius: 3px; }
+    .selo.eleito { background: var(--ok); color: #fff; }
+    .selo.segundo { background: var(--pista); color: var(--asfalto); }
+
+    /* parlamento */
+    .parl { display: grid; grid-template-columns: 360px 1fr; gap: 1.2rem; align-items: start; }
+    .hemi { background: var(--papel); border: 1px solid var(--linha); border-radius: var(--r); padding: 1rem; text-align: center; }
+    .hemi svg { width: 100%; height: auto; display: block; }
+    .hemi .leg { display: flex; flex-wrap: wrap; gap: .4rem .9rem; justify-content: center; font-size: .82rem; color: var(--tinta-2); margin-top: .6rem; }
+    .hemi .leg i { display: inline-block; width: 10px; height: 10px; border-radius: 50%; margin-right: .3rem; vertical-align: -1px; }
+    .tbl { background: var(--papel); border: 1px solid var(--linha); border-radius: var(--r); overflow: hidden; }
+    .tbl td, .tbl th { padding: .55rem .8rem; text-align: left; }
+    .tbl td.n { text-align: right; }
+    .tbl .numc { font-stretch: 75%; font-variation-settings: "wdth" 75; font-weight: 800; font-size: 1.05rem; }
+    .vazio { color: var(--tinta-3); text-align: center; padding: 2.4rem 1rem; background: var(--papel); border: 1px solid var(--linha); border-radius: var(--r); }
+
+    /* staff */
+    .staff { margin-top: 2.4rem; background: var(--papel); border: 1px solid var(--linha); border-left: 4px solid var(--asfalto); border-radius: var(--r); padding: 1.1rem 1.2rem; }
+    .staff h3 { margin: 0 0 .3rem; }
+    .staff .linha { display: flex; gap: .5rem; flex-wrap: wrap; align-items: center; margin: .7rem 0; }
+    .staff .linha input { width: 90px; }
+    .staff .muted { font-size: .85rem; }
+
+    @media (max-width: 860px) {
+      .cand { grid-template-columns: 6px 56px 1fr 92px; }
+      .cand .barra { grid-column: 2 / -1; grid-row: 2; margin: .5rem 0 0; }
+      .cand .num { font-size: 1.8rem; }
+      .parl { grid-template-columns: 1fr; }
+      .placar { grid-template-columns: 1fr; }
+      .pct-grande { grid-row: auto; }
+    }
+  </style>
+  <link rel="stylesheet" href="/sf.css">
+  <script src="/sf.js"></script>
+</head>
+<body>
+  <div class="topbar">
+    <div class="lado">
+      <%- include('partials/placa') %>
+      <h1>Apuração</h1>
+    </div>
+    <div class="lado">
+      <a href="/dashboard">Corporações</a>
+      <% if (user.is_admin) { %><a href="/admin">Painel admin</a><% } %>
+      <a href="/apuracao/transmissao" target="_blank" rel="noopener"><svg class="ic" aria-hidden="true"><use href="/icones.svg#play"/></svg>Modo transmissão</a>
+    </div>
+  </div>
+
+  <div id="alert" class="alert"></div>
+
+  <main class="main">
+    <div class="situ">
+      <h2 id="titulo">Eleição de Santa Fé</h2>
+      <span class="fase" id="fase">Carregando…</span>
+    </div>
+
+    <section class="placar" aria-label="Andamento da apuração">
+      <div class="pct-grande"><span id="pct">0%</span><small>das zonas apuradas</small></div>
+      <div class="zonas" id="zonas" aria-hidden="true"></div>
+      <div class="numeros">
+        <span>Votos apurados <b id="n-total">0</b></span>
+        <span>Válidos <b id="n-validos">0</b></span>
+        <span>Brancos <b id="n-brancos">0</b></span>
+        <span>Nulos <b id="n-nulos">0</b></span>
+      </div>
+    </section>
+
+    <div class="abas">
+      <div class="tab active" data-p="pres">Presidência</div>
+      <div class="tab" data-p="parl" id="aba-parl">Parlamento</div>
+      <span class="espaco"></span>
+      <select id="turno-sel" style="display:none;margin-bottom:.4rem;max-width:160px" aria-label="Turno">
+        <option value="1">1º turno</option><option value="2">2º turno</option>
+      </select>
+    </div>
+
+    <section class="painel on" id="p-pres"><div id="pres"></div></section>
+    <section class="painel" id="p-parl"><div id="parl"></div></section>
+
+    <% if (ehStaff) { %>
+    <section class="staff" id="staff">
+      <h3>Controle da eleição</h3>
+      <p class="muted" id="st-resumo">—</p>
+      <div class="linha">
+        <button class="btn" id="b-abrir1" onclick="acao('abrir1')"><svg class="ic" aria-hidden="true"><use href="/icones.svg#cadeado-aberto"/></svg>Abrir 1º turno</button>
+        <button class="btn danger" id="b-fechar1" onclick="acao('fechar1')"><svg class="ic" aria-hidden="true"><use href="/icones.svg#cadeado"/></svg>Fechar 1º turno</button>
+        <button class="btn" id="b-abrir2" onclick="acao('abrir2')"><svg class="ic" aria-hidden="true"><use href="/icones.svg#cadeado-aberto"/></svg>Abrir 2º turno</button>
+        <button class="btn danger" id="b-fechar2" onclick="acao('fechar2')"><svg class="ic" aria-hidden="true"><use href="/icones.svg#cadeado"/></svg>Fechar 2º turno</button>
+      </div>
+      <div class="linha">
+        <label for="dur" style="font-weight:600;font-size:.88rem">A apuração leva</label>
+        <input id="dur" type="number" min="1" max="600" value="60"> <span class="muted">minutos depois de fechar o turno</span>
+        <button class="btn sec sm" onclick="acao('duracao')">Salvar</button>
+        <span style="flex:1"></span>
+        <button class="btn sec sm" style="color:var(--perigo)!important" onclick="zerar()"><svg class="ic" aria-hidden="true"><use href="/icones.svg#lixo"/></svg>Zerar tudo</button>
+      </div>
+      <h4 style="margin:1.2rem 0 .3rem">Votantes pra revisar</h4>
+      <p class="muted" style="margin:0 0 .5rem">Conta com menos de 30 dias ou ligada por IP a outra conta. Aqui aparece só que a pessoa votou — o voto dela não fica gravado junto com o nome em lugar nenhum.</p>
+      <div style="overflow-x:auto"><table class="tbl"><thead><tr><th>Jogador</th><th>Roblox ID</th><th>Turno</th><th>Cargo</th><th>Conta</th><th>Motivo</th><th>Quando</th></tr></thead><tbody id="st-alertas"></tbody></table></div>
+    </section>
+    <% } %>
+  </main>
+
+<script>
+  const $ = id => document.getElementById(id);
+  const fmt = n => Number(n || 0).toLocaleString('pt-BR');
+  const pct = (x, d = 1) => (Number(x || 0) * 100).toLocaleString('pt-BR', { minimumFractionDigits: d, maximumFractionDigits: d }) + '%';
+  const esc = s => String(s == null ? '' : s).replace(/[&<>"']/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
+  let alertT; function aviso(m, t) { const a = $('alert'); a.textContent = m; a.className = 'alert ' + t; clearTimeout(alertT); alertT = setTimeout(() => a.className = 'alert', 4000); }
+  // texto legível em cima da cor do partido (amarelo pede letra escura)
+  const sobre = h => { const n = parseInt(String(h).slice(1), 16); const r = n >> 16, g = (n >> 8) & 255, b = n & 255; return (r * 299 + g * 587 + b * 114) / 1000 > 150 ? '#161A1F' : '#fff'; };
+  const STAFF = <%- JSON.stringify(!!ehStaff) %>;
+  let turnoVisto = null, ultimo = null, timer = null;
+
+  for (let i = 0; i < 12; i++) $('zonas').appendChild(document.createElement('i'));
+  document.querySelectorAll('.abas .tab').forEach(t => t.onclick = () => {
+    document.querySelectorAll('.abas .tab').forEach(x => x.classList.remove('active'));
+    document.querySelectorAll('.painel').forEach(x => x.classList.remove('on'));
+    t.classList.add('active'); $('p-' + t.dataset.p).classList.add('on');
+  });
+  $('turno-sel').onchange = () => { turnoVisto = Number($('turno-sel').value); carregar(); };
+
+  function textoFase(d) {
+    const t = d.turno + 'º turno';
+    if (!d.temConfig) return 'Esperando o jogo mandar a lista de candidatos.';
+    if (d.turno < d.turnoAtual) return t + ' — resultado final.';
+    if (d.fase === 'preparo') return 'A votação ainda não abriu.';
+    if (d.fase === 'votacao') return t + ' com urnas abertas. ' + fmt(d.votantes) + ' pessoa(s) já votaram. O resultado aparece quando o turno fechar.';
+    if (d.pctApurado >= 1) return t + ' — apuração encerrada.';
+    const p = d.proximaEm;
+    return t + ' em apuração.' + (p != null ? (p < 60 ? ' Próxima zona a qualquer momento.' : ' Próxima zona em cerca de ' + Math.round(p / 60) + ' min.') : '');
+  }
+
+  function renderPres(d) {
+    const P = d.presidencia;
+    if (!P || !P.ranking.length) { $('pres').innerHTML = '<div class="vazio">Sem candidatos.</div>'; return; }
+    if (d.zonasApuradas === 0) { $('pres').innerHTML = '<div class="vazio">' + (d.fase === 'votacao' && d.turno === d.turnoAtual ? 'Votação em andamento. Nenhuma zona apurada ainda.' : 'Nenhuma zona apurada ainda.') + '</div>'; return; }
+    const fim = d.pctApurado >= 1;
+    const max = Math.max(P.limiar, ...P.ranking.map(c => c.pct)) || 1;
+    $('pres').innerHTML = '<div class="cands">' + P.ranking.map(c => {
+      let selo = '';
+      if (fim && P.eleito && P.eleito.numero === c.numero) selo = '<span class="selo eleito">' + (P.situacao === 'eleito_1o' ? 'ELEITO NO 1º TURNO' : 'ELEITO') + '</span>';
+      else if (fim && P.segundoTurno && P.segundoTurno.some(x => x.numero === c.numero)) selo = '<span class="selo segundo">2º TURNO</span>';
+      const escala = Math.max(max, P.limiar + 0.08);
+      return '<div class="cand">' +
+        '<div class="cor" style="background:' + c.cor + '"></div>' +
+        '<div class="num">' + esc(c.numero) + '</div>' +
+        '<div class="quem"><b>' + esc(c.nome) + '</b><span><span class="sigla" style="background:' + c.cor + ';color:' + sobre(c.cor) + '">' + esc(c.sigla) + '</span>' + (c.vice ? 'Vice ' + esc(c.vice) : '') + '</span></div>' +
+        '<div class="barra"><i style="width:' + (c.pct / escala * 100).toFixed(2) + '%;background:' + c.cor + '"></i>' +
+          (d.turno === 1 ? '<span class="l51" style="left:' + (P.limiar / escala * 100).toFixed(2) + '%"></span>' : '') + '</div>' +
+        '<div class="val"><b>' + pct(c.pct) + '</b><span>' + fmt(c.votos) + ' votos</span><br>' + selo + '</div>' +
+      '</div>';
+    }).join('') + '</div>';
+  }
+
+  function hemiSVG(assentos) {
+    const W = 320, H = 196, cx = 160, cy = 162, R = 120, r = 26;
+    let s = '<svg viewBox="0 0 ' + W + ' ' + H + '" role="img" aria-label="Cadeiras do parlamento">';
+    s += '<path d="M' + (cx - R - 34) + ' ' + cy + ' A' + (R + 34) + ' ' + (R + 34) + ' 0 0 1 ' + (cx + R + 34) + ' ' + cy + '" fill="none" stroke="var(--linha)" stroke-width="2"/>';
+    s += '<line x1="20" y1="' + cy + '" x2="300" y2="' + cy + '" stroke="var(--linha-2)" stroke-width="2"/>';
+    assentos.forEach((a, i) => {
+      const ang = Math.PI - i * Math.PI / (assentos.length - 1 || 1);
+      const x = cx + R * Math.cos(ang), y = cy - R * Math.sin(ang);
+      s += '<circle cx="' + x.toFixed(1) + '" cy="' + y.toFixed(1) + '" r="' + r + '" fill="' + (a.vazio ? '#C1C7CF' : a.cor) + '" stroke="#fff" stroke-width="3"><title>' + esc(a.vazio ? 'Cadeira vaga' : a.nome + ' (' + a.sigla + ')') + '</title></circle>';
+      if (!a.vazio) s += '<text x="' + x.toFixed(1) + '" y="' + (y + 5).toFixed(1) + '" text-anchor="middle" font-size="13" font-weight="800" fill="' + sobre(a.cor) + '" style="font-stretch:75%">' + esc(a.sigla).slice(0, 6) + '</text>';
+    });
+    return s + '</svg>';
+  }
+  function renderParl(d) {
+    const P = d.parlamento;
+    if (!P) { $('parl').innerHTML = '<div class="vazio">No 2º turno só tem presidência.</div>'; return; }
+    if (d.zonasApuradas === 0) { $('parl').innerHTML = '<div class="vazio">Nenhuma zona apurada ainda.</div>'; return; }
+    const fim = d.pctApurado >= 1;
+    const leg = P.porPartido.filter(p => p.cadeiras > 0).map(p => '<span><i style="background:' + p.cor + '"></i>' + esc(p.sigla) + ' ' + p.cadeiras + '</span>').join('') +
+      (P.vagas > 0 ? '<span><i style="background:#C1C7CF"></i>Vagas ' + P.vagas + '</span>' : '');
+    const linhas = P.ranking.map(c => '<tr><td class="numc">' + esc(c.numero) + '</td><td>' + esc(c.nome) + '</td><td><span class="sigla" style="background:' + c.cor + ';color:' + sobre(c.cor) + ';font-weight:700;font-size:.72rem;padding:.05rem .4rem;border-radius:3px">' + esc(c.sigla) + '</span></td><td class="n">' + fmt(c.votos) + '</td><td class="n">' + pct(c.pct) + '</td><td>' +
+      (c.eleito ? '<span class="pill ok">' + (fim ? 'Eleito' : 'Entrando') + '</span>' : '<span class="pill">' + (fim ? 'Fora' : 'Fora por enquanto') + '</span>') + '</td></tr>').join('') +
+      (P.pendentes || []).map(c => '<tr><td class="muted">—</td><td>' + esc(c.nome) + '</td><td><span class="sigla" style="background:' + c.cor + ';color:' + sobre(c.cor) + ';font-weight:700;font-size:.72rem;padding:.05rem .4rem;border-radius:3px">' + esc(c.sigla) + '</span></td><td colspan="3" class="muted">Número pendente: não recebe voto</td></tr>').join('');
+    $('parl').innerHTML = '<div class="parl"><div class="hemi">' + hemiSVG(P.assentos) + '<div class="leg">' + leg + '</div></div>' +
+      '<div style="overflow-x:auto"><table class="tbl"><thead><tr><th>Nº</th><th>Candidato</th><th>Partido</th><th style="text-align:right">Votos</th><th style="text-align:right">% válidos</th><th></th></tr></thead><tbody>' + linhas + '</tbody></table></div></div>';
+  }
+
+  async function carregar() {
+    clearTimeout(timer);
+    try {
+      const q = turnoVisto ? '?turno=' + turnoVisto : '';
+      const d = await fetch('/apuracao/dados' + q).then(r => r.json());
+      ultimo = d;
+      if (d.turnoAtual >= 2) $('turno-sel').style.display = '';
+      $('turno-sel').value = String(d.turno);
+      $('titulo').textContent = 'Eleição de Santa Fé — ' + d.turno + 'º turno';
+      $('fase').textContent = textoFase(d);
+      $('pct').textContent = Math.round((d.pctApurado || 0) * 100) + '%';
+      [...$('zonas').children].forEach((z, i) => z.classList.toggle('on', i < (d.zonasApuradas || 0)));
+      const T = d.presidencia ? d.presidencia.totais : { total: 0, validos: 0, branco: 0, nulo: 0 };
+      $('n-total').textContent = fmt(T.total); $('n-validos').textContent = fmt(T.validos);
+      $('n-brancos').textContent = fmt(T.branco); $('n-nulos').textContent = fmt(T.nulo);
+      $('aba-parl').style.display = d.turno === 2 ? 'none' : '';
+      if (d.turno === 2 && $('p-parl').classList.contains('on')) document.querySelector('.abas .tab[data-p="pres"]').click();
+      renderPres(d); renderParl(d);
+      if (STAFF) carregarStaff();
+      const prox = d.proximaEm != null ? Math.min(Math.max(d.proximaEm * 1000 + 800, 2000), 8000) : 8000;
+      timer = setTimeout(carregar, prox);
+    } catch (e) { timer = setTimeout(carregar, 8000); }
+  }
+
+  async function carregarStaff() {
+    try {
+      const d = await fetch('/apuracao/staff').then(r => r.json());
+      const e = d.estado || {};
+      const v = (d.votantes || []).map(x => x.turno + 'º turno ' + x.cargo + ': ' + fmt(x.n)).join('; ') || 'nenhum voto ainda';
+      $('st-resumo').textContent = (d.temConfig ? 'Lista recebida do jogo (' + d.candidatos.presidencia + ' presidenciáveis, ' + d.candidatos.parlamento + ' parlamentares). ' : 'O jogo ainda não mandou a lista de candidatos. ') + 'Votos: ' + v + '.';
+      if (document.activeElement !== $('dur')) $('dur').value = e.duracao_min || 60;
+      const vis = (id, on) => { $(id).style.display = on ? '' : 'none'; };
+      vis('b-abrir1', e.turno === 1 && e.fase === 'preparo');
+      vis('b-fechar1', e.turno === 1 && e.aberto);
+      vis('b-abrir2', e.turno === 1 && e.fase === 'apuracao');
+      vis('b-fechar2', e.turno === 2 && e.aberto);
+      $('st-alertas').innerHTML = (d.alertas || []).map(a => '<tr><td>' + esc(a.nome || '—') + '</td><td class="muted">' + a.user_id + '</td><td>' + a.turno + 'º</td><td>' + esc(a.cargo) + '</td><td>' + (a.conta_dias == null ? '—' : a.conta_dias + ' dias') + '</td><td>' +
+        (a.conta_dias != null && a.conta_dias < 30 ? '<span class="pill warn">conta nova</span> ' : '') + (a.revisar && !(a.conta_dias < 30) ? '<span class="pill err">ligada por IP</span>' : '') + '</td><td class="muted">' + new Date(a.votado_em).toLocaleString('pt-BR') + '</td></tr>').join('') ||
+        '<tr><td colspan="7" class="empty">Ninguém pra revisar.</td></tr>';
+    } catch (e) {}
+  }
+
+  async function acao(a, extra) {
+    const nomes = { abrir1: 'ABRIR o 1º turno', fechar1: 'FECHAR o 1º turno e começar a apuração', abrir2: 'ABRIR o 2º turno', fechar2: 'FECHAR o 2º turno e começar a apuração' };
+    if (nomes[a] && !confirm('Confirma ' + nomes[a] + '?')) return;
+    try {
+      const r = await fetch('/apuracao/staff/acao', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(Object.assign({ acao: a, duracao: Number($('dur').value) }, extra || {})) });
+      const d = await r.json();
+      if (!r.ok) throw new Error(d.error || 'erro');
+      aviso(d.msg, 'success'); turnoVisto = null; carregar();
+    } catch (e) { aviso(e.message, 'error'); }
+  }
+  function zerar() {
+    const t = prompt('Isso APAGA todos os votos e volta a eleição pro começo. Digite ZERAR pra confirmar.');
+    if (t === 'ZERAR') acao('zerar', { confirmar: 'ZERAR' });
+  }
+  carregar();
+</script>
+</body>
+</html>

@@ -1,0 +1,147 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Apuração ao vivo — Santa Fé</title>
+  <link rel="stylesheet" href="/sf.css">
+  <style>
+    /* tela de transmissão: fundo asfalto, letra enorme, nada que distraia */
+    body { margin: 0; background: var(--asfalto) !important; color: #fff !important; overflow: hidden; }
+    .tv { height: 100vh; display: grid; grid-template-rows: auto 1fr auto; padding: 2.2vh 3vw; gap: 2vh; }
+    .topo { display: flex; align-items: center; gap: 1.6vw; border-bottom: 4px solid var(--placa); padding-bottom: 1.6vh; }
+    .topo .placa { transform: scale(1.5); transform-origin: left center; margin-right: 3vw; }
+    .topo h1 { margin: 0; font-size: 4.6vh; color: #fff; }
+    .topo .ao-vivo { margin-left: auto; display: flex; align-items: center; gap: .7vw; font-weight: 800; font-size: 2.2vh; }
+    .topo .ao-vivo i { width: 1.4vh; height: 1.4vh; border-radius: 50%; background: #E0362B; animation: pisca 1.6s infinite; }
+    @keyframes pisca { 50% { opacity: .25; } }
+    .corpo { display: grid; grid-template-columns: 1fr 34vw; gap: 3vw; min-height: 0; }
+    .lista { display: flex; flex-direction: column; gap: 1.6vh; justify-content: center; }
+    .linha { display: grid; grid-template-columns: 9vh 1fr 15vh; align-items: center; gap: 1.4vw; }
+    .linha .num { font-stretch: 75%; font-variation-settings: "wdth" 75; font-weight: 800; font-size: 6.4vh; text-align: center; line-height: 1; padding: .6vh 0; border-radius: 6px; color: #fff; }
+    .linha .nome { font-weight: 700; font-size: 3vh; }
+    .linha .nome small { display: block; font-weight: 500; font-size: 1.8vh; color: #AEB7C2; }
+    .linha .barra { position: relative; height: 2.4vh; margin-top: .9vh; background: #2A3139; border-radius: 3px; }
+    .linha .barra i { position: absolute; inset: 0 auto 0 0; border-radius: 3px; transition: width 1.4s cubic-bezier(.2,.7,.2,1); }
+    .linha .barra .l51 { position: absolute; top: -.6vh; bottom: -.6vh; width: 3px; background: #fff; opacity: .8; }
+    .linha .pct { text-align: right; font-stretch: 75%; font-variation-settings: "wdth" 75; font-weight: 800; font-size: 6vh; line-height: 1; }
+    .linha .pct small { display: block; font-size: 1.8vh; font-weight: 600; color: #AEB7C2; font-stretch: 100%; font-variation-settings: "wdth" 100; }
+    .linha .selo { display: inline-block; font-size: 1.7vh; font-weight: 800; padding: .3vh .6vw; border-radius: 4px; margin-left: .8vw; vertical-align: .3vh; }
+    .selo.eleito { background: var(--ok); color: #fff; } .selo.segundo { background: var(--pista); color: var(--asfalto); }
+    .lado { display: flex; flex-direction: column; gap: 2.4vh; justify-content: center; }
+    .apurado { font-stretch: 75%; font-variation-settings: "wdth" 75; font-weight: 800; font-size: 15vh; line-height: .9; }
+    .apurado small { display: block; font-size: 2.4vh; font-weight: 600; color: #AEB7C2; font-stretch: 100%; font-variation-settings: "wdth" 100; margin-top: .8vh; }
+    .zonas { display: grid; grid-template-columns: repeat(12, 1fr); gap: .4vw; }
+    .zonas i { height: 2vh; border-radius: 2px; background: #2A3139; transition: background .5s; }
+    .zonas i.on { background: var(--pista); }
+    .hemi svg { width: 100%; height: auto; }
+    .rodape { display: flex; gap: 3vw; color: #AEB7C2; font-size: 2.2vh; align-items: center; }
+    .rodape b { color: #fff; font-size: 2.8vh; }
+    .rodape .ctl { margin-left: auto; display: flex; gap: .8vw; align-items: center; }
+    .rodape .ctl label { display: inline-flex; gap: .4vw; align-items: center; cursor: pointer; }
+    .rodape .ctl button { background: #2A3139; color: #fff; border: 1px solid #46505C; border-radius: 6px; padding: .6vh 1vw; font-weight: 600; cursor: pointer; }
+    body.limpo .rodape .ctl { opacity: 0; transition: opacity .3s; } body.limpo:hover .rodape .ctl { opacity: 1; }
+    .aviso { grid-column: 1 / -1; align-self: center; text-align: center; font-size: 4vh; color: #AEB7C2; }
+  </style>
+</head>
+<body class="limpo">
+  <div class="tv">
+    <div class="topo">
+      <%- include('partials/placa') %>
+      <h1 id="tit">Eleição de Santa Fé</h1>
+      <div class="ao-vivo"><i></i>AO VIVO</div>
+    </div>
+    <div class="corpo" id="corpo"><div class="aviso">Carregando…</div></div>
+    <div class="rodape">
+      <span>Votos apurados <b id="r-total">0</b></span>
+      <span>Brancos <b id="r-br">0</b></span>
+      <span>Nulos <b id="r-nu">0</b></span>
+      <div class="ctl">
+        <label><input type="checkbox" id="aos-poucos" checked> Revelar aos poucos</label>
+        <button onclick="tela()">Tela cheia</button>
+      </div>
+    </div>
+  </div>
+<script>
+  const $ = id => document.getElementById(id);
+  const fmt = n => Math.round(Number(n || 0)).toLocaleString('pt-BR');
+  const esc = s => String(s == null ? '' : s).replace(/[&<>"']/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
+  const sobre = h => { const n = parseInt(String(h).slice(1), 16); const r = n >> 16, g = (n >> 8) & 255, b = n & 255; return (r * 299 + g * 587 + b * 114) / 1000 > 150 ? '#161A1F' : '#fff'; };
+  function tela() { (document.fullscreenElement ? document.exitFullscreen() : document.documentElement.requestFullscreen()).catch(() => {}); }
+
+  // "revelar aos poucos": cada número sobe contando até o valor novo, em vez de pular
+  const mostrado = {};
+  function contar(id, alvo, fmtFn, dur) {
+    const el = $(id); if (!el) return;
+    const de = mostrado[id] != null ? mostrado[id] : 0;
+    mostrado[id] = alvo;
+    if (!$('aos-poucos').checked || de === alvo) { el.textContent = fmtFn(alvo); return; }
+    const t0 = performance.now();
+    (function passo(t) {
+      const k = Math.min(1, (t - t0) / dur), e = 1 - Math.pow(1 - k, 3);
+      el.textContent = fmtFn(de + (alvo - de) * e);
+      if (k < 1) requestAnimationFrame(passo);
+    })(t0);
+  }
+  const fPct = v => (v * 100).toLocaleString('pt-BR', { minimumFractionDigits: 1, maximumFractionDigits: 1 }) + '%';
+
+  function hemi(assentos) {
+    const cx = 160, cy = 165, R = 118, r = 27;
+    let s = '<svg viewBox="0 0 320 198">';
+    assentos.forEach((a, i) => {
+      const ang = Math.PI - i * Math.PI / (assentos.length - 1 || 1);
+      const x = cx + R * Math.cos(ang), y = cy - R * Math.sin(ang);
+      s += '<circle cx="' + x.toFixed(1) + '" cy="' + y.toFixed(1) + '" r="' + r + '" fill="' + (a.vazio ? '#46505C' : a.cor) + '" stroke="#1C2127" stroke-width="4"/>';
+      if (!a.vazio) s += '<text x="' + x.toFixed(1) + '" y="' + (y + 5).toFixed(1) + '" text-anchor="middle" font-size="13" font-weight="800" fill="' + sobre(a.cor) + '">' + esc(a.sigla).slice(0, 6) + '</text>';
+    });
+    return s + '</svg>';
+  }
+
+  let montado = '';
+  async function ciclo() {
+    let d;
+    try { d = await fetch('/apuracao/dados').then(r => r.json()); } catch (e) { return setTimeout(ciclo, 4000); }
+    $('tit').textContent = 'Eleição de Santa Fé — ' + d.turno + 'º turno';
+    const P = d.presidencia;
+    if (!P || d.zonasApuradas === 0) {
+      $('corpo').innerHTML = '<div class="aviso">' + (d.fase === 'votacao' ? 'Urnas abertas. A apuração começa quando o turno fechar.' : 'Aguardando a primeira zona apurada.') + '</div>';
+      montado = '';
+      return setTimeout(ciclo, 4000);
+    }
+    const fim = d.pctApurado >= 1;
+    const ids = P.ranking.map(c => c.numero).join(',') + '|' + d.turno;
+    const escala = Math.max(P.limiar + 0.08, ...P.ranking.map(c => c.pct));
+    if (montado !== ids) {
+      montado = ids;
+      $('corpo').innerHTML = '<div class="lista" id="lista"></div><div class="lado"><div class="apurado"><span id="ap">0%</span><small>das zonas apuradas</small></div><div class="zonas" id="zn">' + '<i></i>'.repeat(12) + '</div>' +
+        (d.parlamento ? '<div class="hemi" id="hm"></div>' : '') + '</div>';
+    }
+    // a ordem das linhas segue o placar (quem passa na frente sobe)
+    $('lista').innerHTML = P.ranking.slice(0, 5).map(c => {
+      let selo = '';
+      if (fim && P.eleito && P.eleito.numero === c.numero) selo = '<span class="selo eleito">' + (P.situacao === 'eleito_1o' ? 'ELEITO NO 1º TURNO' : 'ELEITO') + '</span>';
+      else if (fim && P.segundoTurno && P.segundoTurno.some(x => x.numero === c.numero)) selo = '<span class="selo segundo">2º TURNO</span>';
+      return '<div class="linha"><div class="num" style="background:' + c.cor + ';color:' + sobre(c.cor) + '">' + esc(c.numero) + '</div>' +
+        '<div><div class="nome">' + esc(c.nome) + selo + '<small>' + esc(c.sigla) + (c.vice ? ' — vice ' + esc(c.vice) : '') + '</small></div>' +
+        '<div class="barra"><i data-w="' + (c.pct / escala * 100).toFixed(2) + '" style="width:' + ((mostrado['w' + c.numero] || 0)) + '%;background:' + c.cor + '"></i>' +
+        (d.turno === 1 ? '<span class="l51" style="left:' + (P.limiar / escala * 100).toFixed(2) + '%"></span>' : '') + '</div></div>' +
+        '<div class="pct"><span id="p' + c.numero + '"></span><small id="v' + c.numero + '"></small></div></div>';
+    }).join('');
+    requestAnimationFrame(() => document.querySelectorAll('.linha .barra i').forEach(i => { i.style.width = i.dataset.w + '%'; }));
+    P.ranking.slice(0, 5).forEach(c => {
+      mostrado['w' + c.numero] = Number((c.pct / escala * 100).toFixed(2));
+      $('p' + c.numero).textContent = fPct(mostrado['p' + c.numero] || 0);
+      $('v' + c.numero).textContent = fmt(mostrado['v' + c.numero] || 0) + ' votos';
+      contar('p' + c.numero, c.pct, fPct, 1400);
+      contar('v' + c.numero, c.votos, v => fmt(v) + ' votos', 1400);
+    });
+    contar('ap', d.pctApurado, v => Math.round(v * 100) + '%', 1600);
+    [...$('zn').children].forEach((z, i) => z.classList.toggle('on', i < d.zonasApuradas));
+    if (d.parlamento && $('hm')) $('hm').innerHTML = hemi(d.parlamento.assentos);
+    contar('r-total', P.totais.total, fmt, 1400); contar('r-br', P.totais.branco, fmt, 1400); contar('r-nu', P.totais.nulo, fmt, 1400);
+    setTimeout(ciclo, 4000);
+  }
+  ciclo();
+</script>
+</body>
+</html>

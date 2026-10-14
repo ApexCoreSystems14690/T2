@@ -53,6 +53,77 @@ router.get('/acesso/:robloxId', async (req, res) => {
   }
 });
 
+// ===========================================================================
+// [14/10] ELEIÇÃO — o que a urna do jogo usa. Ver src/eleicao.js.
+//   POST /eleicao/config   lista de candidatos (Regras.Eleicao), mandada no boot
+//   GET  /eleicao/estado   { turno, aberto, fase, cargos, finalistas }
+//   POST /eleicao/voto     { userId, nome, turno, cargo, numero, zona, contaDias }
+//                          200 ok | 409 já votou | 503 turno fechado | 400 dado errado
+//   GET  /eleicao/apuracao?turno=N   parciais (só as zonas já liberadas)
+// ===========================================================================
+const EL = require('../eleicao');
+router.post('/eleicao/config', async (req, res) => {
+  try {
+    const cfg = EL.normalizarConfig(req.body || {});
+    if (!cfg.presidencia.length) return res.status(400).json({ error: 'config sem presidência' });
+    await pool.query(
+      `INSERT INTO eleicao_config (id, config, recebido_em) VALUES (1, $1, NOW())
+       ON CONFLICT (id) DO UPDATE SET config = EXCLUDED.config, recebido_em = NOW()`, [JSON.stringify(req.body)]);
+    res.json({ ok: true, presidencia: cfg.presidencia.length, parlamento: cfg.parlamento.length,
+      pendentes: cfg.parlamento.filter(c => c.pendente).length });
+  } catch (err) { console.error('eleicao/config:', err.message); res.status(500).json({ error: 'Erro interno' }); }
+});
+router.get('/eleicao/estado', async (req, res) => {
+  try {
+    const est = await EL.lerEstado(pool);
+    res.json({ turno: est.turno, aberto: !!est.aberto, fase: est.fase,
+      cargos: EL.cargosDoTurno(est.turno), finalistas: est.finalistas || null });
+  } catch (err) { console.error('eleicao/estado:', err.message); res.status(500).json({ error: 'Erro interno' }); }
+});
+router.post('/eleicao/voto', async (req, res) => {
+  const b = req.body || {};
+  const uid = Number(b.userId);
+  const turno = Number(b.turno);
+  const zona = Number(b.zona);
+  const cargo = String(b.cargo || '');
+  if (!Number.isFinite(uid) || uid <= 0 || !Number.isInteger(zona) || zona < 1 || zona > EL.ZONAS)
+    return res.status(400).json({ ok: false, error: 'dado_invalido' });
+  try {
+    const est = await EL.lerEstado(pool);
+    if (!est.aberto || turno !== est.turno) return res.status(503).json({ ok: false, error: 'turno_fechado' });
+    if (!EL.cargosDoTurno(est.turno).includes(cargo)) return res.status(400).json({ ok: false, error: 'cargo_fora_do_turno' });
+    const cfg = await EL.lerConfig(pool);
+    if (!cfg) return res.status(503).json({ ok: false, error: 'sem_config' });
+    const numero = EL.normalizarVoto(cfg, cargo, b.numero, est.turno === 2 ? est.finalistas : null);
+    const dias = Number.isFinite(Number(b.contaDias)) ? Math.max(0, Math.floor(Number(b.contaDias))) : null;
+    // revisão manual: conta nova OU conta ligada por IP a outra (anti-alt, só vínculo verificado)
+    let revisar = dias !== null && dias < 30;
+    if (!revisar) { try { const a = await SEG.altsDe(pool, uid); revisar = a.contas.length > 0; } catch (e) {} }
+    const cli = await pool.connect();
+    try {
+      await cli.query('BEGIN');
+      const q = await cli.query(
+        `INSERT INTO eleicao_votantes (user_id, nome, turno, cargo, conta_dias, revisar) VALUES ($1,$2,$3,$4,$5,$6)
+         ON CONFLICT (user_id, turno, cargo) DO NOTHING RETURNING 1`,
+        [uid, b.nome ? String(b.nome).slice(0, 64) : null, est.turno, cargo, dias, revisar]);
+      if (!q.rowCount) { await cli.query('ROLLBACK'); return res.status(409).json({ ok: false, error: 'ja_votou' }); }
+      // nenhuma coluna aqui aponta pra linha de cima
+      await cli.query(`INSERT INTO eleicao_votos (id, turno, cargo, numero, zona) VALUES ($1,$2,$3,$4,$5)`,
+        [EL.novoId(), est.turno, cargo, numero, zona]);
+      await cli.query('COMMIT');
+    } catch (e) { await cli.query('ROLLBACK').catch(() => {}); throw e; }
+    finally { cli.release(); }
+    res.json({ ok: true });
+  } catch (err) {
+    console.error('eleicao/voto:', err.message);
+    res.status(500).json({ ok: false, error: 'erro_interno' });
+  }
+});
+router.get('/eleicao/apuracao', async (req, res) => {
+  try { res.json(await EL.apuracao(pool, req.query.turno)); }
+  catch (err) { console.error('eleicao/apuracao:', err.message); res.status(500).json({ error: 'Erro interno' }); }
+});
+
 // [14/10] /vincular CODIGO digitado DENTRO do jogo: la o UserId e garantido pela
 // Roblox, entao isto PROVA que quem gerou o codigo no site e dono da conta.
 router.post('/vincular', async (req, res) => {

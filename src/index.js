@@ -1145,6 +1145,9 @@ async function start() {
     // [14/10 SEGURANCA] hash de IP por conta (anti-alt), vinculo Roblox verificado, config
     try { await require('./seguranca').migrar(pool); }
     catch (e) { console.error('migração segurança:', e.message); }
+    // [14/10 ELEICAO] votantes e votos em tabelas separadas (voto secreto), estado do turno
+    try { await require('./eleicao').migrar(pool); }
+    catch (e) { console.error('migração eleição:', e.message); }
     console.log('✅ Banco migrado');
   } catch (err) {
     console.error('❌ Migração falhou:', err.message);
@@ -1202,6 +1205,36 @@ async function start() {
   }, 300000).unref();
   app.locals.limitar = limitar;
   app.use(express.static(path.join(__dirname, 'public')));
+
+  // [14/10] FOTO DA ORGANIZACAO VINDA DO ROBLOX. O link antigo
+  // www.roblox.com/asset-thumbnail/image?assetId=N foi DESLIGADO pela Roblox e
+  // agora volta sem imagem (o Jornal Nacional ficou com a foto quebrada).
+  // O jeito atual e perguntar ao thumbnails.roblox.com qual a URL da imagem.
+  // Aqui o site faz isso e redireciona; guarda a resposta 6 h pra nao bater
+  // na Roblox a cada pagina. As views chamam fotoUrl(icon_url).
+  const cacheThumb = new Map();
+  app.get('/roblox-thumb/:assetId', limitar('thumb', 120, 60), async (req, res) => {
+    const id = String(req.params.assetId || '').replace(/\D/g, '');
+    if (!id || id.length > 20) return res.status(400).end();
+    const c = cacheThumb.get(id);
+    if (c && c.ate > Date.now()) return c.url ? res.redirect(302, c.url) : res.status(404).end();
+    let url = null;
+    try {
+      const r = await fetch('https://thumbnails.roblox.com/v1/assets?assetIds=' + id + '&size=420x420&format=Png&isCircular=false');
+      const j = r.ok ? await r.json() : null;
+      const d = j && j.data && j.data[0];
+      if (d && d.state === 'Completed' && /^https:\/\/[a-z0-9.-]+\.rbxcdn\.com\//.test(d.imageUrl || '')) url = d.imageUrl;
+    } catch (e) { /* sem rede: cai no 404 e a pagina mostra as iniciais */ }
+    cacheThumb.set(id, { url, ate: Date.now() + (url ? 6 : 0.25) * 3600 * 1000 });
+    if (cacheThumb.size > 500) cacheThumb.delete(cacheThumb.keys().next().value);
+    res.set('Cache-Control', 'public, max-age=3600');
+    return url ? res.redirect(302, url) : res.status(404).end();
+  });
+  app.locals.fotoUrl = function (u) {
+    const s = String(u || '');
+    const m = s.match(/^https?:\/\/(?:www\.)?roblox\.com\/asset-thumbnail\/image\?(?:.*&)?assetId=(\d+)/i);
+    return m ? '/roblox-thumb/' + m[1] : s;
+  };
 
   // Sessão com PostgreSQL
   app.use(session({
@@ -1261,6 +1294,7 @@ async function start() {
   app.use('/api/corps', require('./routes/corps-api'));
   app.use('/api/admin', require('./routes/admin-api'));
   app.use('/admin', require('./routes/admin'));
+  app.use('/apuracao', require('./routes/apuracao'));   // [14/10] eleição
   app.use('/empresas', require('./routes/empresas'));   // [30/09] Empresas Oficiais
   app.use('/organizacoes', require('./routes/organizacoes'));  // [30/09] vista de staff: corp + faccao + empresa
   app.use('/faccoes', require('./routes/faccoes'));

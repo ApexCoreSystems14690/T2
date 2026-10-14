@@ -40,6 +40,7 @@
     .modal .error-msg { color: #B23227; font-size: 0.8rem; margin-top: 0.5rem; display: none; }
   </style>
   <link rel="stylesheet" href="/sf.css">
+  <script src="/sf.js"></script>
 
 </head>
 <body>
@@ -78,9 +79,9 @@
         <div class="corp-card">
           <div class="corp-info">
             <% if (corp.has_icon_file) { %>
-              <img src="/api/corps/<%= corp.id %>/icon" class="corp-icon" alt="<%= corp.name %>">
+              <img src="/api/corps/<%= corp.id %>/icon" data-nome="<%= corp.name %>" data-cor="<%= corp.color || '#1D3F94' %>" onerror="sfSemFoto(this)" class="corp-icon" alt="<%= corp.name %>">
             <% } else if (corp.icon_url) { %>
-              <img src="<%= corp.icon_url %>" class="corp-icon" alt="<%= corp.name %>">
+              <img src="<%= fotoUrl(corp.icon_url) %>" data-nome="<%= corp.name %>" data-cor="<%= corp.color || '#1D3F94' %>" onerror="sfSemFoto(this)" class="corp-icon" alt="<%= corp.name %>">
             <% } else { %>
               <div class="corp-color" style="background: <%= corp.color %>"></div>
             <% } %>

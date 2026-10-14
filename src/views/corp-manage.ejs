@@ -73,6 +73,7 @@
     .rank-select { background: #E7E9EC; border: 1px solid #D6DADF; color: #161A1F; padding: 0.3rem 0.5rem; border-radius: 4px; font-size: 0.8rem; }
   </style>
   <link rel="stylesheet" href="/sf.css">
+  <script src="/sf.js"></script>
 
 </head>
 <body>
@@ -80,9 +81,9 @@
     <%- include('partials/placa') %>
     <a href="/dashboard"><svg class="ic" aria-hidden="true"><use href="/icones.svg#voltar"/></svg>Corporações</a>
     <% if (corporation.has_icon_file) { %>
-      <img src="/api/corps/<%= corporation.id %>/icon" style="width:28px;height:28px;border-radius:5px;object-fit:cover">
+      <img src="/api/corps/<%= corporation.id %>/icon" data-nome="<%= corporation.name %>" data-cor="<%= corporation.color || '#1D3F94' %>" onerror="sfSemFoto(this)" style="width:28px;height:28px;border-radius:5px;object-fit:cover">
     <% } else if (corporation.icon_url) { %>
-      <img src="<%= corporation.icon_url %>" style="width:28px;height:28px;border-radius:5px;object-fit:cover">
+      <img src="<%= fotoUrl(corporation.icon_url) %>" data-nome="<%= corporation.name %>" data-cor="<%= corporation.color || '#1D3F94' %>" onerror="sfSemFoto(this)" style="width:28px;height:28px;border-radius:5px;object-fit:cover">
     <% } %>
     <h1><%= corporation.name %></h1>
     <span style="color:#8A94A0;font-size:0.8rem;margin-left:auto">slug: <%= corporation.slug %></span>
@@ -445,12 +446,12 @@
       </div>
       <% if (corporation.has_icon_file) { %>
         <div style="margin-bottom:1rem;display:flex;align-items:center;gap:0.75rem">
-          <img src="/api/corps/<%= corporation.id %>/icon" style="width:64px;height:64px;border-radius:8px;object-fit:cover;border:1px solid #D6DADF">
+          <img src="/api/corps/<%= corporation.id %>/icon" data-nome="<%= corporation.name %>" data-cor="<%= corporation.color || '#1D3F94' %>" onerror="sfSemFoto(this)" style="width:64px;height:64px;border-radius:8px;object-fit:cover;border:1px solid #D6DADF">
           <button class="btn-sm danger" onclick="removeIcon()">Remover imagem</button>
         </div>
       <% } else if (corporation.icon_url) { %>
         <div style="margin-bottom:1rem">
-          <img src="<%= corporation.icon_url %>" style="width:64px;height:64px;border-radius:8px;object-fit:cover;border:1px solid #D6DADF">
+          <img src="<%= fotoUrl(corporation.icon_url) %>" data-nome="<%= corporation.name %>" data-cor="<%= corporation.color || '#1D3F94' %>" onerror="sfSemFoto(this)" style="width:64px;height:64px;border-radius:8px;object-fit:cover;border:1px solid #D6DADF">
         </div>
       <% } %>
       <div class="form-row">

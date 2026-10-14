@@ -37,6 +37,7 @@
     .fac .selo { background: var(--faccao); }
     .adm .selo { background: var(--asfalto); }
     .tudo .selo { background: var(--alerta); }
+    .elei .selo { background: var(--asfalto-2); }
     .item.off { color: var(--tinta-3); }
     .item.off .selo { background: var(--linha-2); }
     .rodape { margin-top: 2.5rem; color: var(--tinta-3); font-size: .82rem; }
@@ -79,6 +80,12 @@
           <span class="selo"><svg class="ic" aria-hidden="true"><use href="/icones.svg#bandeira"/></svg></span>
           <span class="t">Facções</span>
           <span class="d">Cargos, membros e salários das facções.</span>
+        </a>
+        <%# [14/10] eleicao: qualquer um logado ve a apuracao %>
+        <a class="item elei" href="/apuracao">
+          <span class="selo"><svg class="ic" aria-hidden="true"><use href="/icones.svg#urna"/></svg></span>
+          <span class="t">Apuração</span>
+          <span class="d">Resultado da eleição de Santa Fé, zona por zona, com presidência e parlamento.</span>
         </a>
         <%# [30/09, pedido do Julio] atalho de todas as organizacoes, so Diretor Geral pra cima %>
         <% if (typeof ehDiretor !== 'undefined' && ehDiretor) { %>
