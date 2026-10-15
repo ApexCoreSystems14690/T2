@@ -92,3 +92,6 @@ backup_perfis/*.csv
 backup*.sql
 dump*.sql
 *.sql.gz
+
+# [15/10] copias de seguranca locais dos arquivos antes de cada mexida (nao vao pro GitHub)
+_backup_*/
