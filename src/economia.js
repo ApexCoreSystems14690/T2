@@ -44,28 +44,32 @@ function montar(movs, totalCirculando) {
     let s = porStaff.get(m.staffKey);
     if (!s) {
       s = { staff: m.staff, cargo: m.cargo, criado: 0, tirado: 0, acoes: 0, desconhecidos: 0,
-            maior: 0, alvos: new Set(), paraSi: 0, paraSiValor: 0, ultimo: null };
+            maior: 0, alvos: new Set(), paraSi: 0, paraSiValor: 0, paraSiSetado: 0, setadoSemAntes: 0, ultimo: null };
       porStaff.set(m.staffKey, s);
     }
     s.acoes++;
-    if (m.delta == null) s.desconhecidos++;
+    // 'setar' antigo sem antes: o valor setado é o TETO do que pode ter nascido (setar pra V cria no máximo V)
+    if (m.delta == null) { s.desconhecidos++; s.setadoSemAntes += Math.max(0, m.valor || 0); }
     else if (m.delta > 0) { s.criado += m.delta; s.maior = Math.max(s.maior, m.delta); }
     else s.tirado += -m.delta;
     s.alvos.add(m.alvoId || m.alvo);
-    if (m.paraSi) { s.paraSi++; s.paraSiValor += Math.max(0, m.delta || 0); }
+    if (m.paraSi) { s.paraSi++; s.paraSiValor += Math.max(0, m.delta || 0); if (m.delta == null) s.paraSiSetado += Math.max(0, m.valor || 0); }
     if (!s.ultimo || new Date(m.quando) > new Date(s.ultimo)) s.ultimo = m.quando;
   }
   const ranking = [...porStaff.values()].map(s => ({
     ...s, alvos: s.alvos.size,
     liquido: s.criado - s.tirado,
     pct: totalCirculando > 0 ? (s.criado - s.tirado) / totalCirculando : 0,
-  })).sort((a, b) => b.liquido - a.liquido);
+    teto: s.criado - s.tirado + s.setadoSemAntes,
+    pctTeto: totalCirculando > 0 ? (s.criado - s.tirado + s.setadoSemAntes) / totalCirculando : 0,
+  })).sort((a, b) => b.teto - a.teto);
   const criado = movs.reduce((t, m) => t + (m.delta > 0 ? m.delta : 0), 0);
   const tirado = movs.reduce((t, m) => t + (m.delta < 0 ? -m.delta : 0), 0);
   return {
     ranking,
     totais: { criado, tirado, liquido: criado - tirado, acoes: movs.length,
       desconhecidos: movs.filter(m => m.delta == null).length,
+      semAntesValor: movs.reduce((t, m) => t + (m.delta == null ? Math.max(0, m.valor || 0) : 0), 0),
       pct: totalCirculando > 0 ? (criado - tirado) / totalCirculando : 0 },
   };
 }
@@ -98,6 +102,10 @@ async function relatorio(dias) {
     [TIPOS_CMD])).rows;
   const porId = new Map(usuarios.map(u => [u.id, u]));
   const porRoblox = new Map(usuarios.filter(u => u.roblox_id).map(u => [String(u.roblox_id), u]));
+  // [15/10] o mesmo staff aparecia 2x (uma pelo id, outra só pelo nome no extrato da corp / no jogo)
+  const porNome = new Map();
+  for (const u of usuarios) for (const n of [u.roblox_username, u.discord_username]) if (n) porNome.set(String(n).toLowerCase(), u);
+  const acharNome = n => (n ? porNome.get(String(n).toLowerCase()) : null) || null;
   const cargoNome = u => { if (u && perm.ehDono(u)) return 'Dono'; const c = u ? perm.cargoDe(u) : null; return c ? ((perm.CARGOS[c] || {}).nome || c) : null; };
 
   const logs = (await pool.query(
@@ -118,7 +126,7 @@ async function relatorio(dias) {
       staff = nomeUser(u) || 'painel (usuário apagado)';
       chave = 'u' + (l.created_by || '?');
     } else {
-      u = d.staffId ? porRoblox.get(String(d.staffId)) : null;
+      u = (d.staffId ? porRoblox.get(String(d.staffId)) : null) || acharNome(l.jogador);
       staff = l.jogador || (u && nomeUser(u)) || '?';
       chave = u ? 'u' + u.id : 'r' + (d.staffId || l.jogador);
     }
@@ -166,7 +174,7 @@ async function relatorio(dias) {
       ORDER BY l.id DESC LIMIT 1000`, pj).catch(() => ({ rows: [] }))).rows;
   for (const a of aportes) {
     const d = a.detalhe || {};
-    const u = d.staff_user_id ? porId.get(Number(d.staff_user_id)) : null;
+    const u = (d.staff_user_id ? porId.get(Number(d.staff_user_id)) : null) || acharNome(a.por);
     const v = Number(a.valor) || 0;
     movs.push({
       quando: a.quando, staff: (u && nomeUser(u)) || a.por || '?', staffKey: u ? 'u' + u.id : 'n' + a.por,

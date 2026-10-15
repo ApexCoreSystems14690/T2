@@ -365,11 +365,11 @@
         <div class="card" style="margin:0"><div class="muted" style="font-size:.68rem">Circulando na cidade</div><div id="ec-total" style="font-size:clamp(1.15rem,4.6vw,1.6rem);white-space:nowrap;font-weight:800;color:#1D3F94">–</div><div class="muted" id="ec-total-sub" style="font-size:.72rem"></div></div>
         <div class="card" style="margin:0"><div class="muted" style="font-size:.68rem">Carteiras + bancos</div><div id="ec-jog" style="font-size:clamp(1.15rem,4.6vw,1.6rem);white-space:nowrap;font-weight:800">–</div><div class="muted" id="ec-jog-sub" style="font-size:.72rem"></div></div>
         <div class="card" style="margin:0"><div class="muted" style="font-size:.68rem">Caixas de corps/empresas</div><div id="ec-cx" style="font-size:clamp(1.15rem,4.6vw,1.6rem);white-space:nowrap;font-weight:800">–</div><div class="muted" id="ec-cx-sub" style="font-size:.72rem"></div></div>
-        <div class="card" style="margin:0;border-color:#EBC2BE"><div class="muted" style="font-size:.68rem">Criado pela staff no período</div><div id="ec-staff" style="font-size:clamp(1.15rem,4.6vw,1.6rem);white-space:nowrap;font-weight:800;color:#B23227">–</div><div class="muted" id="ec-staff-sub" style="font-size:.72rem"></div></div>
+        <div class="card" style="margin:0;border-color:#EBC2BE"><div class="muted" style="font-size:.68rem">Criado pela staff no período (até)</div><div id="ec-staff" style="font-size:clamp(1.15rem,4.6vw,1.6rem);white-space:nowrap;font-weight:800;color:#B23227">–</div><div class="muted" id="ec-staff-sub" style="font-size:.72rem"></div></div>
       </div>
-      <p class="muted" style="font-size:.74rem;margin:0 0 .8rem">Dinheiro de jogador = foto de quando ele saiu da cidade pela última vez. % = parte do total circulando hoje.</p>
+      <p class="muted" style="font-size:.74rem;margin:0 0 .8rem">Dinheiro de jogador = foto de quando ele saiu da cidade pela última vez. % = parte do total circulando hoje. "Setar" feito antes de 15/10 não tem o valor de antes: setar pra R$ X cria <b>no máximo</b> R$ X, por isso aparece como "até". De 15/10 pra frente todo movimento vem com antes → depois exato.</p>
       <h4 style="margin:.4rem 0">Por membro da staff</h4>
-      <div style="overflow-x:auto"><table><thead><tr><th>Staff</th><th>Cargo</th><th>Criou</th><th>Tirou</th><th>Líquido</th><th>% da cidade</th><th>Ações</th><th>Pra quantos</th><th>Pra si mesmo</th><th>Último</th></tr></thead><tbody id="ec-rank"></tbody></table></div>
+      <div style="overflow-x:auto"><table><thead><tr><th>Staff</th><th>Cargo</th><th>Criou (certo)</th><th>Tirou</th><th>"Setar" antigo sem antes</th><th>Pode ter criado até</th><th>% da cidade (até)</th><th>Ações</th><th>Pra quantos</th><th>Pra si mesmo</th><th>Último</th></tr></thead><tbody id="ec-rank"></tbody></table></div>
       <h4 style="margin:.9rem 0 .4rem">Cada movimento <span class="muted" style="font-size:.78rem;font-weight:400">— <span class="pill err">PRA SI</span> staff mexeu no próprio dinheiro · <span class="pill warn">REPETIDO</span> mesmo staff pro mesmo alvo 3+ vezes</span></h4>
       <div class="row" style="gap:.5rem;margin-bottom:.4rem;flex-wrap:wrap">
         <input id="ec-filtro" placeholder="Filtrar por staff ou alvo" oninput="desenhaMovs()" style="flex:1;min-width:180px">
@@ -808,18 +808,21 @@
       $('ec-jog-sub').textContent = 'carteira ' + fR(c.carteira) + ' · banco ' + fR(c.banco);
       $('ec-cx').textContent = fR(c.caixas);
       $('ec-cx-sub').textContent = fP(c.total ? c.caixas / c.total : 0) + ' do total';
-      $('ec-staff').textContent = fR(s.liquido);
-      $('ec-staff-sub').textContent = fP(s.pct) + ' da cidade · criou ' + fR(s.criado) + ' · tirou ' + fR(s.tirado)
-        + ' · ' + s.acoes + ' ações' + (s.desconhecidos ? ' (' + s.desconhecidos + ' "setar" antigos sem valor de antes)' : '');
+      const teto = s.liquido + (s.semAntesValor || 0);
+      $('ec-staff').textContent = fR(teto);
+      $('ec-staff-sub').textContent = 'até ' + fP(c.total ? teto / c.total : 0) + ' da cidade · certo: ' + fR(s.liquido)
+        + (s.desconhecidos ? ' · + até ' + fR(s.semAntesValor) + ' em ' + s.desconhecidos + ' "setar" antigos (o jogo não guardava quanto a pessoa tinha antes)' : '')
+        + ' · ' + s.acoes + ' ações';
       $('ec-rank').innerHTML = ECON.ranking.length ? ECON.ranking.map(r => '<tr>'
         + '<td><b>' + esc(r.staff) + '</b></td><td>' + esc(r.cargo || '—') + '</td>'
         + '<td style="color:#B23227">' + fR(r.criado) + '</td><td>' + fR(r.tirado) + '</td>'
-        + '<td><b>' + fR(r.liquido) + '</b></td><td>' + fP(r.pct) + '</td>'
-        + '<td>' + r.acoes + (r.desconhecidos ? ' <span class="muted">(' + r.desconhecidos + ' sem valor)</span>' : '') + '</td>'
+        + '<td>' + (r.setadoSemAntes ? fR(r.setadoSemAntes) + ' <span class="muted">(' + r.desconhecidos + 'x)</span>' : '—') + '</td>'
+        + '<td><b>' + fR(r.teto) + '</b></td><td>' + fP(r.pctTeto) + '</td>'
+        + '<td>' + r.acoes + '</td>'
         + '<td>' + r.alvos + '</td>'
-        + '<td>' + (r.paraSi ? '<span class="pill err">' + r.paraSi + 'x · ' + fR(r.paraSiValor) + '</span>' : '—') + '</td>'
+        + '<td>' + (r.paraSi ? '<span class="pill err">' + r.paraSi + 'x · ' + (r.paraSiSetado ? 'até ' + fR(r.paraSiValor + r.paraSiSetado) : fR(r.paraSiValor)) + '</span>' : '—') + '</td>'
         + '<td class="muted">' + (r.ultimo ? fmtT(r.ultimo) : '') + '</td></tr>').join('')
-        : '<tr><td colspan="10" class="empty">Nenhum dinheiro mexido pela staff no período.</td></tr>';
+        : '<tr><td colspan="11" class="empty">Nenhum dinheiro mexido pela staff no período.</td></tr>';
       $('ec-ricos').innerHTML = ECON.ricos.map(r => '<tr><td>' + esc(r.nome || r.roblox_id) + '</td><td>' + fR(r.bolso) + '</td><td>' + fR(r.banco)
         + '</td><td><b>' + fR(r.total) + '</b></td><td>' + fP(r.pct) + '</td></tr>').join('') || '<tr><td colspan="5" class="empty">—</td></tr>';
       $('ec-corps').innerHTML = (c.corps || []).map(k => '<tr><td>' + esc(k.nome) + '</td><td>' + esc(k.tipo || '') + '</td><td>' + fR(k.saldo)
@@ -841,7 +844,7 @@
           + '<td>' + esc(m.origem) + '</td><td>' + esc(m.alvo || '—') + sinais + '</td><td>' + esc(m.conta) + '</td>'
           + '<td>' + (ACAO[m.acao] || esc(m.acao)) + ' ' + fR(m.valor) + '</td>'
           + '<td>' + (m.antes != null ? fR(m.antes) + ' → ' + fR(m.depois) : '<span class="muted">sem registro</span>') + '</td>'
-          + '<td style="font-weight:700;' + cor + '">' + (m.delta == null ? '?' : (m.delta > 0 ? '+' : '') + fR(m.delta)) + '</td>'
+          + '<td style="font-weight:700;' + cor + '">' + (m.delta == null ? '<span class="muted" style="font-weight:400">até +' + fR(m.valor) + '</span>' : (m.delta > 0 ? '+' : '') + fR(m.delta)) + '</td>'
           + '<td>' + fP(m.pct) + '</td><td class="muted" style="font-size:.78rem">' + esc(m.motivo || '') + '</td></tr>';
       }).join('') : '<tr><td colspan="10" class="empty">Nada no período.</td></tr>';
     }
