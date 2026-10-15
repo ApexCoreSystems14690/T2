@@ -234,6 +234,7 @@ router.get('/player/:robloxId', async (req, res) => {
         c.id as corp_id,
         c.name as corp_name,
         c.slug as corp_slug,
+        c.tipo as corp_tipo,   -- [15/10 PD] o CorpService decide faccao por isto; sem ele TODO mundo era 'corp' e ninguem usava o pneu
         r.name as rank_name,
         r.level as rank_level,
         r.salary as rank_salary,
@@ -252,6 +253,7 @@ router.get('/player/:robloxId', async (req, res) => {
         corp_id: row.corp_id,
         corp_slug: row.corp_slug,
         corp_name: row.corp_name,
+        corp_tipo: row.corp_tipo || 'corp',
         rank_name: row.rank_name || 'Sem cargo',
         rank_level: row.rank_level || 0,
         salary: row.rank_salary || 0,
@@ -1891,6 +1893,7 @@ router.get('/dossie/:nome', async (req, res) => {
            JOIN corporations c ON c.id = m.corporation_id
            LEFT JOIN ranks r ON r.id = m.rank_id
           WHERE m.user_id = $1 AND c.is_active = true
+            AND c.tipo <> 'faccao'   -- [15/10] faccao NAO aparece na ficha da policia (RP: eles descobrem)
           ORDER BY m.joined_at DESC LIMIT 1`, [uid]);
       if (m.rows[0]) {
         const x = m.rows[0];
@@ -1904,6 +1907,7 @@ router.get('/dossie/:nome', async (req, res) => {
              FROM corp_vinculos_hist h
              LEFT JOIN corporations c ON c.id = h.corporation_id
             WHERE h.user_id = $1
+              AND c.tipo IS DISTINCT FROM 'faccao'   -- [15/10] saida de faccao tambem nao aparece
             ORDER BY h.saiu_em DESC LIMIT 10`, [uid]);
         historico = h.rows.map(x => ({ corp: x.corp_nome, cargo: x.cargo || '', entrou: x.entrou_em, saiu: x.saiu_em }));
       } catch (_) { historico = []; }

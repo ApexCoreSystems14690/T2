@@ -393,6 +393,15 @@
         <thead><tr><th>Item</th><th>Na prateleira</th><th>Na rua</th><th>Perdidos</th><% if (P.gerir_estoque) { %><th></th><% } %></tr></thead>
         <tbody id="cx-estoque"><tr><td colspan="5" class="empty">Carregando…</td></tr></tbody>
       </table>
+      <% if (P.gerir_estoque) { %>
+      <!-- [15/10] baixa dada por engano volta aqui (até 48h, 1 vez cada) -->
+      <h3 style="color:#161A1F;font-size:0.9rem;margin:1.5rem 0 0.5rem">Baixas recentes</h3>
+      <div style="color:#5B6573;font-size:0.75rem;margin:-0.2rem 0 0.5rem">Deu baixa por engano? Desfaça em até 48h: a peça volta pro armário e sai de Perdidos.</div>
+      <table class="member-table">
+        <thead><tr><th>Quando</th><th>Item</th><th>Quem deu</th><th></th></tr></thead>
+        <tbody id="cx-baixas"><tr><td colspan="4" class="empty">Carregando…</td></tr></tbody>
+      </table>
+      <% } %>
 
       <h3 style="color:#161A1F;font-size:0.9rem;margin:1.5rem 0 0.5rem">Com quem está agora</h3>
       <table class="member-table">
@@ -842,6 +851,16 @@
           }).join('')
         : '<tr><td colspan="5" class="empty">Estoque vazio — compre equipamento acima.</td></tr>';
 
+      var tbx = document.getElementById('cx-baixas');
+      if (tbx) {
+        tbx.innerHTML = (d.baixas && d.baixas.length)
+          ? d.baixas.map(function (b) {
+              return '<tr><td style="color:#5B6573;white-space:nowrap">' + quando(b.criado_em) + '</td><td>' + b.item + '</td><td>' + (b.por || '—') + '</td>' +
+                '<td>' + (b.desfeita ? '<span style="color:#5B6573">Desfeita</span>' : '<button class="btn-sm" onclick="desfazerBaixa(' + b.id + ', \'' + String(b.item).replace(/'/g, "\\'") + '\')">Desfazer</button>') + '</td></tr>';
+            }).join('')
+          : '<tr><td colspan="4" class="empty">Nenhuma baixa nas últimas 48h.</td></tr>';
+      }
+
       var te = document.getElementById('cx-emprestimos');
       te.innerHTML = (d.emprestimos && d.emprestimos.length)
         ? d.emprestimos.map(function (e) {
@@ -888,10 +907,18 @@
     }
 
     async function darBaixa(item) {
-      if (!confirm('Dar baixa em 1 ' + item + '? Isso conta como PERDA e não devolve dinheiro.')) return;
+      if (!confirm('Dar baixa em 1 ' + item + '?\n\nATENÇÃO: arma perdida na rua (morte ou revista) JÁ SAI SOZINHA do estoque e já aparece em Perdidos. Não precisa dar baixa nela.\n\nA baixa tira 1 ' + item + ' que AINDA ESTÁ NO ARMÁRIO e conta como perda, sem devolver dinheiro. Só use se ela sumiu de verdade de lá.')) return;
       var d = await api('POST', '/caixa/baixa', { item: item });
       if (d.error) return showAlert(d.error, 'error');
       showAlert('Baixa registrada', 'success');
+      loadCaixa();
+    }
+
+    async function desfazerBaixa(id, item) {
+      if (!confirm('Desfazer a baixa de 1 ' + item + '? Ela volta pro armário e sai de Perdidos.')) return;
+      var d = await api('POST', '/caixa/baixa/' + id + '/desfazer', {});
+      if (d.error) return showAlert(d.error, 'error');
+      showAlert('Baixa desfeita: 1 ' + item + ' voltou pro armário', 'success');
       loadCaixa();
     }
 

@@ -84,6 +84,12 @@ const ESTOQUE = {
   abasteceu:{ estoque: -1, emprestado:  0, perda: false, rotulo: 'Abasteceu a maleta' },
   comprou:  { estoque: +1, emprestado:  0, perda: false, rotulo: 'Comprada pelo comando' },
   baixa:    { estoque: -1, emprestado:  0, perda: true,  rotulo: 'Baixa dada pelo comando' },
+  // [15/10] DESFAZER BAIXA. Caso real: a equipe perdeu armas na rua (morreu/roubada já
+  // descontam sozinhas) e o comandante ainda deu baixa achando que precisava -- sumiu uma
+  // arma INTEIRA do armário e apareceu +1 em perdidos. Isto é o inverso exato da baixa:
+  // volta 1 pra prateleira e tira 1 de perdidos. Só o painel usa (rota do jogo não aceita),
+  // e só 1 vez por baixa (a baixa fica marcada 'desfeita').
+  desfez_baixa: { estoque: +1, emprestado: 0, perda: false, desfazPerda: true, rotulo: 'Baixa desfeita pelo comando' },
 };
 
 const MAX_POR_PESSOA = 1;   // o vestiário já é toggle: 1 de cada peça por vez
@@ -199,6 +205,9 @@ function aplicarEstoque(est, motivo, quem, item, extra = {}) {
   }
   if (m.perda) {
     est.perdidos[nome] = positivo(est.perdidos[nome]) + 1;
+  }
+  if (m.desfazPerda) {
+    est.perdidos[nome] = Math.max(0, positivo(est.perdidos[nome]) - 1);
   }
 
   return {

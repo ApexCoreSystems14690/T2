@@ -787,6 +787,22 @@ router.post('/:corpId/caixa/baixa', requireCorpOwner, requireCorpPoder('gerir_es
   }
 });
 
+// [15/10] POST /api/corps/:corpId/caixa/baixa/:lancId/desfazer — devolve a peça da baixa
+// dada por engano (até 48h, 1 vez). Mesmo poder de quem dá baixa.
+router.post('/:corpId/caixa/baixa/:lancId/desfazer', requireCorpOwner, requireCorpPoder('gerir_estoque'), async (req, res) => {
+  try {
+    const id = parseInt(req.params.lancId);
+    if (!(id > 0)) return res.status(400).json({ error: 'Baixa inválida' });
+    const por = req.user.roblox_username || req.user.discord_username || String(req.user.id);
+    const r = await caixa.desfazerBaixa(req.params.corpId, id, por);
+    if (!r.ok) return res.status(400).json({ error: 'Essa baixa já foi desfeita ou passou de ' + caixa.JANELA_DESFAZER_H + 'h.' });
+    res.json(r);
+  } catch (err) {
+    console.error('caixa/baixa/desfazer:', err.message);
+    res.status(500).json({ error: 'Erro interno' });
+  }
+});
+
 // POST /api/corps/:corpId/caixa/aporte { valor } — dinheiro criado DO NADA no
 // caixa. Não sai da carteira de ninguém. [29/09] Passou a ser poder de STAFF
 // (`aportar_caixa`): a corp já recebe o repasse do governo e se vira com multa,

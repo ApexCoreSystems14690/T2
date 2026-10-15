@@ -162,6 +162,27 @@ async function comprar(corpId, item, qtd, precos, extra = {}) {
   } finally { client.release(); }
 }
 
+// [15/10] DESFAZER BAIXA -- até JANELA_DESFAZER_H horas, 1 vez por baixa.
+// Primeiro "reserva" a baixa (marca desfeita só se ainda não estava); se a volta da peça
+// falhar, solta a marca. Duas pessoas clicando juntas: só uma passa no UPDATE.
+const JANELA_DESFAZER_H = 48;
+async function desfazerBaixa(corpId, lancId, por) {
+  const r = await pool.query(
+    `UPDATE corp_lancamentos SET detalhe = detalhe || jsonb_build_object('desfeita', NOW(), 'desfeita_por', $3::text)
+      WHERE id = $1 AND corporation_id = $2 AND tipo = 'estoque' AND motivo = 'baixa'
+        AND NOT (detalhe ? 'desfeita') AND criado_em > NOW() - ($4 || ' hours')::interval
+      RETURNING item`, [lancId, corpId, String(por || ''), String(JANELA_DESFAZER_H)]);
+  if (!r.rows[0]) return { ok: false, erro: 'nao_achou' };
+  try {
+    const m = await movEstoque(corpId, 'desfez_baixa', '', r.rows[0].item, { por });
+    if (!m.ok) throw new Error(m.erro || 'falhou');
+    return { ok: true, item: r.rows[0].item, sobrou: m.lancamento.sobrou };
+  } catch (e) {
+    await pool.query(`UPDATE corp_lancamentos SET detalhe = detalhe - 'desfeita' - 'desfeita_por' WHERE id = $1`, [lancId]).catch(() => {});
+    throw e;
+  }
+}
+
 // ---------------------------------------------------------------- leitura
 async function painel(corpId, limite = 60) {
   const lim = Math.min(200, Math.max(1, parseInt(limite) || 60));
@@ -172,7 +193,7 @@ async function painel(corpId, limite = 60) {
   // está desviando -- e a graça da corrupção é ele ter que desconfiar e cobrar.
   // Sobra o extrato de DINHEIRO, que é gestão dele mesmo (multa, pátio, compra,
   // bônus). Os lançamentos de estoque têm valor 0, então o balanço não muda.
-  const [cx, est, empr, lanc, perd] = await Promise.all([
+  const [cx, est, empr, lanc, perd, bx] = await Promise.all([
     pool.query(`SELECT saldo FROM corp_caixa WHERE corporation_id = $1`, [corpId]),
     pool.query(`SELECT item, qtd, perdidos FROM corp_estoque WHERE corporation_id = $1 ORDER BY item`, [corpId]),
     pool.query(`SELECT nome, item, qtd, pego_em FROM corp_emprestimos WHERE corporation_id = $1 ORDER BY nome, item`, [corpId]),
@@ -188,6 +209,13 @@ async function painel(corpId, limite = 60) {
          FROM corp_lancamentos
         WHERE corporation_id = $1 AND tipo = 'estoque' AND perda AND motivo <> 'baixa'
         GROUP BY 1, 2 ORDER BY 1 DESC, 3 DESC LIMIT 60`, [corpId]),
+    // [15/10] baixas recentes, pra poder DESFAZER a que foi dada por engano
+    pool.query(
+      `SELECT id, item, por, criado_em, (detalhe ? 'desfeita') AS desfeita
+         FROM corp_lancamentos
+        WHERE corporation_id = $1 AND tipo = 'estoque' AND motivo = 'baixa'
+          AND criado_em > NOW() - ($2 || ' hours')::interval
+        ORDER BY id DESC LIMIT 30`, [corpId, String(JANELA_DESFAZER_H)]),
   ]);
 
   const naRua = {};
@@ -211,6 +239,7 @@ async function painel(corpId, limite = 60) {
     emprestimos: empr.rows.map(e => ({ nome: e.nome, item: e.item, qtd: Number(e.qtd), pego_em: e.pego_em })),
     extrato: lanc.rows.map(l => ({ ...l, valor: Number(l.valor), saldo_depois: l.saldo_depois === null ? null : Number(l.saldo_depois) })),
     perdas_dia: perd.rows.map(r => ({ dia: r.dia, item: r.item, qtd: Number(r.qtd) })),
+    baixas: bx.rows.map(b => ({ id: b.id, item: b.item, por: b.por, criado_em: b.criado_em, desfeita: !!b.desfeita })),
     balanco: C.balanco(lanc.rows.map(l => ({ tipo: l.tipo, valor: Number(l.valor) }))),
   };
 }
@@ -378,4 +407,4 @@ async function resumoOrcamento(corpId, slug, agoraMs) {
   };
 }
 
-module.exports = { movDinheiro, movEstoque, comprar, painel, precos, catalogo, registrarAtividade, pagarOrcamentoSePendente, resumoOrcamento, ehEmpresa, ORC };
+module.exports = { desfazerBaixa, JANELA_DESFAZER_H, movDinheiro, movEstoque, comprar, painel, precos, catalogo, registrarAtividade, pagarOrcamentoSePendente, resumoOrcamento, ehEmpresa, ORC };

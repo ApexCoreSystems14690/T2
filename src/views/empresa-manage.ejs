@@ -154,6 +154,15 @@
         </table>
       </div>
 
+      <div class="cartao" id="cx-baixas-cartao" style="display:none">
+        <h3>Baixas recentes</h3>
+        <p style="color:#5B6573;font-size:.78rem;margin-bottom:.6rem">Deu baixa por engano? Desfaça em até 48h: a unidade volta pra prateleira e sai de Perdido.</p>
+        <table>
+          <thead><tr><th>Quando</th><th>Item</th><th class="esconde-mob">Quem deu</th><th></th></tr></thead>
+          <tbody id="cx-baixas"></tbody>
+        </table>
+      </div>
+
       <div class="cartao">
         <h3>Quem está com mercadoria agora</h3>
         <p style="color:#5B6573;font-size:.78rem;margin-bottom:.6rem">
@@ -320,6 +329,19 @@
     document.getElementById('cx-saldo').className = 'val ' + (Number(d.saldo) > 0 ? 'pos' : '');
 
     // estoque
+    // [15/10] baixas recentes (desfazer)
+    var cb = document.getElementById('cx-baixas-cartao');
+    if (cb) {
+      cb.style.display = PODE_ESTOQUE ? '' : 'none';
+      document.getElementById('cx-baixas').innerHTML = (d.baixas && d.baixas.length)
+        ? d.baixas.map(function (b) {
+            var q = new Date(b.criado_em); q = q.toLocaleDateString('pt-BR') + ' ' + q.toLocaleTimeString('pt-BR').slice(0, 5);
+            return '<tr><td style="color:#5B6573;white-space:nowrap">' + q + '</td><td>' + b.item + '</td><td class="esconde-mob">' + (b.por || '—') + '</td><td>' +
+              (b.desfeita ? '<span style="color:#5B6573">Desfeita</span>' : '<button class="btn-sm" onclick="desfazerBaixa(' + b.id + ', \'' + String(b.item).replace(/'/g, "\\'") + '\')">Desfazer</button>') + '</td></tr>';
+          }).join('')
+        : '<tr><td colspan="4" class="vazio">Nenhuma baixa nas últimas 48h.</td></tr>';
+    }
+
     var tb = document.getElementById('cx-itens');
     tb.innerHTML = '';
     if (!d.itens || d.itens.length === 0) {
@@ -426,8 +448,14 @@
     if (d) { diz(item + ' saiu da lista'); carregarCaixa(); }
   }
 
+  async function desfazerBaixa(id, item) {
+    if (!confirm('Desfazer a baixa de 1 ' + item + '? Ela volta pra prateleira e sai de Perdido.')) return;
+    var d = await api('POST', '/caixa/baixa/' + id + '/desfazer', {});
+    if (d) { diz('Baixa desfeita: 1 ' + item + ' voltou'); carregarCaixa(); }
+  }
+
   async function darBaixa(item) {
-    if (!confirm('Dar baixa em 1 unidade de ' + item + '?\n\nUse pra corrigir contagem — a unidade some do estoque.')) return;
+    if (!confirm('Dar baixa em 1 unidade de ' + item + '?\n\nATENÇÃO: o que se perdeu na rua JÁ SAI SOZINHO do estoque. A baixa tira 1 unidade que AINDA ESTÁ NA PRATELEIRA e conta como perda. Só use se ela sumiu de verdade.\n\nDeu por engano? Dá pra desfazer em até 48h em "Baixas recentes".')) return;
     var d = await api('POST', '/caixa/baixa', { item: item });
     if (d) { diz('Baixa dada em ' + item); carregarCaixa(); }
   }
