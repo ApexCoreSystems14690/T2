@@ -106,6 +106,7 @@ router.get('/eu', (req, res) => {
     PODERES: perm.PODERES,
     PODER_DO_COMANDO: perm.PODER_DO_COMANDO,
     matriz: perm.matriz(),
+    souDono: perm.ehDono(req.user),
   });
 });
 
@@ -281,6 +282,19 @@ router.get('/bans', requirePoder('banir'), async (req, res) => {
 // [14/10] SEGURANCA — o que o anti-cheat/anti-exploit do jogo pegou, quem foi expulso
 // e por que, entradas recusadas, contas ligadas por IP e a config do anti-alt.
 // ------------------------------------------------------------
+// ------------------------------------------------------------
+// [15/10] ECONOMIA — só o DONO. Dinheiro circulando, quanto a staff criou/tirou,
+// quem, pra quem, antes/depois. Ver src/economia.js.
+// ------------------------------------------------------------
+const ECON = require('../economia');
+router.get('/economia', async (req, res) => {
+  if (!perm.ehDono(req.user)) return res.status(403).json({ error: 'Só o Dono vê a economia.' });
+  try {
+    const dias = Math.min(Math.max(parseInt(req.query.dias) || 0, 0), 3650);
+    res.json(await ECON.relatorio(dias));
+  } catch (err) { console.error('economia:', err.message); res.status(500).json({ error: 'Erro interno' }); }
+});
+
 const SEG = require('../seguranca');
 router.get('/seguranca', requirePoder('ver_registro'), async (req, res) => {
   try {

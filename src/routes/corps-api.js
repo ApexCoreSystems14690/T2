@@ -797,7 +797,8 @@ router.post('/:corpId/caixa/aporte', requireCorpOwner, requireCorpPoder('aportar
     const valor = parseInt(req.body && req.body.valor);
     if (!(valor > 0)) return res.status(400).json({ error: 'Valor inválido' });
     const quem = req.user.roblox_username || req.user.discord_username || String(req.user.id);
-    const r = await caixa.movDinheiro(req.params.corpId, 'aporte', valor, { quem, por: quem });
+    // [15/10] staff_user_id: a aba Economia do Dono sabe exatamente QUEM criou esse dinheiro
+    const r = await caixa.movDinheiro(req.params.corpId, 'aporte', valor, { quem, por: quem, detalhe: { staff_user_id: req.user.id } });
     if (!r.ok) return res.status(400).json({ error: 'Não deu', codigo: r.erro });
     res.json(r);
   } catch (err) {
