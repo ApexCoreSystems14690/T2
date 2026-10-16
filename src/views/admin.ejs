@@ -111,6 +111,7 @@
       <div class="tab" data-tab="historico">Histórico</div>
       <div class="tab" data-tab="analise">Análise</div>
       <div class="tab" data-tab="banidos">Banidos</div>
+      <div class="tab" data-tab="pds">PDs</div>
       <div class="tab" data-tab="seguranca">Segurança</div>
       <div class="tab" data-tab="economia" id="tab-economia" style="display:none">Economia</div>
     </div>
@@ -331,6 +332,22 @@
       </div>
     </div>
 
+    <!-- PDs (16/10): todo encerramento de personagem + reverter -->
+    <div class="panel" id="panel-pds">
+      <div class="row" style="margin-bottom:.6rem;align-items:center;gap:.6rem;flex-wrap:wrap">
+        <b id="pd-conta">—</b>
+        <span class="muted" style="font-size:.8rem;flex:1 1 320px">Todo PD (pneu, tribunal) e todo reset de personagem. Reverter devolve o personagem inteiro como estava um segundo antes: dinheiro, banco, inventário, carros, casas, móveis, celular, corporação com o cargo, co-gerência e mandado. O que ele fez depois com o personagem novo some.</span>
+        <input id="pd-busca" placeholder="nome ou id" style="max-width:180px" onkeydown="if(event.key==='Enter')loadPds()">
+        <button class="btn sec" onclick="loadPds()"><svg class="ic" aria-hidden="true"><use href="/icones.svg#atualizar"/></svg>Atualizar</button>
+      </div>
+      <div style="overflow-x:auto">
+        <table>
+          <thead><tr><th>Quando</th><th>Jogador</th><th>Tipo</th><th>Quem fez</th><th>Motivo</th><th>Estava na roda</th><th>O que ele tinha</th><th>Situação</th><th>Ações</th></tr></thead>
+          <tbody id="pd-body"><tr><td colspan="9" class="empty">Carregando…</td></tr></tbody>
+        </table>
+      </div>
+    </div>
+
     <!-- SEGURANÇA (14/10) -->
     <div class="panel" id="panel-seguranca">
       <div class="row" style="margin-bottom:.6rem;align-items:center;gap:.6rem;flex-wrap:wrap">
@@ -436,6 +453,19 @@
     </div>
   </div>
 
+  <!-- MODAL REVERTER PD (16/10) -->
+  <div class="modal-overlay" id="pdmodal">
+    <div class="modal">
+      <h2 id="pdm-title">Reverter PD</h2>
+      <div class="sub" id="pdm-sub"></div>
+      <div class="fg"><label>Motivo da reversão (fica no registro)</label><textarea id="pdm-motivo" rows="3" maxlength="300" placeholder="ex.: denúncia #12 — PD sem ação de RP antes"></textarea></div>
+      <div class="actions">
+        <button class="btn sec" onclick="$('pdmodal').classList.remove('active')">Cancelar</button>
+        <button class="btn danger" id="pdm-ok" onclick="confirmaReverter()">Reverter</button>
+      </div>
+    </div>
+  </div>
+
   <!-- MODAL DAR ITEM (registro) -->
   <div class="modal-overlay" id="rmodal">
     <div class="modal">
@@ -486,7 +516,7 @@
     const btnSe = (tipo, html) => podeCmd(tipo) ? html : '';
 
     // Painéis e abas por poder. Aba sem nenhum poder some do topo.
-    const PODER_DA_ABA = { jogadores: null, registro: 'ver_registro', servidor: 'servidor', logs: 'ver_registro', cargos: 'corp', usuarios: 'admins', historico: 'admins', analise: 'ver_registro', banidos: 'banir', seguranca: 'ver_registro' };
+    const PODER_DA_ABA = { jogadores: null, registro: 'ver_registro', servidor: 'servidor', logs: 'ver_registro', cargos: 'corp', usuarios: 'admins', historico: 'admins', analise: 'ver_registro', banidos: 'banir', pds: 'ver_registro', seguranca: 'ver_registro' };
 
     async function carregarEu() {
       EU = await api('GET', '/eu');
@@ -789,9 +819,94 @@
       if (tab.dataset.tab === 'cargos') loadCargos();
       if (tab.dataset.tab === 'analise') loadAnalise();
       if (tab.dataset.tab === 'banidos') loadBans();
+      if (tab.dataset.tab === 'pds') loadPds();
       if (tab.dataset.tab === 'seguranca') loadSeg();
       if (tab.dataset.tab === 'economia') loadEcon();
     }));
+
+    // ---------------------------------------------------------------- PDs (16/10)
+    // O painel NAO decide se pode reverter: o site manda `pode_reverter` + `motivo_nao`
+    // por linha (src/pd.js), e o back confere de novo no clique.
+    let PDS = { pds: [], pode_reverter: false }, pdTimer = null, PD_ALVO = null;
+    const PD_TIPO = { pd_faccao: ['PD · pneu', 'err'], pd_estado: ['PD · tribunal', 'err'], pd: ['PD', 'err'], reset: ['Reset (staff)', 'warn'] };
+    async function loadPds() {
+      try {
+        const q = ($('pd-busca').value || '').trim();
+        PDS = await api('GET', '/pds' + (q ? '?q=' + encodeURIComponent(q) : ''));
+      } catch (e) { $('pd-body').innerHTML = '<tr><td colspan="9" class="empty">' + esc(e.message) + '</td></tr>'; return; }
+      const l = PDS.pds || [];
+      const ativos = l.filter(p => p.estado !== 'revertido').length;
+      $('pd-conta').textContent = ativos + (ativos === 1 ? ' PD valendo' : ' PDs valendo') + ' · ' + (l.length - ativos) + ' revertido(s)';
+      $('pd-body').innerHTML = l.length ? l.map(p => {
+        const t = PD_TIPO[p.tipo] || [p.tipo, ''];
+        const r = p.resumo || {};
+        const tinha = (r.dinheiro != null || r.banco != null)
+          ? 'R$ ' + fmtN(r.dinheiro) + ' + banco R$ ' + fmtN(r.banco) + '<br><span class="muted" style="font-size:.72rem">lvl ' + esc(r.level || '?') + ' · ' + fmtN(r.carros) + ' carro(s)' + (p.corps && p.corps.length ? ' · ' + esc(p.corps.join(', ')) : '') + '</span>'
+          : '<span class="muted">—</span>';
+        let sit;
+        if (p.estado === 'revertido') {
+          sit = '<span class="pill ok">REVERTIDO</span><div class="muted" style="font-size:.72rem">por ' + esc(p.rev && p.rev.por || '?') + (p.rev && p.rev.feito_em ? ' · ' + fmtT(p.rev.feito_em) : '') + '</div>'
+            + (p.rev && p.rev.msg ? '<div style="font-size:.72rem">' + esc(p.rev.msg) + '</div>' : '');
+        } else if (p.rev && p.rev.estado === 'pendente') {
+          sit = '<span class="pill warn">NA FILA</span><div class="muted" style="font-size:.72rem">esperando um servidor do jogo (precisa de servidor aberto)</div>';
+        } else if (p.rev && p.rev.estado === 'executando') {
+          sit = '<span class="pill info">DEVOLVENDO…</span><div class="muted" style="font-size:.72rem">tentativa ' + (p.rev.tentativas || 1) + '</div>';
+        } else if (p.rev && p.rev.estado === 'erro') {
+          sit = '<span class="pill err">FALHOU</span><div style="font-size:.72rem;color:#B23227">' + esc(p.rev.msg || '') + '</div><div class="muted" style="font-size:.72rem">nada foi mudado no site — dá pra tentar de novo</div>';
+        } else {
+          sit = '<span class="pill">VALENDO</span>' + (p.backup ? '' : '<div class="muted" style="font-size:.72rem">sem backup</div>');
+        }
+        let acao = '';
+        if (PDS.pode_reverter) {
+          if (p.pode_reverter) acao = '<button class="d" onclick="abrirReverter(' + p.id + ')"><svg class="ic" aria-hidden="true"><use href="/icones.svg#voltar"/></svg>' + (p.rev && p.rev.estado === 'erro' ? 'Tentar de novo' : 'Reverter') + '</button>';
+          else if (p.rev && p.rev.estado === 'pendente') acao = '<button onclick="cancelarReverter(' + p.id + ')"><svg class="ic" aria-hidden="true"><use href="/icones.svg#x"/></svg>Cancelar pedido</button>';
+          else if (p.estado !== 'revertido' && p.motivo_nao) acao = '<span class="muted" style="font-size:.72rem">' + esc(p.motivo_nao) + '</span>';
+        }
+        return '<tr' + (p.estado === 'revertido' ? ' style="opacity:.6"' : '') + '>'
+          + '<td class="muted" style="white-space:nowrap">' + fmtT(p.quando) + '</td>'
+          + '<td><b>' + esc(p.nome || '—') + '</b><div class="muted" style="font-size:.7rem">ID ' + esc(p.roblox_id) + '</div></td>'
+          + '<td><span class="pill ' + t[1] + '">' + esc(t[0]) + '</span></td>'
+          + '<td>' + esc(p.por_nome || '—') + (p.corp ? '<div class="muted" style="font-size:.72rem">' + esc(p.corp) + '</div>' : '') + '</td>'
+          + '<td style="font-size:.78rem">' + esc(p.motivo || '—') + '</td>'
+          + '<td style="font-size:.75rem">' + (p.presentes && p.presentes.length ? esc(p.presentes.join(', ')) : '<span class="muted">—</span>') + '</td>'
+          + '<td style="font-size:.78rem">' + tinha + '</td>'
+          + '<td>' + sit + '</td>'
+          + '<td><div class="acts">' + acao + '</div></td></tr>';
+      }).join('') : '<tr><td colspan="9" class="empty">Nenhum PD registrado ainda.</td></tr>';
+      // pedido andando: atualiza sozinho até terminar
+      clearTimeout(pdTimer);
+      if (l.some(p => p.rev && (p.rev.estado === 'pendente' || p.rev.estado === 'executando'))
+          && $('panel-pds').classList.contains('active')) pdTimer = setTimeout(loadPds, 4000);
+    }
+    function abrirReverter(id) {
+      const p = (PDS.pds || []).find(x => x.id === id); if (!p) return;
+      PD_ALVO = p;
+      $('pdm-title').textContent = 'Reverter PD de ' + (p.nome || p.roblox_id);
+      $('pdm-sub').innerHTML = esc(fmtT(p.quando)) + ' · ' + esc(p.motivo || '') + '<br>'
+        + 'O jogo devolve o personagem como estava antes do PD. Se ele estiver online vai ser desconectado pra entrar de novo já com tudo. '
+        + 'O que ele ganhou com o personagem novo depois do PD <b>some</b>.';
+      $('pdm-motivo').value = '';
+      $('pdmodal').classList.add('active');
+      setTimeout(() => $('pdm-motivo').focus(), 50);
+    }
+    async function confirmaReverter() {
+      if (!PD_ALVO) return;
+      const motivo = ($('pdm-motivo').value || '').trim();
+      if (!motivo) return showAlert('Escreva o motivo', 'error');
+      $('pdm-ok').disabled = true;
+      try {
+        const r = await api('POST', '/pds/' + PD_ALVO.id + '/reverter', { motivo });
+        $('pdmodal').classList.remove('active');
+        showAlert(r.servidores ? 'Pedido enviado — o jogo devolve em segundos' : 'Pedido na fila — vai rodar quando um servidor do jogo abrir', 'success');
+        loadPds();
+      } catch (e) { showAlert(e.message, 'error'); }
+      finally { $('pdm-ok').disabled = false; }
+    }
+    async function cancelarReverter(id) {
+      if (!confirm('Cancelar o pedido de reverter?')) return;
+      try { await api('POST', '/pds/' + id + '/cancelar'); showAlert('Pedido cancelado', 'success'); loadPds(); }
+      catch (e) { showAlert(e.message, 'error'); }
+    }
 
     // ---------------------------------------------------------------- ECONOMIA (15/10, só o Dono)
     let ECON = null;
@@ -969,7 +1084,7 @@
       else if (kind === 'noclip') { tipo = 'noclip'; payload = { ativar: val('modo') === 'on', velocidade: Number(val('velocidade')) || 80 }; }
       else if (kind === 'kick') { payload = { motivo: val('motivo') }; }
       else if (kind === 'ban') { const h = horasBan(val('dur'), val('unid')); if (h == null) return showAlert('Duração inválida', 'error'); payload = { roblox_id: p.userId, motivo: val('motivo'), horas: h }; }
-      else if (kind === 'mais') { tipo = val('modo'); if (tipo === 'level_set') payload = { level: Number(val('level')) }; if (tipo === 'slots_set') payload = { slots: Number(val('slots')) }; if (tipo === 'carro_add' || tipo === 'carro_remove') payload = { carro: val('carro') }; if (tipo === 'resetar_dados' && !confirm('ZERAR todos os dados de ' + p.name + '? Isso não tem volta.')) return; }
+      else if (kind === 'mais') { tipo = val('modo'); if (tipo === 'level_set') payload = { level: Number(val('level')) }; if (tipo === 'slots_set') payload = { slots: Number(val('slots')) }; if (tipo === 'carro_add' || tipo === 'carro_remove') payload = { carro: val('carro') }; if (tipo === 'resetar_dados' && !confirm('ZERAR todos os dados de ' + p.name + '? Dá pra desfazer depois na aba PDs.')) return; }
       try {
         await api('POST', '/command', { tipo, target_roblox_id: p.userId, target_name: p.name, payload });
         showAlert('Comando "' + tipo + '" enviado pra ' + p.name, 'success');

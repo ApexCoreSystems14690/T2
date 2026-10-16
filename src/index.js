@@ -1120,6 +1120,8 @@ async function start() {
         ALTER TABLE game_patrimonio ADD COLUMN IF NOT EXISTS preso INTEGER NOT NULL DEFAULT 0;
         ALTER TABLE game_patrimonio ADD COLUMN IF NOT EXISTS financiamentos JSONB NOT NULL DEFAULT '[]'::jsonb;
         ALTER TABLE game_patrimonio ADD COLUMN IF NOT EXISTS versao INTEGER NOT NULL DEFAULT 1;
+        -- [16/10] RG (Carteira de Identidade) no espelho: o PC da PC mostra quem esta fora da cidade
+        ALTER TABLE game_patrimonio ADD COLUMN IF NOT EXISTS rg JSONB;
         CREATE INDEX IF NOT EXISTS idx_game_patrimonio_nome ON game_patrimonio(LOWER(nome));
         CREATE TABLE IF NOT EXISTS corp_vinculos_hist (
           id SERIAL PRIMARY KEY,
@@ -1148,6 +1150,9 @@ async function start() {
     // [14/10 ELEICAO] votantes e votos em tabelas separadas (voto secreto), estado do turno
     try { await require('./eleicao').migrar(pool); }
     catch (e) { console.error('migração eleição:', e.message); }
+    // [16/10] aba PDs + reverter: colunas novas em fichas_encerradas
+    try { await require('./pd').migrar(pool); }
+    catch (e) { console.error('migração PDs:', e.message); }
     console.log('✅ Banco migrado');
   } catch (err) {
     console.error('❌ Migração falhou:', err.message);

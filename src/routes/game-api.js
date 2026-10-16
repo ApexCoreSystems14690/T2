@@ -1,6 +1,7 @@
 const router = require('express').Router();
 const pool = require('../db/pool');
 const { requireApiKey } = require('../middleware/auth');
+const PD = require('../pd');   // [16/10] aba PDs + reverter
 
 // Todas as rotas aqui precisam da API key
 router.use(requireApiKey);
@@ -373,6 +374,10 @@ router.post('/player/:robloxId/encerrar-personagem', async (req, res) => {
 
     let saiuDe = [], gerencias = 0, donoDe = [], procEncerrados = 0;
 
+    // [16/10 PDs] ANTES de apagar: guarda corp + CARGO + gerência de cada vínculo. É o
+    // que o botão "Reverter" da aba PDs devolve. Sem isto o reverter só saberia o nome da corp.
+    const cap = await PD.capturar(cli, userId);
+
     if (userId) {
       // 2) tira de TODAS as corporações
       const m = await cli.query(
@@ -395,9 +400,18 @@ router.post('/player/:robloxId/encerrar-personagem', async (req, res) => {
       `UPDATE procurados
           SET estado = 'encerrado', encerrado_em = NOW(), encerrado_por = $2,
               atualizado_em = NOW()
-        WHERE roblox_id = $1 AND estado = 'ativo'`,
+        WHERE roblox_id = $1 AND estado = 'ativo'
+        RETURNING id`,
       [rid, txt(b.por_nome, 64) || 'PD']);
     procEncerrados = pr.rowCount || 0;
+
+    // [16/10 PDs] o que o reverter precisa pra desfazer exatamente isto
+    await cli.query(
+      `UPDATE fichas_encerradas
+          SET pd = $2, vinculos = $3, gerencias = $4, procurados_ids = $5
+        WHERE id = $1`,
+      [f.rows[0].id, b.pd === true, JSON.stringify(cap.vinculos), JSON.stringify(cap.gerencias),
+       JSON.stringify(pr.rows.map(r => r.id))]);
 
     await cli.query('COMMIT');
     res.json({
@@ -427,7 +441,7 @@ router.get('/player/:robloxId/fichas-encerradas', async (req, res) => {
   try {
     const r = await pool.query(
       `SELECT id, nome, estado, motivo, por_nome, corp, prisoes, resumo, encerrado_em
-         FROM fichas_encerradas WHERE roblox_id = $1 ORDER BY id DESC LIMIT 20`, [rid]);
+         FROM fichas_encerradas WHERE roblox_id = $1 AND estado <> 'revertido' ORDER BY id DESC LIMIT 20`, [rid]);
     res.json({ ok: true, fichas: r.rows });
   } catch (err) {
     console.error('game/fichas-encerradas:', err.message);
@@ -675,6 +689,35 @@ router.post('/logs', async (req, res) => {
     res.json({ ok: true, n: values.length });
   } catch (err) {
     console.error('logs:', err.message);
+    res.status(500).json({ error: 'Erro interno' });
+  }
+});
+
+// ---------------------------------------------------------------------------
+// [16/10] REVERTER PD — o jogo busca trabalho e devolve o resultado (ver src/pd.js).
+// GET  /api/game/pds/reverter/proximo?job_id=...  -> { pedido: {id, roblox_id, nome, chave} | null }
+// POST /api/game/pds/:id/reverter/resultado { job_id, ok, msg, detalhe }
+// ---------------------------------------------------------------------------
+router.get('/pds/reverter/proximo', async (req, res) => {
+  try {
+    const job = String(req.query.job_id || '');
+    if (!job) return res.status(400).json({ error: 'job_id obrigatório' });
+    res.json({ pedido: await PD.reivindicar(pool, job) });
+  } catch (err) {
+    console.error('pds/proximo:', err.message);
+    res.status(500).json({ error: 'Erro interno' });
+  }
+});
+router.post('/pds/:id/reverter/resultado', async (req, res) => {
+  try {
+    const id = Number(req.params.id);
+    if (!Number.isFinite(id) || id <= 0) return res.status(400).json({ error: 'id inválido' });
+    const b = req.body || {};
+    const r = await PD.concluir(pool, id, b.job_id, { ok: b.ok === true, msg: b.msg, detalhe: b.detalhe });
+    if (!r.ok) return res.status(r.status || 400).json({ error: r.erro });
+    res.json(r);
+  } catch (err) {
+    console.error('pds/resultado:', err.message);
     res.status(500).json({ error: 'Erro interno' });
   }
 });
@@ -957,16 +1000,31 @@ router.get('/celular/deepweb/pericia', async (req, res) => {
 // A lista da tela "pessoas" do PC da delegacia. Devolve se tem mandado aberto.
 router.get('/cidadaos', async (req, res) => {
   try {
+    // [16/10] a busca do PC casa NOME DO RG, usuario do Roblox (com ou sem @) ou NUMERO do RG,
+    // e cada linha leva o rg do espelho: o jogo monta a identidade de quem esta fora da cidade
+    // pela mesma funcao (Ficha.identidade) e faz o filtro fino (RGNucleo.casaBusca).
     const busca = String(req.query.busca || '').trim().slice(0, 64);
     const limit = Math.min(Math.max(Number(req.query.limit) || 50, 1), 200);
     const offset = Math.max(Number(req.query.offset) || 0, 0);
-    const where = busca ? `WHERE LOWER(gp.nome) LIKE LOWER($3)` : '';
-    const params = busca ? [limit, offset, '%' + busca + '%'] : [limit, offset];
+    const params = [limit, offset];
+    let where = '';
+    if (busca) {
+      const semArroba = busca.replace(/^@/, '');
+      params.push('%' + semArroba + '%');
+      const conds = [`gp.nome ILIKE $3`, `pa.rg->>'Nome' ILIKE $3`];
+      const dig = busca.replace(/[xX]$/, '').replace(/\D/g, '');
+      if (dig.length >= 4 && !/[A-Za-z]/.test(busca.replace(/[xX]$/, ''))) {
+        params.push('%' + dig + '%');
+        conds.push(`regexp_replace(COALESCE(pa.rg->>'Num', ''), '[^0-9]', '', 'g') LIKE $4`);
+      }
+      where = 'WHERE ' + conds.join(' OR ');
+    }
     const r = await pool.query(
-      `SELECT gp.roblox_id, gp.nome, gp.primeira_vez, gp.ultima_vez, gp.visitas,
+      `SELECT gp.roblox_id, gp.nome, gp.primeira_vez, gp.ultima_vez, gp.visitas, pa.rg,
               pr.id AS procurado_id, pr.estado AS procurado_estado,
               pr.motivo AS procurado_motivo, pr.descricao AS procurado_descricao
          FROM game_players gp
+         LEFT JOIN game_patrimonio pa ON pa.roblox_id = gp.roblox_id
          LEFT JOIN procurados pr
                 ON pr.roblox_id = gp.roblox_id AND pr.estado <> 'encerrado'
          ${where}
@@ -1326,6 +1384,20 @@ router.get('/bans/faltando', async (req, res) => {
   } catch (err) { res.status(500).json({ error: 'Erro interno' }); }
 });
 
+// [16/10] RG do espelho: so os campos do documento, com teto de tamanho. A foto e a
+// descricao do personagem in-game (RGFoto.descrever, ~1 KB). Formato = Data.RG do jogo.
+function rgDoJogo(rg) {
+  if (!rg || typeof rg !== 'object' || Array.isArray(rg)) return null;
+  const t = (v, n) => (typeof v === 'string' && v.length > 0) ? v.slice(0, n) : null;
+  const out = { Nome: t(rg.Nome, 48), Nasc: t(rg.Nasc, 10), Num: t(rg.Num, 16), Exp: t(rg.Exp, 10) };
+  if (!out.Nome || !out.Nasc) return null;
+  if (rg.Foto && typeof rg.Foto === 'object' && !Array.isArray(rg.Foto)) {
+    const js = JSON.stringify(rg.Foto);
+    if (js.length <= 16000) out.Foto = rg.Foto;   // a foto real tem ~1 KB
+  }
+  return JSON.stringify(out);
+}
+
 router.post('/patrimonio', async (req, res) => {
   try {
     const b = req.body || {};
@@ -1337,11 +1409,11 @@ router.post('/patrimonio', async (req, res) => {
     await pool.query(
       `INSERT INTO game_patrimonio (roblox_id, nome, bolso, banco, level, xp, emprego, carros, casas,
                                     prisoes, dividas, divida_estado, divida_recusas, preso,
-                                    financiamentos, versao, atualizado_em)
+                                    financiamentos, versao, rg, atualizado_em)
        -- [10/10] o backfill do jogo nao manda nome: sem isto a linha nascia com nome NULL
        -- e a ficha (que busca por nome) nunca achava quem nao entrou desde entao.
        VALUES ($1, COALESCE($2, (SELECT nome FROM game_players WHERE roblox_id = $1)),
-               $3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15,$16, NOW())
+               $3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15,$16,$17, NOW())
        ON CONFLICT (roblox_id) DO UPDATE SET
          nome = COALESCE(EXCLUDED.nome, game_patrimonio.nome),
          bolso = EXCLUDED.bolso, banco = EXCLUDED.banco,
@@ -1351,6 +1423,9 @@ router.post('/patrimonio', async (req, res) => {
          divida_estado = EXCLUDED.divida_estado, divida_recusas = EXCLUDED.divida_recusas,
          preso = EXCLUDED.preso,
          financiamentos = EXCLUDED.financiamentos, versao = EXCLUDED.versao,
+         -- [16/10] o RG (Carteira de Identidade) cru, igual o Data.RG do jogo. Sem RG = NULL
+         -- (inclusive depois de um PD: o morador novo ainda nao tirou documento).
+         rg = EXCLUDED.rg,
          atualizado_em = NOW()`,
       [rid, b.nome != null ? String(b.nome).slice(0, 64) : null,
        num(b.bolso), num(b.banco), num(b.level) || 1, num(b.xp),
@@ -1361,7 +1436,8 @@ router.post('/patrimonio', async (req, res) => {
        b.divida_estado != null ? String(b.divida_estado).slice(0, 16) : 'Pagando',
        num(b.divida_recusas), num(b.preso),
        // [10/10] Devendo detalhado no PC da PC (cada parcela, igual online ou offline)
-       JSON.stringify(arr(b.financiamentos)), num(b.versao) || 1]);
+       JSON.stringify(arr(b.financiamentos)), num(b.versao) || 1,
+       rgDoJogo(b.rg)]);
     res.json({ ok: true });
   } catch (err) {
     console.error('patrimonio:', err.message);
@@ -1872,7 +1948,7 @@ router.get('/dossie/:nome', async (req, res) => {
   try {
     const pa = await pool.query(
       `SELECT roblox_id, nome, bolso, banco, level, xp, emprego, carros, casas,
-              prisoes, dividas, divida_estado, divida_recusas, preso, financiamentos, atualizado_em
+              prisoes, dividas, divida_estado, divida_recusas, preso, financiamentos, rg, atualizado_em
          FROM game_patrimonio WHERE LOWER(nome) = LOWER($1) LIMIT 1`, [nome]);
     if (pa.rows.length === 0) return res.json({ ok: false, erro: 'nao_achei' });
     const p = pa.rows[0];
@@ -1919,7 +1995,7 @@ router.get('/dossie/:nome', async (req, res) => {
 
     // ja levou PD alguma vez?
     const fe = await pool.query(
-      `SELECT COUNT(*)::int AS n FROM fichas_encerradas WHERE roblox_id = $1`, [rid]);
+      `SELECT COUNT(*)::int AS n FROM fichas_encerradas WHERE roblox_id = $1 AND estado <> 'revertido'`, [rid]);
 
     res.json({
       ok: true,
@@ -1932,6 +2008,7 @@ router.get('/dossie/:nome', async (req, res) => {
         corp, cargo, corp_slug: corpSlug, corp_tipo: corpTipo, salario, entrou, historico,
         procurado: pr.rows[0] ? (pr.rows[0].motivo || 'sim') : null,
         pds_anteriores: fe.rows[0] ? fe.rows[0].n : 0,
+        rg: p.rg || null,   // [16/10] identidade de quem esta fora da cidade (Ficha.identidade)
         // [09/10] a ficha criminal AGORA vem (o jogo passou a espelhar)
         prisoes: p.prisoes || [],
         dividas: p.dividas || [],
@@ -1965,7 +2042,7 @@ router.get('/ficha/cidade', async (req, res) => {
     const r = await pool.query(
       `SELECT roblox_id, nome, bolso, banco, level, emprego,
               prisoes, dividas, divida_estado, divida_recusas, preso,
-              carros, financiamentos, atualizado_em
+              carros, financiamentos, rg, atualizado_em
          FROM game_patrimonio
         ORDER BY atualizado_em DESC NULLS LAST
         LIMIT 300`);
@@ -1982,6 +2059,7 @@ router.get('/ficha/cidade', async (req, res) => {
         // [12/10] aba Veiculos do PC da PC: os carros e os financiamentos de todo mundo
         carros: p.carros || {},
         financiamentos: p.financiamentos || [],
+        rg: p.rg || null,   // [16/10] identidade (Ficha.identidade no jogo)
       })),
     });
   } catch (err) {
@@ -1997,7 +2075,7 @@ router.get('/patrimonio/ids', async (req, res) => {
     const r = await pool.query(
       `SELECT gp.roblox_id FROM game_players gp
          LEFT JOIN game_patrimonio pa ON pa.roblox_id = gp.roblox_id
-        WHERE pa.roblox_id IS NULL OR COALESCE(pa.versao, 1) < 2
+        WHERE pa.roblox_id IS NULL OR COALESCE(pa.versao, 1) < 3   -- [16/10] 3 = foto com RG
         ORDER BY gp.ultima_vez DESC
         LIMIT 60`);
     res.json({ ok: true, ids: r.rows.map(x => Number(x.roblox_id)) });

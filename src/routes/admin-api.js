@@ -247,6 +247,49 @@ router.post('/command', async (req, res) => {
 });
 
 // ------------------------------------------------------------
+// [16/10] PDs — registro de todo encerramento de personagem + botão REVERTER.
+// A regra mora em src/pd.js. Ver: quem vê registro. Reverter: Diretor Geral pra cima.
+// ------------------------------------------------------------
+const PD = require('../pd');
+router.get('/pds', requirePoder('ver_registro'), async (req, res) => {
+  try {
+    const pds = await PD.listar(pool, { limite: req.query.limite, busca: req.query.q });
+    res.json({ pds, pode_reverter: perm.pode(req.user, 'pd_reverter') });
+  } catch (err) {
+    console.error('pds:', err.message);
+    res.status(500).json({ error: 'Erro interno' });
+  }
+});
+router.post('/pds/:id/reverter', requirePoder('pd_reverter'), async (req, res) => {
+  try {
+    const id = Number(req.params.id);
+    if (!Number.isFinite(id) || id <= 0) return res.status(400).json({ error: 'id inválido' });
+    const motivo = str((req.body || {}).motivo, 300);
+    if (!motivo) return res.status(400).json({ error: 'Escreva o motivo da reversão (fica no registro).' });
+    const quem = req.user.discord_username || ('user#' + req.user.id);
+    const r = await PD.pedir(pool, id, quem, motivo);
+    if (!r.ok) return res.status(r.status || 400).json({ error: r.erro });
+    await audit(req, 'pd_reverter', { ficha: id, motivo });
+    const sv = await pool.query(`SELECT COUNT(*)::int AS n FROM game_servers WHERE updated_at > NOW() - INTERVAL '90 seconds'`);
+    res.json({ ok: true, servidores: sv.rows[0].n });
+  } catch (err) {
+    console.error('pds/reverter:', err.message);
+    res.status(500).json({ error: 'Erro interno' });
+  }
+});
+router.post('/pds/:id/cancelar', requirePoder('pd_reverter'), async (req, res) => {
+  try {
+    const id = Number(req.params.id);
+    if (!(await PD.cancelar(pool, id))) return res.status(409).json({ error: 'Só dá pra cancelar pedido que nenhum servidor pegou ainda.' });
+    await audit(req, 'pd_reverter_cancelado', { ficha: id });
+    res.json({ ok: true });
+  } catch (err) {
+    console.error('pds/cancelar:', err.message);
+    res.status(500).json({ error: 'Erro interno' });
+  }
+});
+
+// ------------------------------------------------------------
 // [05/10] BANIDOS — lista pro painel. Fonte: a tabela game_bans (espelho).
 // `vencido` e calculado AQUI, pelo relogio do site: ban temporario que passou da hora
 // ja nao vale no jogo (o DataHandler apaga a chave na proxima entrada do cara), entao

@@ -91,6 +91,9 @@ const PODERES = {
   registro:      { rotulo: 'Apagar jogadores do registro',   min: 'diretor'    },
   logs:          { rotulo: 'Resetar logs',                   min: 'diretor'    },
   reset_jogador: { rotulo: 'Resetar o save de um jogador',   min: 'diretor'    },
+  // [16/10] aba PDs: ver é de quem vê registro; REVERTER devolve o personagem inteiro
+  // (dinheiro, casas, corps) -- mesmo peso de resetar, mesmo degrau.
+  pd_reverter:   { rotulo: 'Reverter PD (devolver o personagem)', min: 'diretor' },
   admins:        { rotulo: 'Gerir admins e seus cargos',     min: 'diretor'    },
 
   // [25/09] SSU. Decisao do Julio: a grade roda SOZINHA e ninguem mexe nela
