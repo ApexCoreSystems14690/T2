@@ -90,7 +90,16 @@ const ESTOQUE = {
   // volta 1 pra prateleira e tira 1 de perdidos. Só o painel usa (rota do jogo não aceita),
   // e só 1 vez por baixa (a baixa fica marcada 'desfeita').
   desfez_baixa: { estoque: +1, emprestado: 0, perda: false, desfazPerda: true, rotulo: 'Baixa desfeita pelo comando' },
+  // [18/10 SAMU Corpo Contínuo] DOAÇÃO DE SANGUE. O banco de sangue do hospital virou
+  // item do estoque da SAMU ("Bolsa de sangue"): doar na cadeira = +1 aqui, usar na rua ou
+  // na mesa = `abasteceu` (−1, o mesmo lote da maleta). Vale pra todos os servidores juntos
+  // e sobrevive a reinício -- o banco antigo era 3 bolsas na memória do servidor.
+  // Não se compra (não está no catálogo/preços do jogo), só se doa. Teto em BANCO_SANGUE.
+  doacao:   { estoque: +1, emprestado:  0, perda: false, rotulo: 'Doação de sangue' },
 };
+
+// [18/10] O banco de sangue: item, teto da geladeira (8 bolsas à vista) e a corp dona.
+const BANCO_SANGUE = { item: 'Bolsa de sangue', teto: 8, corp: 'samu' };
 
 const MAX_POR_PESSOA = 1;   // o vestiário já é toggle: 1 de cada peça por vez
 
@@ -174,6 +183,8 @@ function podeEstoque(est, motivo, quem, item) {
   const nome = String(item || '');
   if (!nome) return { ok: false, erro: 'item' };
   if (m.estoque < 0 && naPrateleira(est, nome) < 1) return { ok: false, erro: 'sem_estoque' };
+  // [18/10] geladeira cheia: a bolsa de sangue tem teto, qualquer que seja a entrada
+  if (m.estoque > 0 && nome === BANCO_SANGUE.item && naPrateleira(est, nome) >= BANCO_SANGUE.teto) return { ok: false, erro: 'cheia' };
   if (m.emprestado > 0 && comAPessoa(est, quem, nome) >= MAX_POR_PESSOA) return { ok: false, erro: 'ja_tem' };
   if (m.emprestado < 0 && comAPessoa(est, quem, nome) < 1) return { ok: false, erro: 'nao_tem' };
   return { ok: true };
@@ -222,6 +233,8 @@ function aplicarEstoque(est, motivo, quem, item, extra = {}) {
       quem: pessoa,
       por: String(extra.por || pessoa),
       sobrou: naPrateleira(est, nome),
+      // [18/10] detalhe opcional (a doação de sangue guarda por/userId); antes era sempre {}
+      detalhe: extra.detalhe && typeof extra.detalhe === 'object' ? extra.detalhe : {},
     },
   };
 }
@@ -277,7 +290,7 @@ function custoDaCompra(precos, item, qtd) {
 }
 
 module.exports = {
-  RATEIO, DINHEIRO, ESTOQUE, MAX_POR_PESSOA,
+  RATEIO, DINHEIRO, ESTOQUE, MAX_POR_PESSOA, BANCO_SANGUE,
   inteiro, positivo, parteDaCorp,
   aplicarDinheiro,
   novoEstoque, naPrateleira, comAPessoa, naRua, podeEstoque, aplicarEstoque,

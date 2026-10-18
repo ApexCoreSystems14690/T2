@@ -193,7 +193,7 @@ async function painel(corpId, limite = 60) {
   // está desviando -- e a graça da corrupção é ele ter que desconfiar e cobrar.
   // Sobra o extrato de DINHEIRO, que é gestão dele mesmo (multa, pátio, compra,
   // bônus). Os lançamentos de estoque têm valor 0, então o balanço não muda.
-  const [cx, est, empr, lanc, perd, bx] = await Promise.all([
+  const [cx, est, empr, lanc, perd, bx, corp, doa] = await Promise.all([
     pool.query(`SELECT saldo FROM corp_caixa WHERE corporation_id = $1`, [corpId]),
     pool.query(`SELECT item, qtd, perdidos FROM corp_estoque WHERE corporation_id = $1 ORDER BY item`, [corpId]),
     pool.query(`SELECT nome, item, qtd, pego_em FROM corp_emprestimos WHERE corporation_id = $1 ORDER BY nome, item`, [corpId]),
@@ -216,6 +216,13 @@ async function painel(corpId, limite = 60) {
         WHERE corporation_id = $1 AND tipo = 'estoque' AND motivo = 'baixa'
           AND criado_em > NOW() - ($2 || ' hours')::interval
         ORDER BY id DESC LIMIT 30`, [corpId, String(JANELA_DESFAZER_H)]),
+    pool.query(`SELECT slug FROM corporations WHERE id = $1`, [corpId]),
+    // [18/10] doações de sangue recentes (o extrato não mostra estoque; a doação é a
+    // única entrada de estoque que o comando da SAMU quer VER com nome -- é mérito, não desvio)
+    pool.query(
+      `SELECT criado_em, quem, item FROM corp_lancamentos
+        WHERE corporation_id = $1 AND tipo = 'estoque' AND motivo = 'doacao'
+        ORDER BY id DESC LIMIT 20`, [corpId]),
   ]);
 
   const naRua = {};
@@ -231,11 +238,22 @@ async function painel(corpId, limite = 60) {
   for (const [item, rua] of Object.entries(naRua)) {
     if (!itens.some(i => i.item === item)) itens.push({ item, prateleira: 0, rua, perdido: 0 });
   }
+  // [18/10] a SAMU sempre tem a linha do banco de sangue, mesmo com 0 bolsas: o jogo lê
+  // `prateleira` daqui (lerPrateleira) e a geladeira vazia precisa aparecer como 0, não sumir.
+  const slug = corp.rows[0] ? String(corp.rows[0].slug) : '';
+  let banco_sangue = null;
+  if (slug === C.BANCO_SANGUE.corp) {
+    if (!itens.some(i => i.item === C.BANCO_SANGUE.item)) itens.push({ item: C.BANCO_SANGUE.item, prateleira: 0, rua: 0, perdido: 0 });
+    const linha = itens.find(i => i.item === C.BANCO_SANGUE.item);
+    banco_sangue = { item: C.BANCO_SANGUE.item, teto: C.BANCO_SANGUE.teto, prateleira: linha.prateleira };
+  }
   itens.sort((a, b) => a.item.localeCompare(b.item));
 
   return {
     saldo: Number(cx.rows[0] ? cx.rows[0].saldo : 0),
     itens,
+    banco_sangue,
+    doacoes: doa.rows.map(d => ({ quem: d.quem, item: d.item, criado_em: d.criado_em })),
     emprestimos: empr.rows.map(e => ({ nome: e.nome, item: e.item, qtd: Number(e.qtd), pego_em: e.pego_em })),
     extrato: lanc.rows.map(l => ({ ...l, valor: Number(l.valor), saldo_depois: l.saldo_depois === null ? null : Number(l.saldo_depois) })),
     perdas_dia: perd.rows.map(r => ({ dia: r.dia, item: r.item, qtd: Number(r.qtd) })),

@@ -1735,6 +1735,8 @@ router.post('/corp/estoque', async (req, res) => {
 const LOTE_MOTIVOS = ['abasteceu', 'recuperou'];
 const LOTE_MAX = 120;   // trava de sanidade: maleta cheia sao 44
 // [09/10] reposicao automatica por corp: abaixo de `min` na prateleira, compra `itens[x]`.
+// [18/10] "Bolsa de sangue" fica FORA de proposito: o banco de sangue so enche com doacao
+// (rota /corp/:slug/estoque/entrada abaixo), nunca com o caixa. Nao adicionar aqui.
 const REPOR = {
   samu: { min: 10, itens: { 'Fio de sutura': 20, 'Gesso': 20, 'Colar cervical': 20, 'Adrenalina': 20 } },
 };
@@ -1831,9 +1833,47 @@ router.get('/corp/:slug/estoque', async (req, res) => {
     const c = await corpPorSlug(req.params.slug);
     if (!c) return res.status(404).json({ error: 'corporação não encontrada' });
     const d = await caixa.painel(c.id, 1);
-    res.json({ ok: true, corp: c.slug, saldo: d.saldo, itens: d.itens });
+    // [18/10] `itens` ja traz "Bolsa de sangue" com prateleira 0 quando a geladeira esta vazia
+    // (painel() garante a linha pra SAMU); `banco_sangue` e o resumo com o teto.
+    res.json({ ok: true, corp: c.slug, saldo: d.saldo, itens: d.itens, banco_sangue: d.banco_sangue });
   } catch (err) {
     console.error('corp/estoque/ler:', err.message);
+    res.status(500).json({ error: 'Erro interno' });
+  }
+});
+
+// [18/10 SAMU Corpo Contínuo] POST /api/game/corp/:slug/estoque/entrada  { item, n, por, userId }
+// ENTRADA de estoque que NAO e compra: a doacao de sangue. O jogador senta na cadeira de
+// doacao, a bolsa enche e o jogo chama isto -> +1 "Bolsa de sangue" na prateleira da SAMU,
+// com teto (BANCO_SANGUE.teto = 8). Usar a bolsa (rua/mesa) e o mesmo lote `abasteceu` da
+// maleta (-1). Por enquanto so aceita a bolsa: entrada gratis de qualquer outro item seria
+// uma porta pra criar arma do nada. Cada unidade passa pelo movEstoque (lock + nucleo +
+// lancamento com motivo 'doacao'), como todo o resto.
+// Devolve { ok:true, prateleira } ou { ok:false, erro:'cheia'|'item'|'qtd', prateleira }.
+router.post('/corp/:slug/estoque/entrada', async (req, res) => {
+  try {
+    const { item, n, por, userId } = req.body || {};
+    const it = String(item || '').slice(0, 64);
+    if (it !== CC.BANCO_SANGUE.item) return res.status(400).json({ ok: false, erro: 'item' });
+    const q = Math.max(0, Math.min(CC.BANCO_SANGUE.teto, parseInt(n) || 0));
+    if (q <= 0) return res.status(400).json({ ok: false, erro: 'qtd' });
+    const c = await corpPorSlug(req.params.slug);
+    if (!c) return res.status(404).json({ error: 'corporação não encontrada' });
+    if (c.slug !== CC.BANCO_SANGUE.corp) return res.status(400).json({ ok: false, erro: 'corp' });
+    const nome = String(por || '').slice(0, 64);
+    const uid = parseInt(userId) || null;
+    let entraram = 0, erro = null;
+    for (let i = 0; i < q; i++) {
+      const r = await caixa.movEstoque(c.id, 'doacao', nome, it, { roblox_id: uid, por: nome, detalhe: { por: nome, userId: uid } });
+      if (!r.ok) { erro = r.erro; break; }
+      entraram += 1;
+    }
+    const atual = await pool.query(`SELECT qtd FROM corp_estoque WHERE corporation_id = $1 AND item = $2`, [c.id, it]);
+    const prateleira = atual.rows[0] ? Number(atual.rows[0].qtd) : 0;
+    if (entraram === 0) return res.json({ ok: false, erro: erro || 'cheia', prateleira, teto: CC.BANCO_SANGUE.teto });
+    res.json({ ok: true, entraram, prateleira, teto: CC.BANCO_SANGUE.teto });
+  } catch (err) {
+    console.error('corp/estoque/entrada:', err.message);
     res.status(500).json({ error: 'Erro interno' });
   }
 });

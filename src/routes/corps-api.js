@@ -772,6 +772,8 @@ router.post('/:corpId/caixa/baixa', requireCorpOwner, requireCorpPoder('gerir_es
   try {
     const { item } = req.body || {};
     if (!item) return res.status(400).json({ error: 'Item é obrigatório' });
+    // [18/10] bolsa de sangue não tem baixa: só entra por doação e sai pelo uso no jogo
+    if (String(item) === CC.BANCO_SANGUE.item) return res.status(400).json({ error: 'O banco de sangue não aceita baixa: as bolsas saem quando a equipe usa.', codigo: 'banco_sangue' });
     const r = await caixa.movEstoque(req.params.corpId, 'baixa', '', String(item).slice(0, 64),
       { por: req.user.roblox_username || req.user.discord_username || String(req.user.id) });
     if (!r.ok) {

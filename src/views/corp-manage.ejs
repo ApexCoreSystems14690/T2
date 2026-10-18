@@ -403,6 +403,16 @@
       </table>
       <% } %>
 
+      <!-- [18/10] SAMU: doações de sangue (só aparece quando a corp tem banco de sangue) -->
+      <div id="cx-doacoes-bloco" style="display:none">
+        <h3 style="color:#161A1F;font-size:0.9rem;margin:1.5rem 0 0.5rem">Doações de sangue recentes</h3>
+        <div style="color:#5B6573;font-size:0.75rem;margin:-0.2rem 0 0.5rem">Cada doação na cadeira do hospital põe 1 bolsa na geladeira (até <span id="cx-doacoes-teto">8</span>). As bolsas saem quando a equipe usa na rua ou na mesa.</div>
+        <table class="member-table">
+          <thead><tr><th>Quando</th><th>Doador</th></tr></thead>
+          <tbody id="cx-doacoes"><tr><td colspan="2" class="empty">Carregando…</td></tr></tbody>
+        </table>
+      </div>
+
       <h3 style="color:#161A1F;font-size:0.9rem;margin:1.5rem 0 0.5rem">Com quem está agora</h3>
       <table class="member-table">
         <thead><tr><th>Policial</th><th>Item</th><th>Desde</th></tr></thead>
@@ -840,8 +850,16 @@
       }
 
       var tb = document.getElementById('cx-estoque');
+      var bs = d.banco_sangue;   // [18/10] SAMU: a geladeira do banco de sangue (só doação, sem compra nem baixa)
       tb.innerHTML = (d.itens && d.itens.length)
         ? d.itens.map(function (i) {
+            if (bs && i.item === bs.item) {
+              return '<tr><td><b>Banco de sangue</b> <span style="color:#5B6573">· ' + i.prateleira + '/' + bs.teto + ' bolsas · enche só com doação na cadeira do hospital</span></td>' +
+                '<td style="font-variant-numeric:tabular-nums">' + i.prateleira + '</td>' +
+                '<td style="font-variant-numeric:tabular-nums">' + i.rua + '</td>' +
+                '<td style="font-variant-numeric:tabular-nums;color:#5B6573">—</td>' +
+                (d.pode_estoque ? '<td></td>' : '') + '</tr>';
+            }
             return '<tr><td>' + i.item + '</td>' +
               '<td style="font-variant-numeric:tabular-nums">' + i.prateleira + '</td>' +
               '<td style="font-variant-numeric:tabular-nums">' + i.rua + '</td>' +
@@ -859,6 +877,20 @@
                 '<td>' + (b.desfeita ? '<span style="color:#5B6573">Desfeita</span>' : '<button class="btn-sm" onclick="desfazerBaixa(' + b.id + ', \'' + String(b.item).replace(/'/g, "\\'") + '\')">Desfazer</button>') + '</td></tr>';
             }).join('')
           : '<tr><td colspan="4" class="empty">Nenhuma baixa nas últimas 48h.</td></tr>';
+      }
+
+      // [18/10] doações de sangue: só a SAMU tem o bloco
+      var bd = document.getElementById('cx-doacoes-bloco');
+      if (bd) {
+        bd.style.display = bs ? '' : 'none';
+        if (bs) {
+          document.getElementById('cx-doacoes-teto').textContent = bs.teto;
+          document.getElementById('cx-doacoes').innerHTML = (d.doacoes && d.doacoes.length)
+            ? d.doacoes.map(function (x) {
+                return '<tr><td style="color:#5B6573;white-space:nowrap">' + quando(x.criado_em) + '</td><td>Doação de sangue (' + (x.quem || '—') + ')</td></tr>';
+              }).join('')
+            : '<tr><td colspan="2" class="empty">Ninguém doou ainda. A geladeira está com ' + bs.prateleira + '/' + bs.teto + '.</td></tr>';
+        }
       }
 
       var te = document.getElementById('cx-emprestimos');
