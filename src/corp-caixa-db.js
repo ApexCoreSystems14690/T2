@@ -183,9 +183,56 @@ async function desfazerBaixa(corpId, lancId, por) {
   }
 }
 
+// ---------------------------------------------------------------- fantasmas
+// [22/10] Julio (print de "Com quem está agora"): "pessoal nem ta no jogo e ta
+// dizendo que tao com elas". O empréstimo só fecha quando o JOGO manda `saiu` no
+// PlayerRemoving. Se esse POST não chega (servidor caiu/fechou no SSU, site fora,
+// BindToClose estourou), a linha fica presa PRA SEMPRE -- buraco anotado em 03/10.
+// A regra do Julio (30/09) é "kitar volta tudo pro estoque", então: quem está há
+// FANTASMA_MIN fora de TODO servidor vivo devolve o que tinha, com o mesmo `saiu`
+// (passa pelo núcleo, pelo lock e vira lançamento -- nada de DELETE na mão).
+// Fora de servidor = não aparece na lista de players de nenhum game_servers vivo
+// (heartbeat < 2 min) E o último heartbeat que viu ele (game_players.ultima_vez)
+// tem mais de FANTASMA_MIN. As duas juntas: um servidor com heartbeat atrasado não
+// arranca a arma da mão de quem está jogando.
+const FANTASMA_MIN = 5;
+async function faxinaFantasmas(corpId = null) {
+  const r = await pool.query(
+    `SELECT e.corporation_id, e.nome, e.roblox_id, e.item, e.qtd
+       FROM corp_emprestimos e
+      WHERE ($1::int IS NULL OR e.corporation_id = $1)
+        AND e.pego_em < NOW() - ($2 || ' minutes')::interval
+        AND NOT EXISTS (
+          SELECT 1 FROM game_servers s, jsonb_array_elements(s.players) p
+           WHERE s.updated_at > NOW() - INTERVAL '2 minutes'
+             AND ((e.roblox_id IS NOT NULL AND p->>'userId' = e.roblox_id::text)
+                  OR LOWER(p->>'name') = LOWER(e.nome)))
+        AND NOT EXISTS (
+          SELECT 1 FROM game_players gp
+           WHERE (gp.roblox_id = e.roblox_id OR LOWER(gp.nome) = LOWER(e.nome))
+             AND gp.ultima_vez > NOW() - ($2 || ' minutes')::interval)
+      ORDER BY e.id LIMIT 200`,
+    [corpId, String(FANTASMA_MIN)]);
+  let n = 0;
+  for (const e of r.rows) {
+    for (let i = 0; i < Number(e.qtd); i++) {
+      const m = await movEstoque(e.corporation_id, 'saiu', e.nome, e.item, {
+        roblox_id: e.roblox_id ? Number(e.roblox_id) : null, por: 'sistema',
+        detalhe: { auto: 'fora_do_jogo' },
+      });
+      if (!m.ok) break;
+      n++;
+    }
+  }
+  return n;
+}
+
 // ---------------------------------------------------------------- leitura
 async function painel(corpId, limite = 60) {
   const lim = Math.min(200, Math.max(1, parseInt(limite) || 60));
+  // [22/10] o painel nunca mostra fantasma: limpa antes de ler (servidor fechado
+  // não manda heartbeat, então a limpeza do heartbeat sozinha não basta)
+  try { await faxinaFantasmas(corpId); } catch (e) { console.error('faxinaFantasmas:', e.message); }
   // [29/09] O EXTRATO NÃO MOSTRA MOVIMENTO DE EQUIPAMENTO -- `tipo <> 'estoque'`.
   // [stated] Julio: o comandante "só pode ver quantas armas foram perdidas no dia
   // etc quantas tinham e pa, ele que descubra e cobre seus agentes".
@@ -425,4 +472,4 @@ async function resumoOrcamento(corpId, slug, agoraMs) {
   };
 }
 
-module.exports = { desfazerBaixa, JANELA_DESFAZER_H, movDinheiro, movEstoque, comprar, painel, precos, catalogo, registrarAtividade, pagarOrcamentoSePendente, resumoOrcamento, ehEmpresa, ORC };
+module.exports = { faxinaFantasmas, FANTASMA_MIN, desfazerBaixa, JANELA_DESFAZER_H, movDinheiro, movEstoque, comprar, painel, precos, catalogo, registrarAtividade, pagarOrcamentoSePendente, resumoOrcamento, ehEmpresa, ORC };

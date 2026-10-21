@@ -65,8 +65,10 @@ async function ctxDaCorp(corpId, user) {
               WHERE mm.corporation_id = c.id AND mm.user_id = $2) AS minhas_permissoes,
             (SELECT MAX(level) FROM ranks WHERE corporation_id = c.id) AS nivel_max,
             (SELECT COUNT(DISTINCT level)::int FROM ranks WHERE corporation_id = c.id) AS qtd_niveis
-       FROM corporations c WHERE c.id = $1`,
-    [id, user.id]
+       FROM corporations c WHERE c.id = $1 AND c.cidade_id = $3`,
+    // [21/10 Cidades] corp de OUTRA cidade não existe pra este pedido (404).
+    // user.cidade_id vem do contexto (src/cidades.js); sem cidade, nada bate.
+    [id, user.id, user.cidade_id || 0]
   );
   if (r.rows.length === 0) return null;
   const row = r.rows[0];

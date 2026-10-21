@@ -6,6 +6,39 @@ const PD = require('../pd');   // [16/10] aba PDs + reverter
 // Todas as rotas aqui precisam da API key
 router.use(requireApiKey);
 
+// [21/10 Cidades] De que cidade é este servidor do jogo? O jogo manda o slug no
+// header x-cidade. Sem header = Santa Fé Oficial (é o que o jogo de hoje manda).
+// Slug que não existe = 400: nunca cair em silêncio na cidade errada.
+const CID = require('../cidades');
+async function cidadeDoJogo(req) {
+  if (req._cidadeJogo) return req._cidadeJogo;
+  const slug = CID.slugDoJogo(req.get('x-cidade'));
+  if (!slug) return (req._cidadeJogo = CID.SANTA_FE);
+  const c = await CID.porSlug(pool, slug);
+  if (!c) { const e = new Error('cidade desconhecida: ' + slug); e.status = 400; throw e; }
+  return (req._cidadeJogo = c.id);
+}
+router.use(async (req, res, next) => {
+  try { await cidadeDoJogo(req); next(); }
+  catch (e) { res.status(e.status || 500).json({ error: e.message }); }
+});
+
+// [21/10 Cidades] Lista pro LOBBY do jogo (place "Cidades"): as cidades abertas,
+// quantos estão jogando e quantos servidores cada uma tem agora.
+router.get('/cidades', async (req, res) => {
+  try {
+    const [lista, mov] = await Promise.all([CID.todas(pool), CID.movimento(pool)]);
+    res.json({
+      ok: true,
+      cidades: lista.filter(c => c.status === 'ativa').map(c => ({
+        slug: c.slug, nome: c.nome, sigla: c.sigla, tipo: c.tipo, cor: c.cor, descricao: c.descricao,
+        vagas: c.vagas, online: (mov[c.id] || {}).online || 0, aberta: !!(mov[c.id] || {}).servidores,
+        lotada: ((mov[c.id] || {}).online || 0) >= c.vagas,
+      })),
+    });
+  } catch (err) { console.error('game/cidades:', err.message); res.status(500).json({ error: 'Erro interno' }); }
+});
+
 // ===========================================================================
 // [14/10 SEGURANCA] ACESSO — o jogo pergunta isto na ENTRADA de cada jogador.
 // O site virou a FONTE DA VERDADE do ban: ban/desban pelo painel vale mesmo com
@@ -210,8 +243,11 @@ router.get('/ssu', async (req, res) => {
     // lista e refaz de tempos em tempos. Lista velha por alguns minutos custa,
     // no pior caso, um admin recem-promovido esperando -- nunca um jogador
     // comum entrando fora do horario.
+    // [21/10 Cidades] staff = cidade_staff da cidade que está perguntando (header
+    // x-cidade, sem header = Santa Fé Oficial).
     const st = await pool.query(
-      `SELECT roblox_id FROM users WHERE roblox_id IS NOT NULL AND is_admin = true LIMIT 200`);
+      `SELECT u.roblox_id FROM users u JOIN cidade_staff cs ON cs.user_id = u.id
+        WHERE u.roblox_id IS NOT NULL AND cs.cidade_id = $1 LIMIT 200`, [await cidadeDoJogo(req)]);
     res.json({
       ok: true,
       ajustes: (r.rows[0] && r.rows[0].value) || {},
@@ -506,6 +542,7 @@ router.get('/corp/:corpSlug/ranks', async (req, res) => {
 // ============================================================
 
 // POST /api/game/heartbeat  { job_id, place_id, players: [...], catalog?: {...} }
+let ultimaFaxina = 0;
 router.post('/heartbeat', async (req, res) => {
   try {
     const { job_id, place_id, players, catalog } = req.body || {};
@@ -513,15 +550,16 @@ router.post('/heartbeat', async (req, res) => {
     const lista = Array.isArray(players) ? players.slice(0, 200) : [];
     if (catalog && typeof catalog === 'object') {
       await pool.query(
-        `INSERT INTO game_servers (job_id, place_id, players, catalog, updated_at) VALUES ($1, $2, $3, $4, NOW())
-         ON CONFLICT (job_id) DO UPDATE SET place_id = EXCLUDED.place_id, players = EXCLUDED.players, catalog = EXCLUDED.catalog, updated_at = NOW()`,
-        [job_id, place_id ? parseInt(place_id) : null, JSON.stringify(lista), JSON.stringify(catalog)]
+        // [21/10 Cidades] o servidor fica marcado com a cidade dele (header x-cidade)
+        `INSERT INTO game_servers (job_id, place_id, players, catalog, updated_at, cidade_id) VALUES ($1, $2, $3, $4, NOW(), $5)
+         ON CONFLICT (job_id) DO UPDATE SET place_id = EXCLUDED.place_id, players = EXCLUDED.players, catalog = EXCLUDED.catalog, updated_at = NOW(), cidade_id = EXCLUDED.cidade_id`,
+        [job_id, place_id ? parseInt(place_id) : null, JSON.stringify(lista), JSON.stringify(catalog), req._cidadeJogo]
       );
     } else {
       await pool.query(
-        `INSERT INTO game_servers (job_id, place_id, players, updated_at) VALUES ($1, $2, $3, NOW())
-         ON CONFLICT (job_id) DO UPDATE SET place_id = EXCLUDED.place_id, players = EXCLUDED.players, updated_at = NOW()`,
-        [job_id, place_id ? parseInt(place_id) : null, JSON.stringify(lista)]
+        `INSERT INTO game_servers (job_id, place_id, players, updated_at, cidade_id) VALUES ($1, $2, $3, NOW(), $4)
+         ON CONFLICT (job_id) DO UPDATE SET place_id = EXCLUDED.place_id, players = EXCLUDED.players, updated_at = NOW(), cidade_id = EXCLUDED.cidade_id`,
+        [job_id, place_id ? parseInt(place_id) : null, JSON.stringify(lista), req._cidadeJogo]
       );
     }
     // limpa servidores mortos (sem heartbeat há 2 min)
@@ -569,6 +607,13 @@ router.post('/heartbeat', async (req, res) => {
            ON CONFLICT (roblox_id) DO UPDATE SET nome = EXCLUDED.nome, ultima_vez = NOW()`,
           pr);
       }
+    }
+
+    // [22/10] devolve ao estoque o que está "com" quem já saiu do jogo (o `saiu` do
+    // PlayerRemoving não chegou). No máximo 1x por minuto, sem segurar o heartbeat.
+    if (Date.now() - ultimaFaxina > 60000) {
+      ultimaFaxina = Date.now();
+      caixa.faxinaFantasmas().catch(e => console.error('faxinaFantasmas:', e.message));
     }
 
     // Fila de itens: entrega pendências de quem está online agora (o jogo aplica e confirma)

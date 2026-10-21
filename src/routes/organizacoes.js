@@ -45,7 +45,8 @@ router.get('/', async (req, res) => {
               COALESCE((SELECT saldo FROM corp_caixa cx WHERE cx.corporation_id = c.id), 0) AS saldo
          FROM corporations c
          LEFT JOIN users u ON u.id = c.owner_id
-        ORDER BY CASE c.tipo WHEN 'empresa' THEN 0 WHEN 'corp' THEN 1 ELSE 2 END, c.name`);
+        WHERE c.cidade_id = $1                    -- [21/10] só a cidade escolhida
+        ORDER BY CASE c.tipo WHEN 'empresa' THEN 0 WHEN 'corp' THEN 1 ELSE 2 END, c.name`, [req.cidade.id]);
 
     const orgs = r.rows.map(o => ({ ...o, rotulo: ROTULO[o.tipo] || o.tipo }));
     res.render('organizacoes', {

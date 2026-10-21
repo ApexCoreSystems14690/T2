@@ -1245,6 +1245,12 @@ async function start() {
     return m ? '/roblox-thumb/' + m[1] : s;
   };
 
+  // [21/10] CIDADES: tabela das cidades, staff por cidade e cidade_id em toda
+  // tabela da cidade. Vem DEPOIS de todos os CREATE TABLE do boot (ver src/cidades.js).
+  const CID = require('./cidades');
+  try { await CID.garantir(pool); }
+  catch (e) { console.error('[cidades] garantir:', e.message); throw e; }
+
   // Sessão com PostgreSQL
   app.use(session({
     store: new PgSession({ pool, tableName: 'session' }),
@@ -1281,6 +1287,10 @@ async function start() {
     next();
   });
 
+  // [21/10] Cidade do pedido (sessão) + cargo de staff DESTA cidade no req.user
+  // + trava de aba trocada. Tem que vir logo depois de carregar o usuário.
+  app.use(CID.contexto(pool));
+
   // [14/10 SEGURANCA] grava o HASH do IP de quem esta logado (1x por sessao/IP) pro
   // anti-alt. O jogo nao ve IP; o site ve. IP cru nunca vai pro banco.
   app.use(require('./seguranca').middlewareIp(pool));
@@ -1298,22 +1308,76 @@ async function start() {
   app.use('/api/game/net', limitar('game', 300, 60), require('./routes/net-api'));
   // vincular Roblox e a rota de tomada de conta: aperta de verdade.
   app.use('/dashboard/link-roblox', limitar('link', 10, 300));
-  app.use('/dashboard', require('./routes/dashboard'));
-  app.use('/net', require('./routes/net'));
-  app.use('/api/corps', require('./routes/corps-api'));
-  app.use('/api/admin', require('./routes/admin-api'));
-  app.use('/admin', require('./routes/admin'));
-  app.use('/apuracao', require('./routes/apuracao'));   // [14/10] eleição
-  app.use('/empresas', require('./routes/empresas'));   // [30/09] Empresas Oficiais
-  app.use('/organizacoes', require('./routes/organizacoes'));  // [30/09] vista de staff: corp + faccao + empresa
-  app.use('/faccoes', require('./routes/faccoes'));
+  // [21/10 Cidades] tudo daqui pra baixo pertence a UMA cidade. Sem cidade
+  // escolhida: página volta pra tela Cidades, API toma 409. Exceções: vincular
+  // Roblox (é da conta, vale pra todas), o logo público das corps e a
+  // transmissão da apuração (aberta no OBS, sem login).
+  const exige = CID.exigeCidade;
+  app.use('/dashboard', exige({ livres: ['/link-roblox'] }), require('./routes/dashboard'));
+  app.use('/net', exige(), require('./routes/net'));
+  app.use('/api/corps', exige({ livres: [/^\/\d+\/icon$/] }), require('./routes/corps-api'));
+  app.use('/api/admin', exige(), require('./routes/admin-api'));
+  app.use('/admin', exige(), require('./routes/admin'));
+  app.use('/apuracao', exige({ livres: ['/transmissao', '/dados'] }), require('./routes/apuracao'));   // [14/10] eleição
+  app.use('/empresas', exige(), require('./routes/empresas'));   // [30/09] Empresas Oficiais
+  app.use('/organizacoes', exige(), require('./routes/organizacoes'));  // [30/09] vista de staff: corp + faccao + empresa
+  app.use('/faccoes', exige(), require('./routes/faccoes'));
 
-  // Home
-  app.get('/', (req, res) => {
-    // [30/09] o card "Todas as Organizacoes" so aparece pro Diretor Geral+.
+  // [21/10] ENTRADA = tela CIDADES. Mostra as cidades da rede (hoje só o Santa
+  // Fé Oficial), quantos estão jogando em cada uma e o cargo de staff que a
+  // pessoa tem em cada uma.
+  app.get('/', async (req, res) => {
+    try {
+      const [lista, mov, cargos] = await Promise.all([
+        CID.todas(pool), CID.movimento(pool),
+        CID.meusCargos(pool, req.usuarioPlataforma && req.usuarioPlataforma.id),
+      ]);
+      const perm = require('./permissoes');
+      const plataforma = !!(req.usuarioPlataforma && perm.ehDono(req.usuarioPlataforma));
+      const cidadesVis = lista.filter(c => c.status !== 'fechada').map(c => {
+        let cargo = cargos[c.id] || null;
+        // a conta da plataforma é Dono só na oficial; nas outras, só o dono da cidade
+        if ((plataforma && c.tipo === 'oficial') || (req.usuarioPlataforma && c.dono_user_id === req.usuarioPlataforma.id)) cargo = 'dono';
+        return Object.assign({}, c, {
+          online: (mov[c.id] || {}).online || 0,
+          servidores: (mov[c.id] || {}).servidores || 0,
+          meu_cargo: cargo,
+          meu_cargo_nome: cargo ? ((perm.CARGOS[cargo] || {}).nome || cargo) : null,
+        });
+      });
+      res.render('cidades', {
+        cidade: null,   // a placa do topo aqui é a da rede, não a da cidade da sessão
+        user: req.usuarioPlataforma || null,
+        cidades: cidadesVis,
+        atual: req.cidade ? req.cidade.id : null,
+        voltar: CID.voltarSeguro(req.query.voltar) || '',
+      });
+    } catch (err) {
+      console.error('cidades:', err.message);
+      res.status(500).render('error', { message: 'Erro ao carregar as cidades', user: req.user || null });
+    }
+  });
+
+  // Entrar numa cidade: grava na sessão e segue pro painel dela (ou pra onde
+  // a pessoa queria ir). Sem login, vai pro Discord e volta pra cá depois.
+  app.get('/cidade/:slug', async (req, res) => {
+    const c = CID.slugValido(req.params.slug) ? await CID.porSlug(pool, req.params.slug) : null;
+    if (!c || c.status !== 'ativa') return res.redirect('/');
+    req.session.cidadeId = c.id;
+    const voltar = CID.voltarSeguro(req.query.voltar);
+    if (!req.session.userId) {
+      req.session.depoisDoLogin = voltar || '/painel';
+      return req.session.save(() => res.redirect('/auth/discord'));
+    }
+    req.session.save(() => res.redirect(voltar || '/painel'));
+  });
+
+  // O painel da cidade escolhida (a antiga home: corporações, empresas, facções...)
+  app.get('/painel', CID.exigeCidade(), (req, res) => {
+    if (!req.user) return res.redirect('/');
     let ehDiretor = false;
-    try { ehDiretor = !!(req.user && require('./permissoes').ehDiretorOuMais(req.user)); } catch (_) {}
-    res.render('home', { user: req.user || null, ehDiretor });
+    try { ehDiretor = !!require('./permissoes').ehDiretorOuMais(req.user); } catch (_) {}
+    res.render('home', { user: req.user, ehDiretor });
   });
 
   // 404

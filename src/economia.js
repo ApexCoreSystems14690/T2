@@ -74,7 +74,8 @@ function montar(movs, totalCirculando) {
   };
 }
 
-async function relatorio(dias) {
+async function relatorio(dias, cidadeId) {
+  cidadeId = cidadeId || 1;
   const janela = dias > 0 ? `NOW() - ($1 || ' days')::interval` : `'-infinity'::timestamp`;
   const pj = dias > 0 ? [String(dias)] : [];
 
@@ -97,9 +98,12 @@ async function relatorio(dias) {
 
   // ---------------------------------------------------------------- STAFF
   const usuarios = (await pool.query(
-    `SELECT id, discord_id, discord_username, roblox_username, roblox_id, is_admin, admin_cargo FROM users
-      WHERE is_admin = true OR id IN (SELECT DISTINCT created_by FROM game_commands WHERE tipo = ANY($1))`,
-    [TIPOS_CMD])).rows;
+    // [21/10 Cidades] o cargo de staff é o desta cidade
+    `SELECT u.id, u.discord_id, u.discord_username, u.roblox_username, u.roblox_id,
+            (cs.cargo IS NOT NULL) AS is_admin, cs.cargo AS admin_cargo
+       FROM users u LEFT JOIN cidade_staff cs ON cs.user_id = u.id AND cs.cidade_id = $2
+      WHERE cs.cargo IS NOT NULL OR u.id IN (SELECT DISTINCT created_by FROM game_commands WHERE tipo = ANY($1))`,
+    [TIPOS_CMD, cidadeId])).rows;
   const porId = new Map(usuarios.map(u => [u.id, u]));
   const porRoblox = new Map(usuarios.filter(u => u.roblox_id).map(u => [String(u.roblox_id), u]));
   // [15/10] o mesmo staff aparecia 2x (uma pelo id, outra só pelo nome no extrato da corp / no jogo)

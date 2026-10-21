@@ -34,13 +34,18 @@ router.get('/discord/callback', async (req, res) => {
     // a usar a sessao JA LOGADA dela -- inclusive se a vitima fosse admin.
     // Trocar o sid no login quebra isso: o cookie plantado morre no ato.
     const idNovo = user.id;
+    // [21/10 Cidades] a cidade escolhida antes do login sobrevive à troca do sid
+    const cidadeId = req.session.cidadeId || null;
+    const depois = req.session.depoisDoLogin || null;
     req.session.regenerate((errR) => {
       if (errR) {
         console.error('regenerate:', errR.message);
         return res.render('error', { message: 'Erro no login', user: null });
       }
       req.session.userId = idNovo;
-      req.session.save(() => res.redirect('/dashboard'));
+      if (cidadeId) req.session.cidadeId = cidadeId;
+      const ok = require('../cidades').voltarSeguro(depois);
+      req.session.save(() => res.redirect(cidadeId ? (ok || '/painel') : '/'));
     });
   } catch (err) {
     console.error('Auth callback erro:', err.message);

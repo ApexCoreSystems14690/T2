@@ -26,6 +26,7 @@ async function preparar() {
     DELETE FROM game_commands; DELETE FROM game_item_fila; DELETE FROM game_servers; DELETE FROM game_patrimonio;
   `);
   await T.garantir(pool);
+  await require('./src/cidades').garantir(pool);
   await pool.query(`DELETE FROM tester_liberacoes`);
   await pool.query(`DELETE FROM members WHERE user_id IN (SELECT id FROM users WHERE discord_id LIKE 'tt_%')`);
   await pool.query(`DELETE FROM users WHERE discord_id LIKE 'tt_%'`);
@@ -66,7 +67,8 @@ async function preparar() {
 function app(comoQuem) {
   const a = express();
   a.use(express.json());
-  a.use((req, res, next) => { req.user = comoQuem(); next(); });
+  // [21/10 Cidades] o painel roda dentro do Santa Fé Oficial
+  a.use((req, res, next) => { req.cidade = { id: 1, slug: 'santa-fe', nome: 'Santa Fé' }; req.user = Object.assign({}, comoQuem(), { cidade_id: 1 }); next(); });
   a.use('/api/admin', require('./src/routes/admin-api'));
   return a;
 }

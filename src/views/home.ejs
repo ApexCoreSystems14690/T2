@@ -3,7 +3,7 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>Santa Fé — Sistema da cidade</title>
+  <title><%= cidade ? cidade.nome : 'Santa Fé' %> — Sistema da cidade</title>
   <meta name="theme-color" content="#1C2127">
   <style>
     body { margin: 0; min-height: 100vh; }
@@ -21,8 +21,10 @@
     .entrar .ic { width: 1.3em; height: 1.3em; }
     .quem { display: flex; align-items: center; gap: .8rem; flex-wrap: wrap; color: var(--tinta-2); font-size: .92rem; margin: 0 0 1.1rem; }
     .quem strong { color: var(--tinta); }
-    .quem a { margin-left: auto; color: var(--tinta-2); text-decoration: none; display: inline-flex; align-items: center; gap: .3rem; }
-    .quem a:hover { color: var(--perigo); }
+    .quem a { color: var(--tinta-2); text-decoration: none; display: inline-flex; align-items: center; gap: .3rem; }
+    .quem a.trocar { margin-left: auto; }
+    .quem a.trocar:hover { color: var(--placa); }
+    .quem a.sair:hover { color: var(--perigo); }
     .lista { background: var(--papel); border: 1px solid var(--linha); border-radius: var(--r); overflow: hidden; }
     .item { display: grid; grid-template-columns: 44px 1fr; gap: .2rem 1rem; align-items: center; padding: 1rem 1.1rem; text-decoration: none; color: var(--tinta); border-top: 1px solid var(--linha); }
     .item:first-child { border-top: 0; }
@@ -49,11 +51,11 @@
   <div class="faixa-topo"></div>
   <main class="casa">
     <div class="placa-grande" aria-label="Placa Santa Fé RP">
-      <div class="faixa"><span>SANTA FÉ</span><span class="bandeirinha"></span></div>
-      <div class="chars">SFE·RP</div>
+      <div class="faixa"><span><%= cidade ? String(cidade.nome).toUpperCase() : 'SANTA FÉ' %></span><span class="bandeirinha"></span></div>
+      <div class="chars"><%= cidade ? String(cidade.sigla || 'SFE').toUpperCase() : 'SFE' %>·RP</div>
     </div>
 
-    <h1>Sistema da cidade de Santa Fé</h1>
+    <h1>Sistema da cidade de <%= cidade ? cidade.nome : 'Santa Fé' %></h1>
     <% if (!user) { %>
       <p class="lede">Cargos, membros, caixa e salários das corporações, facções e empresas do Santa Fé RP. Entre com a mesma conta do Discord do servidor.</p>
       <a href="/auth/discord" class="btn entrar"><svg class="ic" aria-hidden="true"><use href="/icones.svg#discord"/></svg>Entrar com Discord</a>
@@ -61,7 +63,9 @@
       <p class="lede">Escolha o que você vai gerenciar hoje.</p>
       <div class="quem">
         <span>Conectado como <strong><%= user.discord_username %></strong></span>
-        <a href="/auth/logout"><svg class="ic" aria-hidden="true"><use href="/icones.svg#sair"/></svg>Sair</a>
+        <%# [21/10 Cidades] tudo nesta tela é da cidade escolhida %>
+        <a href="/" class="trocar"><svg class="ic" aria-hidden="true"><use href="/icones.svg#voltar"/></svg>Trocar de cidade</a>
+        <a href="/auth/logout" class="sair"><svg class="ic" aria-hidden="true"><use href="/icones.svg#sair"/></svg>Sair</a>
       </div>
       <nav class="lista" aria-label="Painéis">
         <a class="item corp" href="/dashboard">

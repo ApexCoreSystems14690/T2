@@ -8,7 +8,7 @@ const E = require('../eleicao');
 
 router.use(requireAuth);
 
-const ehStaff = u => perm.ehDono(u);
+const ehStaff = u => perm.ehDonoAqui(u);   // [21/10] Dono desta cidade
 function soStaff(req, res, next) {
   if (ehStaff(req.user)) return next();
   return res.status(403).json({ error: 'Só o Dono controla a eleição.' });

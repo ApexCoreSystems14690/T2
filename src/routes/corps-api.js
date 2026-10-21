@@ -68,11 +68,11 @@ router.get('/', async (req, res) => {
     const result = perm.pode(req.user, 'corp')
       ? await pool.query(
           `SELECT c.*, (SELECT COUNT(*) FROM members WHERE corporation_id = c.id) as member_count
-           FROM corporations c ORDER BY c.name`)
+           FROM corporations c WHERE c.cidade_id = $1 ORDER BY c.name`, [req.cidade.id])
       : await pool.query(
           `SELECT c.*, (SELECT COUNT(*) FROM members WHERE corporation_id = c.id) as member_count
-           FROM corporations c WHERE c.owner_id = $1 ORDER BY c.name`,
-          [req.user.id]);
+           FROM corporations c WHERE c.owner_id = $1 AND c.cidade_id = $2 ORDER BY c.name`,
+          [req.user.id, req.cidade.id]);
     res.json({ corporations: result.rows });
   } catch (err) {
     res.status(500).json({ error: 'Erro interno' });
@@ -89,10 +89,11 @@ router.get('/users/list', async (req, res) => {
     // poder de DONO / co-gerente / staff ('ver_usuarios'), e mais ninguém.
     if (!perm.pode(req.user, 'corp')) {
       const gerencia = await pool.query(
-        `SELECT 1 FROM corporations WHERE owner_id = $1
-         UNION SELECT 1 FROM corp_managers WHERE user_id = $1
+        `SELECT 1 FROM corporations WHERE owner_id = $1 AND cidade_id = $2
+         UNION SELECT 1 FROM corp_managers cm JOIN corporations c ON c.id = cm.corporation_id
+                WHERE cm.user_id = $1 AND c.cidade_id = $2
          LIMIT 1`,
-        [req.user.id]
+        [req.user.id, req.cidade.id]
       );
       if (gerencia.rows.length === 0) return res.status(403).json({ error: 'Acesso negado' });
     }
@@ -639,9 +640,10 @@ router.post('/', requirePoder('corp'), async (req, res) => {
     // Slug deve ser lowercase e sem espaços
     const cleanSlug = slug.toLowerCase().replace(/\s+/g, '-').replace(/[^a-z0-9-]/g, '');
     const result = await pool.query(
-      `INSERT INTO corporations (name, slug, description, owner_id, color, icon_url, max_members, tipo)
-       VALUES ($1, $2, $3, $4, $5, $6, $7, $8) RETURNING *`,
-      [name, cleanSlug, description || null, req.user.id, color || '#3B82F6', icon_url || null, max_members || 100, tipoLimpo]
+      `INSERT INTO corporations (name, slug, description, owner_id, color, icon_url, max_members, tipo, cidade_id)
+       VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9) RETURNING *`,
+      // [21/10 Cidades] a corp nasce na cidade em que o pedido está
+      [name, cleanSlug, description || null, req.user.id, color || '#3B82F6', icon_url || null, max_members || 100, tipoLimpo, req.cidade.id]
     );
     res.json({ corporation: result.rows[0] });
   } catch (err) {

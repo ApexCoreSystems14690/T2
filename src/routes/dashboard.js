@@ -41,12 +41,13 @@ router.get('/', async (req, res) => {
               ) AS pode_gerenciar
        FROM corporations c
        WHERE c.tipo NOT IN ('faccao','empresa')   -- [20/09] faccao: /faccoes · [30/09] empresa: /empresas
+         AND c.cidade_id = $3                      -- [21/10] só a cidade escolhida
          AND ($2::boolean
           OR c.owner_id = $1
           OR c.id IN (SELECT corporation_id FROM corp_managers WHERE user_id = $1)
           OR c.id IN (SELECT corporation_id FROM members WHERE user_id = $1))
        ORDER BY c.name`,
-      [req.user.id, perm.pode(req.user, 'corp')]
+      [req.user.id, perm.pode(req.user, 'corp'), req.cidade.id]
     );
     res.render('dashboard', {
       user: req.user,

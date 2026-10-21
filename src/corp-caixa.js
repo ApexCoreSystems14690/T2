@@ -50,6 +50,9 @@ const DINHEIRO = {
   // configura por cargo, e ESSE sai daqui. Se o caixa não cobre, o débito é
   // recusado e o jogo paga só o piso: empresa não imprime dinheiro.
   salario:  { sinal: -1, rotulo: 'Adicional de salário pago' },
+  // [21/10 Julio] "é possível o cara sacar dinheiro de contas de CNPJ, como do Mercado
+  // Fechado". Saque pelo celular (app Banco > Empresa), quem tem o CNPJ saca pro bolso.
+  saque:    { sinal: -1, rotulo: 'Saque pelo CNPJ (celular)' },
 };
 
 // ---------------------------------------------------------------- estoque

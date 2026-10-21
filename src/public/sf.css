@@ -274,3 +274,28 @@ td > a.btn:hover { border-color: var(--placa) !important; color: var(--placa) !i
   .topbar > div:last-child, .topbar .user { width: 100%; overflow-x: auto; flex-wrap: nowrap !important; gap: .9rem !important; padding-bottom: 2px; }
   .topbar h1 { font-size: 1.15rem !important; }
 }
+
+/* ===================== CIDADE (21/10) =====================
+   Selo da cidade ao lado da placa: em que cidade você está mexendo, e o
+   atalho pra trocar. Aviso de aba trocada no rodapé. */
+.cidade-chip {
+  display: inline-flex; align-items: stretch; margin-left: .55rem; vertical-align: middle;
+  border: 1px solid var(--linha-2); border-radius: 4px; overflow: hidden; background: var(--papel);
+  text-decoration: none !important; font-size: .78rem; line-height: 1; flex-shrink: 0;
+}
+.cidade-chip-nome { color: var(--tinta); font-weight: 700; padding: .38rem .55rem; display: inline-flex; align-items: center; gap: .35rem; }
+.cidade-chip-of { background: var(--pista); color: #10131A; font-size: .62rem; font-weight: 800; padding: .15rem .3rem; border-radius: 2px; letter-spacing: .02em; }
+.cidade-chip-trocar { color: var(--tinta-3); padding: .38rem .5rem; border-left: 1px solid var(--linha-2); display: inline-flex; align-items: center; }
+.cidade-chip:hover .cidade-chip-trocar { color: var(--placa); }
+/* na barra de asfalto */
+.topbar .cidade-chip { background: transparent; border-color: rgba(255,255,255,.22); }
+.topbar .cidade-chip-nome { color: #fff; }
+.topbar .cidade-chip-trocar { color: #C9D0D8; border-left-color: rgba(255,255,255,.22); }
+.topbar .cidade-chip:hover .cidade-chip-trocar { color: var(--pista); }
+.sf-aviso-cidade {
+  position: fixed; left: 50%; bottom: 18px; transform: translateX(-50%); z-index: 9999;
+  background: var(--asfalto); color: #fff; border-left: 4px solid var(--pista);
+  padding: .7rem .9rem; border-radius: 6px; display: flex; gap: .9rem; align-items: center;
+  box-shadow: var(--sombra-modal); font-size: .9rem; max-width: calc(100vw - 32px);
+}
+.sf-aviso-cidade button { background: var(--pista); color: #10131A; border: 0; border-radius: 4px; padding: .45rem .8rem; font-weight: 800; cursor: pointer; }

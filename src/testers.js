@@ -148,7 +148,7 @@ async function conceder(pool, gestor, pedido) {
       await cli.query('ROLLBACK');
       return { erro: 'Esse usuário não vinculou o Roblox no site — sem isso não dá pra mandar item nem carro' };
     }
-    const ja = await cli.query(`SELECT id FROM tester_liberacoes WHERE user_id = $1 AND status = 'ativa' FOR UPDATE`, [alvo.id]);
+    const ja = await cli.query(`SELECT id FROM tester_liberacoes WHERE user_id = $1 AND status = 'ativa' AND cidade_id = $2 FOR UPDATE`, [alvo.id, gestor.cidade_id || 1]);
     if (ja.rows[0]) { await cli.query('ROLLBACK'); return { erro: 'Esse tester já tem uma liberação ativa (#' + ja.rows[0].id + '). Estenda ou encerre ela antes.' }; }
 
     const nomeAlvo = alvo.roblox_username || alvo.discord_username || ('user#' + alvo.id);
@@ -159,7 +159,8 @@ async function conceder(pool, gestor, pedido) {
     const corps = [];
     if (pedido.tipos.length) {
       const cs = await cli.query(
-        `SELECT id, name, tipo FROM corporations WHERE is_active = true AND tipo = ANY($1::text[]) ORDER BY tipo, name`, [pedido.tipos]);
+        `SELECT id, name, tipo FROM corporations WHERE is_active = true AND tipo = ANY($1::text[]) AND cidade_id = $2 ORDER BY tipo, name`,
+        [pedido.tipos, gestor.cidade_id || 1]);   // [21/10] só as corps da cidade de quem libera
       const rk = await cli.query(`SELECT id, corporation_id, name, level FROM ranks WHERE corporation_id = ANY($1::int[])`, [cs.rows.map(c => c.id)]);
       const mb = await cli.query(`SELECT corporation_id, rank_id FROM members WHERE user_id = $1 AND corporation_id = ANY($2::int[]) FOR UPDATE`,
         [alvo.id, cs.rows.map(c => c.id)]);
@@ -217,11 +218,12 @@ async function conceder(pool, gestor, pedido) {
     if (on && corps.length) await comando(cli, 'corp_refresh', rid, on, {}, gestor.id);
 
     const r = await cli.query(
-      `INSERT INTO tester_liberacoes (user_id, roblox_id, nome, dado_por, dado_por_nome, motivo, expira_em, corps, itens, carros, historico)
-       VALUES ($1,$2,$3,$4,$5,$6, NOW() + ($7 || ' hours')::interval, $8,$9,$10,$11) RETURNING id, expira_em`,
+      `INSERT INTO tester_liberacoes (user_id, roblox_id, nome, dado_por, dado_por_nome, motivo, expira_em, corps, itens, carros, historico, cidade_id)
+       VALUES ($1,$2,$3,$4,$5,$6, NOW() + ($7 || ' hours')::interval, $8,$9,$10,$11,$12) RETURNING id, expira_em`,
       [alvo.id, rid, nomeAlvo, gestor.id, gestorNome, pedido.motivo || null, String(pedido.horas),
        JSON.stringify(corps), JSON.stringify(itens), JSON.stringify(carros),
-       linhaHist(`Liberado por ${pedido.horas} h: ${corps.length} corps, ${itens.length} itens, ${carros.filter(c => !c.pulado).length} carros`, gestorNome)]);
+       linhaHist(`Liberado por ${pedido.horas} h: ${corps.length} corps, ${itens.length} itens, ${carros.filter(c => !c.pulado).length} carros`, gestorNome),
+       gestor.cidade_id || 1]);
     await cli.query('COMMIT');
     return {
       ok: true, id: r.rows[0].id, expira_em: r.rows[0].expira_em, online: !!on,
@@ -236,15 +238,15 @@ async function conceder(pool, gestor, pedido) {
 }
 
 // ESTENDER — soma horas ao prazo (nunca passa de 7 dias a partir de agora).
-async function estender(pool, id, horas, quem) {
+async function estender(pool, id, horas, quem, cidadeId) {
   const h = Number(horas);
   if (!Number.isFinite(h) || h < HORAS_MIN || h > HORAS_MAX) return { erro: `Estender de ${HORAS_MIN} a ${HORAS_MAX} horas` };
   const r = await pool.query(
     `UPDATE tester_liberacoes
         SET expira_em = LEAST(expira_em + ($2 || ' hours')::interval, NOW() + INTERVAL '${HORAS_MAX} hours'),
             historico = historico || $3::jsonb
-      WHERE id = $1 AND status = 'ativa' RETURNING id, expira_em`,
-    [id, String(h), linhaHist(`Estendido em ${h} h`, quem)]);
+      WHERE id = $1 AND status = 'ativa' AND cidade_id = $4 RETURNING id, expira_em`,
+    [id, String(h), linhaHist(`Estendido em ${h} h`, quem), cidadeId || 1]);
   if (!r.rows[0]) return { erro: 'Liberação não está ativa' };
   return { ok: true, expira_em: r.rows[0].expira_em };
 }
@@ -285,11 +287,11 @@ async function _encerrarLinha(cli, lib, quem, fimMotivo) {
   return falta;
 }
 
-async function encerrar(pool, id, quem) {
+async function encerrar(pool, id, quem, cidadeId) {
   const cli = await pool.connect();
   try {
     await cli.query('BEGIN');
-    const r = await cli.query(`SELECT * FROM tester_liberacoes WHERE id = $1 AND status = 'ativa' FOR UPDATE`, [id]);
+    const r = await cli.query(`SELECT * FROM tester_liberacoes WHERE id = $1 AND status = 'ativa' AND cidade_id = $2 FOR UPDATE`, [id, cidadeId || 1]);
     if (!r.rows[0]) { await cli.query('ROLLBACK'); return { erro: 'Liberação não está ativa' }; }
     const falta = await _encerrarLinha(cli, r.rows[0], quem, 'encerrada');
     await cli.query('COMMIT');
@@ -367,10 +369,10 @@ function iniciar(pool, ms) {
   if (_timer.unref) _timer.unref();
 }
 
-async function listar(pool) {
+async function listar(pool, cidadeId) {
   const r = await pool.query(
-    `SELECT * FROM tester_liberacoes
-      ORDER BY (status = 'ativa') DESC, (status = 'revertendo') DESC, id DESC LIMIT 100`);
+    `SELECT * FROM tester_liberacoes WHERE cidade_id = $1
+      ORDER BY (status = 'ativa') DESC, (status = 'revertendo') DESC, id DESC LIMIT 100`, [cidadeId || 1]);
   return r.rows;
 }
 

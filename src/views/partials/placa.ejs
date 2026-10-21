@@ -1,1 +1,44 @@
-<a class="placa" href="/" title="Início — Santa Fé" aria-label="Início — Santa Fé"><span class="faixa"><span>SANTA FÉ</span><span>RP</span></span><span class="chars">SFE·RP</span></a>
+<%
+  // [21/10 Cidades] a placa é da cidade em que a pessoa está. Sem cidade (tela
+  // Cidades, erro), é a placa da rede e leva pra tela Cidades.
+  var _c = (typeof cidade !== 'undefined' && cidade) ? cidade : null;
+  var _faixa = _c ? String(_c.nome).toUpperCase() : 'SANTA FÉ';
+  var _chars = _c ? (String(_c.sigla || 'SFE').toUpperCase() + '·RP') : 'SFE·RP';
+%><a class="placa" href="<%= _c ? '/painel' : '/' %>" title="Início — <%= _c ? _c.nome : 'Cidades' %>" aria-label="Início — <%= _c ? _c.nome : 'Cidades' %>"><span class="faixa"><span><%= _faixa %></span><span>RP</span></span><span class="chars"><%= _chars %></span></a><% if (_c) { %><a class="cidade-chip" href="/" title="Trocar de cidade"><span class="cidade-chip-nome"><%= _c.nome %><% if (_c.tipo === 'oficial') { %> <span class="cidade-chip-of">Oficial</span><% } %></span><span class="cidade-chip-trocar">trocar</span></a>
+<script>
+/* [21/10 Cidades] TRAVA DE ABA. Toda chamada desta página leva a cidade em que
+   ela foi aberta. Se a sessão já mudou de cidade (outra aba), o site recusa
+   com 409 em vez de agir na cidade errada, e a página avisa. */
+(function () {
+  if (window.__sfCidade) return;
+  window.__sfCidade = <%= Number(_c.id) %>;
+  var f0 = window.fetch;
+  if (!f0) return;
+  window.fetch = function (url, opt) {
+    opt = opt || {};
+    var u = typeof url === 'string' ? url : (url && url.url) || '';
+    var mesmoSite = u.charAt(0) === '/' && u.charAt(1) !== '/';
+    if (mesmoSite) {
+      var h = new Headers(opt.headers || {});
+      h.set('X-Cidade-Pagina', String(window.__sfCidade));
+      opt = Object.assign({}, opt, { headers: h });
+    }
+    return f0.call(this, url, opt).then(function (r) {
+      if (mesmoSite && r.status === 409) {
+        r.clone().json().then(function (j) { if (j && (j.cidade_trocada || j.escolher_cidade)) sfAvisoCidade(j.error); }).catch(function () {});
+      }
+      return r;
+    });
+  };
+  window.sfAvisoCidade = function (msg) {
+    if (document.getElementById('sf-aviso-cidade')) return;
+    var d = document.createElement('div');
+    d.id = 'sf-aviso-cidade';
+    d.className = 'sf-aviso-cidade';
+    d.innerHTML = '<span></span><button type="button">Recarregar</button>';
+    d.firstChild.textContent = msg || 'Você trocou de cidade em outra aba.';
+    d.lastChild.onclick = function () { location.reload(); };
+    document.body.appendChild(d);
+  };
+})();
+</script><% } %>

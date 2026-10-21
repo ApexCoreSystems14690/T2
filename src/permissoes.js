@@ -212,6 +212,13 @@ async function resolverDono(pool) {
 // Diretor Geral (80) pra cima. [30/09] E o portao do painel "Todas as
 // organizacoes": o Julio pediu que ver tudo e editar livre seja "so para adm
 // Diretor ou owner".
+// [21/10 Cidades] Dono DENTRO da cidade em que o pedido está: o Dono da
+// plataforma (conta fixa) ou o dono daquela cidade. É o que as telas "só o
+// Dono" usam -- o ehDono puro continua sendo só a conta da plataforma.
+function ehDonoAqui(user) {
+  return cargoDe(user) === 'dono';
+}
+
 function ehDiretorOuMais(user) {
   return nivelDoCargo(cargoDe(user)) >= 80;
 }
@@ -226,7 +233,15 @@ function ehDiretorOuMais(user) {
 // sobrar um registro sem cargo, ele cai no degrau mais baixo em vez do mais
 // alto — errar pra menos, nunca pra mais.
 function cargoDe(user) {
-  if (ehDono(user)) return 'dono';
+  // [21/10 Cidades] A conta da plataforma é Dono SÓ na cidade oficial. Julio: "os
+  // devs não são staffs de RP nas outras cidades" -- nas cidades dos outros ela não é
+  // nada no painel (as ferramentas da rede, como criar cidade e ban de rede, são
+  // portões próprios, fora da escada). Sem contexto de cidade (código antigo, testes)
+  // vale como antes.
+  if (ehDono(user) && (user.cidade_id == null || user.cidade_id === 1 || user.cidade_oficial)) return 'dono';
+  // [21/10 Cidades] o dono DE UMA CIDADE (cidades.dono_user_id) é Dono só dentro
+  // dela. Quem marca é o contexto da cidade (src/cidades.js), por pedido.
+  if (user && user.dono_da_cidade) return 'dono';
   if (!user || !user.is_admin) return null;
   const c = user.admin_cargo;
   if (!c || !CARGOS[c] || c === 'dono') return 'estagiario';
@@ -291,5 +306,5 @@ function matriz() {
 module.exports = {
   CARGOS, ORDEM, CARGOS_ATRIBUIVEIS, PODERES, PODER_DO_COMANDO, DONO_DISCORD, DONO_DISCORD_ID,
   DONO_DISCORD_ENV_NOMES, DONO_IDS_RESOLVIDOS,
-  ehDono, resolverDono, ehDiretorOuMais, cargoDe, cargoTem, pode, poderesDe, podeMexerEm, podeDarCargo, nivelDoCargo, matriz,
+  ehDono, ehDonoAqui, resolverDono, ehDiretorOuMais, cargoDe, cargoTem, pode, poderesDe, podeMexerEm, podeDarCargo, nivelDoCargo, matriz,
 };

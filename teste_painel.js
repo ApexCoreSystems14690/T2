@@ -91,7 +91,17 @@ let USUARIO_ATUAL = null;
 function subirApp() {
   const app = express();
   app.use(express.json());
-  app.use((req, _res, next) => { req.user = USUARIO_ATUAL; next(); });
+  // [21/10 Cidades] o painel agora roda DENTRO de uma cidade: o pedido leva o
+  // Santa Fé Oficial e o cargo de staff vem de cidade_staff (como no site).
+  app.use(async (req, _res, next) => {
+    req.cidade = { id: 1, slug: 'santa-fe', nome: 'Santa Fé', tipo: 'oficial', status: 'ativa' };
+    const base = USUARIO_ATUAL;
+    if (!base) { req.user = null; return next(); }
+    const s = await pool.query('SELECT cargo FROM cidade_staff WHERE cidade_id = 1 AND user_id = $1', [base.id]);
+    const cargo = s.rows[0] ? s.rows[0].cargo : null;
+    req.user = Object.assign({}, base, { is_admin: !!cargo, admin_cargo: cargo, cidade_id: 1 });
+    next();
+  });
   app.use('/api/admin', require('./src/routes/admin-api'));
   return new Promise(r => { const s = app.listen(0, () => r(s)); });
 }
@@ -124,6 +134,14 @@ async function semear() {
   await cria('administrador', 'administrador', true);
   await cria('moderador', 'moderador', true);
   await cria('zé', null, false);               // não é admin
+  // [21/10 Cidades] a migração de verdade (src/cidades.js) copia o staff de hoje
+  // pro Santa Fé Oficial; aqui faz o mesmo à mão, depois da limpeza do boot.
+  await require('./src/cidades').garantir(pool);   // o TRUNCATE ... CASCADE de users leva a tabela cidades junto
+  require('./src/cidades').limparCache();
+  await pool.query(`TRUNCATE cidade_staff`);
+  await pool.query(`INSERT INTO cidade_staff (cidade_id, user_id, cargo)
+    SELECT 1, id, CASE WHEN admin_cargo IS NULL OR admin_cargo = '' OR admin_cargo = 'dono' THEN 'estagiario' ELSE admin_cargo END
+      FROM users WHERE is_admin = true`);
   return u;
 }
 
@@ -133,6 +151,7 @@ async function semear() {
   await pool.query(SCHEMA);
   await pool.query(MIGRACAO);
   await pool.query(MIGRACAO);
+  await require('./src/cidades').garantir(pool);   // [21/10] cidades + staff por cidade
   const col = await pool.query(`SELECT data_type FROM information_schema.columns WHERE table_name='users' AND column_name='admin_cargo'`);
   ok(col.rows.length === 1, 'coluna users.admin_cargo existe depois de 2 rodadas');
 
@@ -208,8 +227,9 @@ async function semear() {
   ok((await req('POST', '/users/' + U['moderador'].id + '/cargo', { cargo: 'diretor' })).status === 403, 'diretor não promove ninguém a diretor (seu próprio nível)');
   const promo = await req('POST', '/users/' + U['moderador'].id + '/cargo', { cargo: 'supervisor' });
   ok(promo.status === 200, 'diretor promove moderador a supervisor');
-  const chk = await pool.query('SELECT admin_cargo FROM users WHERE id=$1', [U['moderador'].id]);
-  ok(chk.rows[0].admin_cargo === 'supervisor', 'gravou supervisor no banco');
+  // [21/10 Cidades] o cargo de staff agora é da CIDADE (cidade_staff), não da conta
+  const chk = await pool.query('SELECT cargo AS admin_cargo FROM cidade_staff WHERE cidade_id = 1 AND user_id = $1', [U['moderador'].id]);
+  ok(chk.rows[0] && chk.rows[0].admin_cargo === 'supervisor', 'gravou supervisor no banco (no Santa Fé Oficial)');
   USUARIO_ATUAL = U['julio14690'];
   ok((await req('POST', '/users/' + U['diretor'].id + '/cargo', { cargo: null })).status === 200, 'dono tira o admin do diretor');
   await pool.query('UPDATE users SET is_admin=true, admin_cargo=$1 WHERE id=$2', ['diretor', U['diretor'].id]);

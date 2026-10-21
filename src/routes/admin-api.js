@@ -106,7 +106,8 @@ router.get('/eu', (req, res) => {
     PODERES: perm.PODERES,
     PODER_DO_COMANDO: perm.PODER_DO_COMANDO,
     matriz: perm.matriz(),
-    souDono: perm.ehDono(req.user),
+    souDono: perm.ehDonoAqui(req.user),
+    cidade: req.cidade ? { id: req.cidade.id, slug: req.cidade.slug, nome: req.cidade.nome, tipo: req.cidade.tipo } : null,
   });
 });
 
@@ -331,10 +332,10 @@ router.get('/bans', requirePoder('banir'), async (req, res) => {
 // ------------------------------------------------------------
 const ECON = require('../economia');
 router.get('/economia', async (req, res) => {
-  if (!perm.ehDono(req.user)) return res.status(403).json({ error: 'Só o Dono vê a economia.' });
+  if (!perm.ehDonoAqui(req.user)) return res.status(403).json({ error: 'Só o Dono vê a economia.' });
   try {
     const dias = Math.min(Math.max(parseInt(req.query.dias) || 0, 0), 3650);
-    res.json(await ECON.relatorio(dias));
+    res.json(await ECON.relatorio(dias, req.cidade.id));
   } catch (err) { console.error('economia:', err.message); res.status(500).json({ error: 'Erro interno' }); }
 });
 
@@ -472,9 +473,13 @@ router.get('/audit', requirePoder('admins'), async (req, res) => {
 router.get('/users', requirePoder('admins'), async (req, res) => {
   try {
     const r = await pool.query(
-      `SELECT id, discord_username, discord_id, discord_avatar, roblox_id, roblox_username, is_admin, admin_cargo, created_at,
-              (discord_id LIKE 'roblox_%') AS is_placeholder
-       FROM users ORDER BY is_admin DESC, LOWER(COALESCE(discord_username, roblox_username, '')) ASC`);
+      // [21/10 Cidades] o cargo de staff é o DESTA cidade (cidade_staff), não a coluna antiga
+      `SELECT u.id, u.discord_username, u.discord_id, u.discord_avatar, u.roblox_id, u.roblox_username,
+              (cs.cargo IS NOT NULL) AS is_admin, cs.cargo AS admin_cargo, u.created_at,
+              (u.discord_id LIKE 'roblox_%') AS is_placeholder
+         FROM users u
+         LEFT JOIN cidade_staff cs ON cs.user_id = u.id AND cs.cidade_id = $1
+        ORDER BY (cs.cargo IS NOT NULL) DESC, LOWER(COALESCE(u.discord_username, u.roblox_username, '')) ASC`, [req.cidade.id]);
     // cargo resolvido no servidor: is_admin com admin_cargo vazio = DONO (setado direto no banco)
     res.json({ users: r.rows.map(u => {
       const cargo = perm.cargoDe(u);
@@ -502,7 +507,11 @@ async function definirCargo(req, res, id, cargo) {
     if (!id) return res.status(400).json({ error: 'id inválido' });
     if (cargo === '' || cargo === undefined) cargo = null;
 
-    const q = await pool.query('SELECT * FROM users WHERE id = $1', [id]);
+    // [21/10 Cidades] o alvo é visto com o cargo que tem NESTA cidade
+    const q = await pool.query(
+      `SELECT u.*, (cs.cargo IS NOT NULL) AS is_admin, cs.cargo AS admin_cargo
+         FROM users u LEFT JOIN cidade_staff cs ON cs.user_id = u.id AND cs.cidade_id = $2
+        WHERE u.id = $1`, [id, req.cidade.id]);
     if (q.rows.length === 0) return res.status(404).json({ error: 'Usuário não encontrado' });
     const alvo = q.rows[0];
 
@@ -513,8 +522,8 @@ async function definirCargo(req, res, id, cargo) {
     }
 
     if (cargo === null) {
-      await pool.query('UPDATE users SET is_admin = false, admin_cargo = NULL, updated_at = NOW() WHERE id = $1', [id]);
-      await audit(req, 'admin:retirar', { user_id: id, nome: alvo.discord_username || alvo.roblox_username });
+      await pool.query('DELETE FROM cidade_staff WHERE cidade_id = $1 AND user_id = $2', [req.cidade.id, id]);
+      await audit(req, 'admin:retirar', { user_id: id, nome: alvo.discord_username || alvo.roblox_username, cidade: req.cidade.slug });
       return res.json({ ok: true, cargo: null });
     }
 
@@ -525,8 +534,12 @@ async function definirCargo(req, res, id, cargo) {
       return res.status(400).json({ error: 'Esse usuário ainda não entrou com Discord; não pode ser admin' });
     }
 
-    await pool.query('UPDATE users SET is_admin = true, admin_cargo = $1, updated_at = NOW() WHERE id = $2', [cargo, id]);
-    await audit(req, 'admin:cargo', { user_id: id, nome: alvo.discord_username || alvo.roblox_username, de: perm.cargoDe(alvo), para: cargo });
+    // [21/10 Cidades] cargo de staff vale SÓ nesta cidade
+    await pool.query(
+      `INSERT INTO cidade_staff (cidade_id, user_id, cargo, dado_por) VALUES ($1, $2, $3, $4)
+       ON CONFLICT (cidade_id, user_id) DO UPDATE SET cargo = EXCLUDED.cargo, dado_por = EXCLUDED.dado_por, dado_em = NOW()`,
+      [req.cidade.id, id, cargo, req.user.id]);
+    await audit(req, 'admin:cargo', { user_id: id, nome: alvo.discord_username || alvo.roblox_username, de: perm.cargoDe(alvo), para: cargo, cidade: req.cidade.slug });
     res.json({ ok: true, cargo });
   } catch (err) {
     console.error('users/cargo:', err.message);
@@ -548,8 +561,10 @@ router.post('/users/:id/admin', requirePoder('admins'), (req, res) =>
 // ------------------------------------------------------------
 router.get('/corps', requirePoder('corp'), async (req, res) => {
   try {
-    const corps = await pool.query('SELECT id, name, slug FROM corporations WHERE is_active = true ORDER BY name');
-    const ranks = await pool.query('SELECT id, corporation_id, name, level FROM ranks ORDER BY corporation_id, level DESC');
+    const corps = await pool.query('SELECT id, name, slug FROM corporations WHERE is_active = true AND cidade_id = $1 ORDER BY name', [req.cidade.id]);
+    const ranks = await pool.query(
+      `SELECT r.id, r.corporation_id, r.name, r.level FROM ranks r JOIN corporations c ON c.id = r.corporation_id
+        WHERE c.cidade_id = $1 ORDER BY r.corporation_id, r.level DESC`, [req.cidade.id]);
     res.json({ corps: corps.rows, ranks: ranks.rows });
   } catch (err) { res.status(500).json({ error: 'Erro interno' }); }
 });
@@ -559,6 +574,9 @@ router.post('/cargo', requirePoder('corp'), async (req, res) => {
     const user_id = parseInt(req.body.user_id), corp_id = parseInt(req.body.corp_id);
     const rank_id = req.body.rank_id ? parseInt(req.body.rank_id) : null;
     if (!user_id || !corp_id) return res.status(400).json({ error: 'user_id e corp_id são obrigatórios' });
+    // [21/10 Cidades] a corp tem que ser desta cidade
+    const daCidade = await pool.query('SELECT 1 FROM corporations WHERE id = $1 AND cidade_id = $2', [corp_id, req.cidade.id]);
+    if (!daCidade.rows.length) return res.status(404).json({ error: 'Corporação não encontrada' });
     if (rank_id) {
       const rk = await pool.query('SELECT 1 FROM ranks WHERE id = $1 AND corporation_id = $2', [rank_id, corp_id]);
       if (rk.rows.length === 0) return res.status(400).json({ error: 'Cargo não pertence a essa corporação' });
@@ -874,11 +892,11 @@ const quemSou = req => req.user.discord_username || ('user#' + req.user.id);
 router.get('/testers', requirePoder('testers'), async (req, res) => {
   try {
     const [libs, users, corps, online] = await Promise.all([
-      TESTERS.listar(pool),
+      TESTERS.listar(pool, req.cidade.id),
       pool.query(`SELECT id, discord_username, roblox_id, roblox_username FROM users
                    WHERE discord_id NOT LIKE 'roblox_%' OR roblox_id IS NOT NULL
                    ORDER BY LOWER(COALESCE(roblox_username, discord_username, '')) ASC`),
-      pool.query(`SELECT tipo, COUNT(*)::int AS n FROM corporations WHERE is_active = true GROUP BY tipo`),
+      pool.query(`SELECT tipo, COUNT(*)::int AS n FROM corporations WHERE is_active = true AND cidade_id = $1 GROUP BY tipo`, [req.cidade.id]),
       TESTERS.onlineAgora(pool),
     ]);
     const porTipo = {};
@@ -907,7 +925,7 @@ router.post('/testers/conceder', requirePoder('testers'), async (req, res) => {
 router.post('/testers/:id/estender', requirePoder('testers'), async (req, res) => {
   try {
     const id = parseInt(req.params.id);
-    const r = await TESTERS.estender(pool, id, req.body && req.body.horas, quemSou(req));
+    const r = await TESTERS.estender(pool, id, req.body && req.body.horas, quemSou(req), req.cidade.id);
     if (r.erro) return res.status(400).json({ error: r.erro });
     await audit(req, 'testers:estender', { id, horas: Number(req.body.horas) });
     res.json(r);
@@ -917,7 +935,7 @@ router.post('/testers/:id/estender', requirePoder('testers'), async (req, res) =
 router.post('/testers/:id/encerrar', requirePoder('testers'), async (req, res) => {
   try {
     const id = parseInt(req.params.id);
-    const r = await TESTERS.encerrar(pool, id, quemSou(req));
+    const r = await TESTERS.encerrar(pool, id, quemSou(req), req.cidade.id);
     if (r.erro) return res.status(400).json({ error: r.erro });
     await audit(req, 'testers:encerrar', { id });
     res.json(r);
@@ -968,7 +986,7 @@ router.get('/ssu', requirePoder('ssu'), async (req, res) => {
     const ajustes = await lerAjustes();
     // [05/10] abrir SSU fora da grade e SO do DONO. Portao local, como a pagina
     // /organizacoes: inventar poder novo mexeria na matriz de todo mundo.
-    const ehDono = perm.ehDono(req.user);
+    const ehDono = perm.ehDonoAqui(req.user);
     res.json({
       ok: true, agora, souDono: ehDono,
       grade: SSU.gradeTexto(),
@@ -984,7 +1002,7 @@ router.post('/ssu', requirePoder('ssu'), async (req, res) => {
     const acao = String((req.body && req.body.acao) || '');
     const agora = Math.floor(Date.now() / 1000);
     const ajustes = await lerAjustes();
-    const ehDono = perm.ehDono(req.user);
+    const ehDono = perm.ehDonoAqui(req.user);
     const podem = SSU.acoesPossiveis(agora, ajustes, ehDono);
 
     // [05/10] ABRIR = sessao AVULSA, fora da grade, SO pro dono. Sai cedo porque e a
