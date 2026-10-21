@@ -130,6 +130,10 @@ async function start() {
     // log imprime o id pra copiar pra DONO_DISCORD_ID no Railway.
     try { await require('./permissoes').resolverDono(pool); }
     catch (e) { console.error('resolver dono:', e.message); }
+    // [21/10] Painel Testers: tabela das liberações temporárias + o relógio que
+    // vence prazo, entrega carro pendente e tira o que foi dado (src/testers.js).
+    try { const T = require('./testers'); await T.garantir(pool); T.iniciar(pool); }
+    catch (e) { console.error('testers:', e.message); }
     // Painel admin: fila de comandos, logs do jogo, servidores online, auditoria
     await pool.query(`
       CREATE TABLE IF NOT EXISTS game_servers (

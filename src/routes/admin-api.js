@@ -863,6 +863,68 @@ router.post('/registro/dar-todos', requirePoder('item_todos'), async (req, res) 
 });
 
 // ============================================================
+// [21/10] PAINEL TESTERS — liberação temporária (itens, carros, todas as corps)
+// Quem usa: Diretor Geral+ e o cargo lateral "Gestor testers" (poder 'testers').
+// A regra toda mora em src/testers.js; aqui é só a porta. Tudo vai pra
+// admin_audit E pro histórico da própria liberação.
+// ============================================================
+const TESTERS = require('../testers');
+const quemSou = req => req.user.discord_username || ('user#' + req.user.id);
+
+router.get('/testers', requirePoder('testers'), async (req, res) => {
+  try {
+    const [libs, users, corps, online] = await Promise.all([
+      TESTERS.listar(pool),
+      pool.query(`SELECT id, discord_username, roblox_id, roblox_username FROM users
+                   WHERE discord_id NOT LIKE 'roblox_%' OR roblox_id IS NOT NULL
+                   ORDER BY LOWER(COALESCE(roblox_username, discord_username, '')) ASC`),
+      pool.query(`SELECT tipo, COUNT(*)::int AS n FROM corporations WHERE is_active = true GROUP BY tipo`),
+      TESTERS.onlineAgora(pool),
+    ]);
+    const porTipo = {};
+    for (const r of corps.rows) porTipo[r.tipo] = r.n;
+    res.json({
+      liberacoes: libs.map(l => Object.assign({}, l, { online: !!(l.roblox_id && online.has(Number(l.roblox_id))) })),
+      usuarios: users.rows.map(u => Object.assign({}, u, { online: !!(u.roblox_id && online.has(Number(u.roblox_id))) })),
+      corps_por_tipo: porTipo,
+      horas_max: TESTERS.HORAS_MAX,
+    });
+  } catch (err) { console.error('testers:', err.message); res.status(500).json({ error: 'Erro interno' }); }
+});
+
+router.post('/testers/conceder', requirePoder('testers'), async (req, res) => {
+  try {
+    const n = TESTERS.normalizarPedido(req.body);
+    if (n.erro) return res.status(400).json({ error: n.erro });
+    const r = await TESTERS.conceder(pool, req.user, n.pedido);
+    if (r.erro) return res.status(400).json({ error: r.erro });
+    await audit(req, 'testers:liberar', { id: r.id, user_id: n.pedido.user_id, horas: n.pedido.horas, tipos: n.pedido.tipos,
+      nivel: n.pedido.nivel, itens: n.pedido.itens.length, carros: n.pedido.carros.length, resumo: r.resumo });
+    res.json(r);
+  } catch (err) { console.error('testers/conceder:', err.message); res.status(500).json({ error: 'Erro interno: ' + err.message }); }
+});
+
+router.post('/testers/:id/estender', requirePoder('testers'), async (req, res) => {
+  try {
+    const id = parseInt(req.params.id);
+    const r = await TESTERS.estender(pool, id, req.body && req.body.horas, quemSou(req));
+    if (r.erro) return res.status(400).json({ error: r.erro });
+    await audit(req, 'testers:estender', { id, horas: Number(req.body.horas) });
+    res.json(r);
+  } catch (err) { console.error('testers/estender:', err.message); res.status(500).json({ error: 'Erro interno' }); }
+});
+
+router.post('/testers/:id/encerrar', requirePoder('testers'), async (req, res) => {
+  try {
+    const id = parseInt(req.params.id);
+    const r = await TESTERS.encerrar(pool, id, quemSou(req));
+    if (r.erro) return res.status(400).json({ error: r.erro });
+    await audit(req, 'testers:encerrar', { id });
+    res.json(r);
+  } catch (err) { console.error('testers/encerrar:', err.message); res.status(500).json({ error: 'Erro interno' }); }
+});
+
+// ============================================================
 // [25/09] SSU — as TRES acoes prontas. Nao existe rota que edite a grade.
 //
 // Pedido do Julio: "Tudo pre feito ja sem poder mexer livremente, isso so para

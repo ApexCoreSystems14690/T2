@@ -113,6 +113,7 @@
       <div class="tab" data-tab="banidos">Banidos</div>
       <div class="tab" data-tab="pds">PDs</div>
       <div class="tab" data-tab="seguranca">Segurança</div>
+      <div class="tab" data-tab="testers">Testers</div>
       <div class="tab" data-tab="economia" id="tab-economia" style="display:none">Economia</div>
     </div>
 
@@ -370,6 +371,73 @@
       <div id="sg-alts" class="muted">—</div>
     </div>
 
+    <!-- TESTERS (21/10) — Diretor+ e o Gestor testers -->
+    <div class="panel" id="panel-testers">
+      <div class="card">
+        <h3>Liberar tester</h3>
+        <p class="muted" style="font-size:.8rem;margin-bottom:.8rem">Dá tudo de uma vez e com prazo. Quando o prazo acaba (ou você encerra), as corps voltam na hora e o jogo tira os itens e carros assim que o tester estiver online. Tudo fica registrado.</p>
+        <div class="row">
+          <div class="fg picker" style="max-width:340px">
+            <label>Tester</label>
+            <input id="ts-user" placeholder="buscar por nome ou Roblox ID" autocomplete="off">
+            <div class="picker-list" id="ts-list"></div>
+            <span class="muted" id="ts-picked" style="font-size:.72rem"></span>
+          </div>
+          <div class="fg" style="max-width:160px">
+            <label>Prazo</label>
+            <select id="ts-horas"><option value="2">2 horas</option><option value="6">6 horas</option><option value="12">12 horas</option><option value="24" selected>24 horas</option><option value="48">2 dias</option><option value="72">3 dias</option><option value="168">7 dias</option></select>
+          </div>
+          <div class="fg" style="max-width:320px">
+            <label>Motivo (opcional)</label>
+            <input id="ts-motivo" maxlength="200" placeholder="ex.: teste da SAMU">
+          </div>
+        </div>
+        <div class="grid2">
+          <div class="pt-box">
+            <div style="font-weight:700;font-size:.82rem;margin-bottom:.4rem">Corporações</div>
+            <label style="font-size:.82rem;display:block"><input type="checkbox" id="ts-t-corp" checked> Todas as corporações <span class="muted" id="ts-n-corp"></span></label>
+            <label style="font-size:.82rem;display:block"><input type="checkbox" id="ts-t-faccao" checked> Todas as facções <span class="muted" id="ts-n-faccao"></span></label>
+            <label style="font-size:.82rem;display:block"><input type="checkbox" id="ts-t-empresa" checked> Todas as empresas <span class="muted" id="ts-n-empresa"></span></label>
+            <div class="fg" style="margin-top:.4rem;max-width:220px"><label>Cargo em cada uma</label>
+              <select id="ts-nivel"><option value="alto">O mais alto</option><option value="baixo">O mais baixo</option></select></div>
+          </div>
+          <div class="pt-box">
+            <div style="font-weight:700;font-size:.82rem;margin-bottom:.4rem">Itens e carros</div>
+            <label style="font-size:.82rem;display:block"><input type="checkbox" id="ts-todos-itens" checked> Todos os itens do jogo, 1 de cada <span class="muted" id="ts-n-itens"></span></label>
+            <label style="font-size:.82rem;display:block"><input type="checkbox" id="ts-todos-carros" checked> Todos os carros <span class="muted" id="ts-n-carros"></span></label>
+            <div class="row" style="margin:.5rem 0 .3rem;gap:.4rem">
+              <div class="fg"><label>Ou só alguns: item</label><input id="ts-item" list="ts-dl-itens" placeholder="nome do item"></div>
+              <div class="fg" style="max-width:70px"><label>Qtd</label><input id="ts-qtd" type="number" min="1" max="99" value="1"></div>
+              <button class="btn sec sm" onclick="tsAdd('item')">+ item</button>
+            </div>
+            <div class="row" style="margin:0 0 .3rem;gap:.4rem">
+              <div class="fg"><label>carro</label><input id="ts-carro" list="ts-dl-carros" placeholder="nome do carro"></div>
+              <button class="btn sec sm" onclick="tsAdd('carro')">+ carro</button>
+            </div>
+            <datalist id="ts-dl-itens"></datalist><datalist id="ts-dl-carros"></datalist>
+            <div id="ts-escolhidos" style="font-size:.78rem"></div>
+          </div>
+        </div>
+        <div class="row" style="margin-top:.8rem;margin-bottom:0;align-items:center">
+          <button class="btn" id="ts-go" onclick="tsLiberar()">Liberar tudo</button>
+          <span class="muted" id="ts-resumo" style="font-size:.78rem"></span>
+        </div>
+      </div>
+
+      <div class="card">
+        <div class="row" style="margin-bottom:.5rem;align-items:center">
+          <h3 style="margin:0;flex:1">Liberações</h3>
+          <button class="btn sec sm" onclick="loadTesters()">Atualizar</button>
+        </div>
+        <div style="overflow-x:auto">
+          <table>
+            <thead><tr><th>Tester</th><th>O que tem</th><th>Prazo</th><th>Situação</th><th>Quem deu</th><th></th></tr></thead>
+            <tbody id="ts-body"><tr><td colspan="6" class="empty">Carregando…</td></tr></tbody>
+          </table>
+        </div>
+      </div>
+    </div>
+
     <!-- ECONOMIA (15/10) — só o Dono -->
     <div class="panel" id="panel-economia">
       <div class="row" style="margin-bottom:.6rem;align-items:center;gap:.6rem;flex-wrap:wrap">
@@ -516,7 +584,7 @@
     const btnSe = (tipo, html) => podeCmd(tipo) ? html : '';
 
     // Painéis e abas por poder. Aba sem nenhum poder some do topo.
-    const PODER_DA_ABA = { jogadores: null, registro: 'ver_registro', servidor: 'servidor', logs: 'ver_registro', cargos: 'corp', usuarios: 'admins', historico: 'admins', analise: 'ver_registro', banidos: 'banir', pds: 'ver_registro', seguranca: 'ver_registro' };
+    const PODER_DA_ABA = { jogadores: null, registro: 'ver_registro', servidor: 'servidor', logs: 'ver_registro', cargos: 'corp', usuarios: 'admins', historico: 'admins', analise: 'ver_registro', banidos: 'banir', pds: 'ver_registro', seguranca: 'ver_registro', testers: 'testers' };
 
     async function carregarEu() {
       EU = await api('GET', '/eu');
@@ -541,6 +609,8 @@
       if (podeP('ssu')) ssuCarrega();
       // [15/10] Economia: so o Dono (o back tambem barra com 403)
       if (EU.souDono) $('tab-economia').style.display = '';
+      // [21/10] cargo lateral (Gestor testers): abre direto na aba dele
+      if ((EU.CARGOS[EU.cargo] || {}).lateral && podeP('testers')) document.querySelector('.tab[data-tab="testers"]').click();
     }
 
     // ---------------------------------------------------------------- SSU
@@ -808,6 +878,144 @@
       } catch (e) { showAlert(e.message, 'error'); loadSeg(); }
     }
 
+    // ---------------------------------------------------------------- TESTERS (21/10)
+    // Liberação temporária. O painel só monta o pedido; quem decide e registra é
+    // o site (src/testers.js). Back barra com 403 quem não tem o poder 'testers'.
+    let TST = { liberacoes: [], usuarios: [], corps_por_tipo: {} }, TS_SEL = null, TS_ITENS = [], TS_CARROS = [], TS_ABERTA = null;
+    async function loadTesters() {
+      try {
+        TST = await api('GET', '/testers');
+        for (const t of ['corp', 'faccao', 'empresa']) $('ts-n-' + t).textContent = '(' + (TST.corps_por_tipo[t] || 0) + ')';
+        tsCatalogo();
+        tsRenderLista();
+      } catch (e) { showAlert('Testers: ' + e.message, 'error'); }
+    }
+    function tsCatalogo() {
+      const it = cat('itens', []), cr = cat('carros', []);
+      $('ts-n-itens').textContent = it.length ? '(' + it.length + ')' : '(precisa de um servidor online)';
+      $('ts-n-carros').textContent = cr.length ? '(' + cr.length + ')' : '(precisa de um servidor online)';
+      $('ts-dl-itens').innerHTML = it.map(x => '<option value="' + esc(x) + '">').join('');
+      $('ts-dl-carros').innerHTML = cr.map(x => '<option value="' + esc(x) + '">').join('');
+    }
+    function tsAdd(tipo) {
+      if (tipo === 'item') {
+        const n = $('ts-item').value.trim(); if (!n) return;
+        const q = Math.max(1, Math.min(99, parseInt($('ts-qtd').value) || 1));
+        const ja = TS_ITENS.find(i => i.item === n);
+        if (ja) ja.qtd = Math.min(99, ja.qtd + q); else TS_ITENS.push({ item: n, qtd: q });
+        $('ts-item').value = '';
+      } else {
+        const n = $('ts-carro').value.trim(); if (!n) return;
+        if (!TS_CARROS.includes(n)) TS_CARROS.push(n);
+        $('ts-carro').value = '';
+      }
+      tsRenderEscolhidos();
+    }
+    function tsTira(tipo, i) { (tipo === 'item' ? TS_ITENS : TS_CARROS).splice(i, 1); tsRenderEscolhidos(); }
+    function tsRenderEscolhidos() {
+      const a = TS_ITENS.map((it, i) => '<span class="pill info" style="margin:.1rem">' + esc(it.item) + ' ×' + it.qtd + ' <a href="#" onclick="tsTira(\'item\',' + i + ');return false">✕</a></span>');
+      const b = TS_CARROS.map((c, i) => '<span class="pill warn" style="margin:.1rem">' + esc(c) + ' <a href="#" onclick="tsTira(\'carro\',' + i + ');return false">✕</a></span>');
+      $('ts-escolhidos').innerHTML = a.concat(b).join('');
+    }
+    (function () {
+      const inp = $('ts-user'), list = $('ts-list');
+      function tsRenderPicker() {
+        const q = inp.value.toLowerCase().trim();
+        const us = TST.usuarios.filter(u => !q || [u.discord_username, u.roblox_username, u.roblox_id, u.id].some(v => v != null && String(v).toLowerCase().includes(q))).slice(0, 40);
+        list.innerHTML = us.length ? us.map(u => '<div class="picker-item" data-id="' + u.id + '"><div>' + (u.online ? '<span class="ponto ok"></span>' : '') + esc(u.roblox_username || u.discord_username || ('#' + u.id)) + '</div><div class="m">' + (u.roblox_id ? 'Roblox ' + u.roblox_id : 'sem Roblox vinculado') + (u.discord_username ? ' · ' + esc(u.discord_username) : '') + '</div></div>').join('') : '<div class="picker-item muted">Ninguém com esse nome</div>';
+        list.classList.add('open');
+      }
+      inp.addEventListener('focus', async () => { if (!TST.usuarios.length) await loadTesters(); tsRenderPicker(); });
+      inp.addEventListener('input', () => { TS_SEL = null; $('ts-picked').textContent = ''; tsRenderPicker(); });
+      list.addEventListener('mousedown', e => {
+        const it = e.target.closest('.picker-item'); if (!it || !it.dataset.id) return;
+        TS_SEL = TST.usuarios.find(u => String(u.id) === it.dataset.id);
+        inp.value = TS_SEL.roblox_username || TS_SEL.discord_username || ('#' + TS_SEL.id);
+        $('ts-picked').textContent = TS_SEL.online ? 'online agora — recebe na hora' : 'offline — itens na fila, carros quando entrar';
+        list.classList.remove('open');
+      });
+      document.addEventListener('click', e => { if (!e.target.closest('#panel-testers .picker')) list.classList.remove('open'); });
+    })();
+    async function tsLiberar() {
+      if (!TS_SEL) return showAlert('Escolha o tester', 'error');
+      const tipos = ['corp', 'faccao', 'empresa'].filter(t => $('ts-t-' + t).checked);
+      let itens = TS_ITENS.slice(), carros = TS_CARROS.slice();
+      if ($('ts-todos-itens').checked) for (const n of cat('itens', [])) if (!itens.some(i => i.item === n)) itens.push({ item: n, qtd: 1 });
+      if ($('ts-todos-carros').checked) for (const c of cat('carros', [])) if (!carros.includes(c)) carros.push(c);
+      const horas = Number($('ts-horas').value);
+      const nCorps = tipos.reduce((s, t) => s + (TST.corps_por_tipo[t] || 0), 0);
+      const nome = TS_SEL.roblox_username || TS_SEL.discord_username;
+      if (!confirm('Liberar pra ' + nome + ' por ' + $('ts-horas').selectedOptions[0].text + '?\n\n' +
+        nCorps + ' corps (cargo ' + ($('ts-nivel').value === 'alto' ? 'mais alto' : 'mais baixo') + ')\n' +
+        itens.length + ' itens\n' + carros.length + ' carros\n\nNo fim do prazo tudo volta sozinho.')) return;
+      $('ts-go').disabled = true; $('ts-resumo').textContent = 'liberando…';
+      try {
+        const r = await api('POST', '/testers/conceder', { user_id: TS_SEL.id, horas, tipos, nivel: $('ts-nivel').value, itens, carros, motivo: $('ts-motivo').value });
+        const s = r.resumo || {};
+        $('ts-resumo').textContent = 'Feito: ' + s.corps + ' corps, ' + s.itens + ' itens, ' + s.carros + ' carros'
+          + (s.carros_pulados ? ' (' + s.carros_pulados + ' ele já tinha)' : '')
+          + (s.carros_pendentes ? ' · ' + s.carros_pendentes + ' carros chegam quando ele entrar' : '')
+          + ' · vence ' + fmtT(r.expira_em);
+        showAlert('Tester liberado', 'success');
+        TS_ITENS = []; TS_CARROS = []; tsRenderEscolhidos();
+      } catch (e) { $('ts-resumo').textContent = ''; showAlert(e.message, 'error'); }
+      $('ts-go').disabled = false;
+      loadTesters();
+    }
+    function tsFalta(ms) {
+      if (ms <= 0) return 'vencendo…';
+      const m = Math.round(ms / 60000), h = Math.floor(m / 60), d = Math.floor(h / 24);
+      return d >= 1 ? d + 'd ' + (h % 24) + 'h' : h >= 1 ? h + 'h ' + (m % 60) + 'min' : m + 'min';
+    }
+    function tsRenderLista() {
+      const L = TST.liberacoes || [];
+      if (!L.length) { $('ts-body').innerHTML = '<tr><td colspan="6" class="empty">Nenhuma liberação ainda</td></tr>'; return; }
+      const SIT = { ativa: ['ok', 'Ativa'], revertendo: ['warn', 'Voltando'], encerrada: ['', 'Encerrada'] };
+      $('ts-body').innerHTML = L.map(l => {
+        const corps = l.corps || [], itens = l.itens || [], carros = (l.carros || []).filter(c => !c.pulado);
+        const falta = itens.filter(i => i.tirar).length + carros.filter(c => c.tirar).length;
+        const pendCarro = carros.filter(c => !c.entregue).length;
+        const sit = SIT[l.status] || ['', l.status];
+        let prazo = '';
+        if (l.status === 'ativa') prazo = 'vence em <b>' + tsFalta(new Date(l.expira_em) - Date.now()) + '</b><div class="muted" style="font-size:.7rem">' + fmtT(l.expira_em) + '</div>';
+        else prazo = '<span class="muted" style="font-size:.75rem">' + (l.fim_motivo === 'expirou' ? 'prazo acabou' : 'encerrada por ' + esc(l.encerrada_por || '?')) + '<br>' + (l.encerrada_em ? fmtT(l.encerrada_em) : '') + '</span>';
+        const obs = l.status === 'revertendo' ? '<div class="muted" style="font-size:.7rem">falta tirar ' + falta + ' no jogo (quando ele entrar)</div>'
+          : (l.status === 'ativa' && pendCarro ? '<div class="muted" style="font-size:.7rem">' + pendCarro + ' carro(s) chegam quando ele entrar</div>' : '');
+        const acoes = l.status === 'ativa'
+          ? '<div class="acts"><button onclick="tsEstender(' + l.id + ')">+ prazo</button><button class="d" onclick="tsEncerrar(' + l.id + ')">Encerrar</button><button onclick="tsDetalhe(' + l.id + ')">Ver</button></div>'
+          : '<div class="acts"><button onclick="tsDetalhe(' + l.id + ')">Ver</button></div>';
+        let linha = '<tr><td>' + (l.online ? '<span class="ponto ok"></span>' : '') + '<b>' + esc(l.nome || '?') + '</b><div class="muted" style="font-size:.7rem">#' + l.id + (l.roblox_id ? ' · ' + l.roblox_id : '') + (l.motivo ? ' · ' + esc(l.motivo) : '') + '</div></td>' +
+          '<td>' + corps.length + ' corps · ' + itens.length + ' itens · ' + carros.length + ' carros</td>' +
+          '<td>' + prazo + '</td>' +
+          '<td><span class="pill ' + sit[0] + '">' + sit[1] + '</span>' + obs + '</td>' +
+          '<td>' + esc(l.dado_por_nome || '?') + '<div class="muted" style="font-size:.7rem">' + fmtT(l.criado_em) + '</div></td>' +
+          '<td>' + acoes + '</td></tr>';
+        if (TS_ABERTA === l.id) {
+          const cps = corps.map(c => esc(c.corp) + (c.cargo ? ' (' + esc(c.cargo) + ')' : '') + (c.antes && c.antes.membro ? ' <span class="muted">já era membro</span>' : '') + (c.desfeito ? ' <span class="muted">→ ' + ({ remover: 'saiu', restaurar: 'cargo devolvido', nada: 'sem mudança' }[c.desfeito] || c.desfeito) + '</span>' : '')).join(' · ') || '—';
+          const its = itens.map(i => esc(i.item) + ' ×' + i.qtd + (i.cancelado ? ' <span class="muted">(cancelado na fila)</span>' : i.tirado ? ' <span class="muted">(tirado)</span>' : i.tirar ? ' <span class="muted">(falta tirar)</span>' : '')).join(' · ') || '—';
+          const crs = (l.carros || []).map(c => esc(c.carro) + (c.pulado ? ' <span class="muted">(já tinha, não deu)</span>' : !c.entregue ? ' <span class="muted">(pendente)</span>' : c.tirado ? ' <span class="muted">(tirado)</span>' : c.tirar ? ' <span class="muted">(falta tirar)</span>' : '')).join(' · ') || '—';
+          const hist = (l.historico || []).map(h => fmtT(h.em) + ' · ' + esc(h.quem) + ' — ' + esc(h.texto)).join('<br>');
+          linha += '<tr><td colspan="6" style="background:#F4F5F7;font-size:.78rem;line-height:1.5"><b>Corps:</b> ' + cps + '<br><b>Itens:</b> ' + its + '<br><b>Carros:</b> ' + crs + '<br><b>Registro:</b><br>' + hist + '</td></tr>';
+        }
+        return linha;
+      }).join('');
+    }
+    function tsDetalhe(id) { TS_ABERTA = TS_ABERTA === id ? null : id; tsRenderLista(); }
+    async function tsEstender(id) {
+      const h = prompt('Estender quantas horas? (1 a ' + (TST.horas_max || 168) + ')', '24');
+      if (!h) return;
+      try { const r = await api('POST', '/testers/' + id + '/estender', { horas: Number(h) }); showAlert('Agora vence ' + fmtT(r.expira_em), 'success'); }
+      catch (e) { showAlert(e.message, 'error'); }
+      loadTesters();
+    }
+    async function tsEncerrar(id) {
+      if (!confirm('Encerrar agora?\n\nAs corps voltam na hora. Itens e carros saem no jogo assim que ele estiver online.')) return;
+      try { const r = await api('POST', '/testers/' + id + '/encerrar'); showAlert(r.falta_no_jogo ? 'Encerrado — o jogo tira o resto quando ele entrar' : 'Encerrado', 'success'); }
+      catch (e) { showAlert(e.message, 'error'); }
+      loadTesters();
+    }
+    setInterval(() => { if ($('panel-testers').classList.contains('active')) loadTesters(); }, 20000);
+
     document.querySelectorAll('.tab').forEach(tab => tab.addEventListener('click', () => {
       document.querySelectorAll('.tab').forEach(t => t.classList.remove('active'));
       document.querySelectorAll('.panel').forEach(p => p.classList.remove('active'));
@@ -822,6 +1030,7 @@
       if (tab.dataset.tab === 'pds') loadPds();
       if (tab.dataset.tab === 'seguranca') loadSeg();
       if (tab.dataset.tab === 'economia') loadEcon();
+      if (tab.dataset.tab === 'testers') loadTesters();
     }));
 
     // ---------------------------------------------------------------- PDs (16/10)
@@ -974,6 +1183,7 @@
         $('st-upd').textContent = new Date().toLocaleTimeString('pt-BR');
         renderPlayers();
         renderClima();
+        if (typeof tsCatalogo === 'function' && $('panel-testers').classList.contains('active')) tsCatalogo();
         $('srv-list').innerHTML = STATE.servers.length ? STATE.servers.map(s => '<div><span class="pill info">' + esc(s.job_id.slice(0, 8)) + '</span> ' + s.n + ' jogador(es) · visto ' + fmtT(s.updated_at) + '</div>').join('') : 'Nenhum servidor mandou heartbeat nos últimos 90s. O jogo precisa estar rodando com o AdminBridge ativo.';
       } catch (e) { showAlert('Erro ao carregar estado: ' + e.message, 'error'); }
     }

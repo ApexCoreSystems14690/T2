@@ -63,11 +63,17 @@ const CARGOS = {
   administrador: { nome: 'Administrador', nivel: 40,  cor: '#3B82F6', desc: 'Banir, expulsar, dar item individual e noclip.' },
   moderador:     { nome: 'Moderador',     nivel: 20,  cor: '#10B981', desc: 'Banir, expulsar e dar item individual. Sem noclip.' },
   estagiario:    { nome: 'Estagiário',    nivel: 10,  cor: '#64748B', desc: 'Ver registro e logs, mandar mensagem, expulsar e dar item individual. NÃO bane.' },
+  // [21/10 Julio] cargo LATERAL: fica fora da escada. Não herda nada de quem
+  // está abaixo dele (não bane, não expulsa, não vê log); tem SÓ os poderes da
+  // lista `poderes`. O nível 15 serve só pra escada de gestão: Diretor+ concede
+  // e tira, ele não mexe em ninguém.
+  gestor_testers:{ nome: 'Gestor testers', nivel: 15,  cor: '#0E7490', lateral: true, poderes: ['testers'],
+                   desc: 'Só o painel Testers: libera itens, carros e todas as corps pra um tester, com prazo. Tudo volta sozinho e fica registrado.' },
 };
 
-const ORDEM = ['dono', 'diretor', 'supervisor', 'administrador', 'moderador', 'estagiario'];
+const ORDEM = ['dono', 'diretor', 'supervisor', 'administrador', 'moderador', 'estagiario', 'gestor_testers'];
 // Cargos que o painel pode atribuir. 'dono' fica de fora de propósito.
-const CARGOS_ATRIBUIVEIS = ['diretor', 'supervisor', 'administrador', 'moderador', 'estagiario'];
+const CARGOS_ATRIBUIVEIS = ['diretor', 'supervisor', 'administrador', 'moderador', 'estagiario', 'gestor_testers'];
 
 // Cada poder diz o cargo MÍNIMO que o exerce. Quem está acima também tem.
 const PODERES = {
@@ -100,6 +106,10 @@ const PODERES = {
   // livremente -- so o Diretor Geral pra cima usa as tres acoes prontas
   // (encerrar agora, reabrir, estender). Nao existe rota que edite a grade.
   ssu:           { rotulo: 'SSU: encerrar, reabrir e estender', min: 'diretor'    },
+
+  // [21/10] painel Testers: liberação TEMPORÁRIA de itens, carros e todas as
+  // corps pra um tester. Diretor+ pela escada, e o Gestor testers pela lista dele.
+  testers:       { rotulo: 'Painel Testers (liberação temporária)', min: 'diretor' },
 
   wipe:          { rotulo: 'WIPE GERAL (reset da temporada)', min: 'dono'      },
 };
@@ -223,12 +233,19 @@ function cargoDe(user) {
   return c;
 }
 
+// Um cargo tem o poder? Escada: nível >= mínimo. Lateral: só o que está na lista.
+function cargoTem(cargo, poder) {
+  const c = CARGOS[cargo];
+  const p = PODERES[poder];
+  if (!c || !p) return false;
+  if (c.lateral) return (c.poderes || []).includes(poder);
+  return c.nivel >= nivelDoCargo(p.min);
+}
+
 function pode(user, poder) {
   const cargo = cargoDe(user);
   if (!cargo) return false;
-  const p = PODERES[poder];
-  if (!p) return false;
-  return nivelDoCargo(cargo) >= nivelDoCargo(p.min);
+  return cargoTem(cargo, poder);
 }
 
 // Todos os poderes de um usuário, como objeto { poder: true } — é o que vai
@@ -237,9 +254,8 @@ function poderesDe(user) {
   const out = {};
   const cargo = cargoDe(user);
   if (!cargo) return out;
-  const meu = nivelDoCargo(cargo);
-  for (const [k, p] of Object.entries(PODERES)) {
-    if (meu >= nivelDoCargo(p.min)) out[k] = true;
+  for (const k of Object.keys(PODERES)) {
+    if (cargoTem(cargo, k)) out[k] = true;
   }
   return out;
 }
@@ -266,7 +282,7 @@ function matriz() {
   const linhas = [];
   for (const cargo of ORDEM) {
     const n = nivelDoCargo(cargo);
-    const tem = Object.keys(PODERES).filter(k => n >= nivelDoCargo(PODERES[k].min));
+    const tem = Object.keys(PODERES).filter(k => cargoTem(cargo, k));
     linhas.push({ cargo, nome: CARGOS[cargo].nome, nivel: n, poderes: tem });
   }
   return linhas;
@@ -275,5 +291,5 @@ function matriz() {
 module.exports = {
   CARGOS, ORDEM, CARGOS_ATRIBUIVEIS, PODERES, PODER_DO_COMANDO, DONO_DISCORD, DONO_DISCORD_ID,
   DONO_DISCORD_ENV_NOMES, DONO_IDS_RESOLVIDOS,
-  ehDono, resolverDono, ehDiretorOuMais, cargoDe, pode, poderesDe, podeMexerEm, podeDarCargo, nivelDoCargo, matriz,
+  ehDono, resolverDono, ehDiretorOuMais, cargoDe, cargoTem, pode, poderesDe, podeMexerEm, podeDarCargo, nivelDoCargo, matriz,
 };
