@@ -40,6 +40,7 @@
     .adm .selo { background: var(--asfalto); }
     .tudo .selo { background: var(--alerta); }
     .elei .selo { background: var(--asfalto-2); }
+    .regra .selo { background: #10131A; color: var(--pista); }
     .item.off { color: var(--tinta-3); }
     .item.off .selo { background: var(--linha-2); }
     .rodape { margin-top: 2.5rem; color: var(--tinta-3); font-size: .82rem; }
@@ -59,6 +60,7 @@
     <% if (!user) { %>
       <p class="lede">Cargos, membros, caixa e salários das corporações, facções e empresas do Santa Fé RP. Entre com a mesma conta do Discord do servidor.</p>
       <a href="/auth/discord" class="btn entrar"><svg class="ic" aria-hidden="true"><use href="/icones.svg#discord"/></svg>Entrar com Discord</a>
+      <% if (cidade) { %><p style="margin-top:1rem"><a href="/cidade/<%= cidade.slug %>/regras">Ler as regras da cidade</a></p><% } %>
     <% } else { %>
       <p class="lede">Escolha o que você vai gerenciar hoje.</p>
       <div class="quem">
@@ -85,6 +87,14 @@
           <span class="t">Facções</span>
           <span class="d">Cargos, membros e salários das facções.</span>
         </a>
+        <%# [22/10] regulamento DESTA cidade %>
+        <% if (cidade) { %>
+        <a class="item regra" href="/cidade/<%= cidade.slug %>/regras">
+          <span class="selo"><svg class="ic" aria-hidden="true"><use href="/icones.svg#livro"/></svg></span>
+          <span class="t">Regras da cidade</span>
+          <span class="d">Os regulamentos de <%= cidade.nome %>, com busca e link direto pra cada artigo.</span>
+        </a>
+        <% } %>
         <%# [14/10] eleicao: qualquer um logado ve a apuracao %>
         <a class="item elei" href="/apuracao">
           <span class="selo"><svg class="ic" aria-hidden="true"><use href="/icones.svg#urna"/></svg></span>

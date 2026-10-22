@@ -417,6 +417,11 @@
             <datalist id="ts-dl-itens"></datalist><datalist id="ts-dl-carros"></datalist>
             <div id="ts-escolhidos" style="font-size:.78rem"></div>
           </div>
+          <div class="pt-box">
+            <div style="font-weight:700;font-size:.82rem;margin-bottom:.4rem">Poderes de teste</div>
+            <label style="font-size:.82rem;display:block"><input type="checkbox" id="ts-noclip" checked> Noclip + Modo Deus</label>
+            <p class="muted" style="font-size:.72rem;margin:.3rem 0 0">Voa, atravessa parede e pega, move, gira ou apaga objetos e carros do mapa. Liga quando ele entrar e religa sozinho se ele trocar de servidor. Desliga no fim do prazo.</p>
+          </div>
         </div>
         <div class="row" style="margin-top:.8rem;margin-bottom:0;align-items:center">
           <button class="btn" id="ts-go" onclick="tsLiberar()">Liberar tudo</button>
@@ -947,14 +952,15 @@
       const nome = TS_SEL.roblox_username || TS_SEL.discord_username;
       if (!confirm('Liberar pra ' + nome + ' por ' + $('ts-horas').selectedOptions[0].text + '?\n\n' +
         nCorps + ' corps (cargo ' + ($('ts-nivel').value === 'alto' ? 'mais alto' : 'mais baixo') + ')\n' +
-        itens.length + ' itens\n' + carros.length + ' carros\n\nNo fim do prazo tudo volta sozinho.')) return;
+        itens.length + ' itens\n' + carros.length + ' carros\n' + ($('ts-noclip').checked ? 'Noclip + Modo Deus\n' : '') + '\nNo fim do prazo tudo volta sozinho.')) return;
       $('ts-go').disabled = true; $('ts-resumo').textContent = 'liberando…';
       try {
-        const r = await api('POST', '/testers/conceder', { user_id: TS_SEL.id, horas, tipos, nivel: $('ts-nivel').value, itens, carros, motivo: $('ts-motivo').value });
+        const r = await api('POST', '/testers/conceder', { user_id: TS_SEL.id, horas, tipos, nivel: $('ts-nivel').value, itens, carros, noclip: $('ts-noclip').checked, motivo: $('ts-motivo').value });
         const s = r.resumo || {};
         $('ts-resumo').textContent = 'Feito: ' + s.corps + ' corps, ' + s.itens + ' itens, ' + s.carros + ' carros'
           + (s.carros_pulados ? ' (' + s.carros_pulados + ' ele já tinha)' : '')
           + (s.carros_pendentes ? ' · ' + s.carros_pendentes + ' carros chegam quando ele entrar' : '')
+          + (s.noclip ? ' · noclip: ' + s.noclip : '')
           + ' · vence ' + fmtT(r.expira_em);
         showAlert('Tester liberado', 'success');
         TS_ITENS = []; TS_CARROS = []; tsRenderEscolhidos();
@@ -982,10 +988,10 @@
         const obs = l.status === 'revertendo' ? '<div class="muted" style="font-size:.7rem">falta tirar ' + falta + ' no jogo (quando ele entrar)</div>'
           : (l.status === 'ativa' && pendCarro ? '<div class="muted" style="font-size:.7rem">' + pendCarro + ' carro(s) chegam quando ele entrar</div>' : '');
         const acoes = l.status === 'ativa'
-          ? '<div class="acts"><button onclick="tsEstender(' + l.id + ')">+ prazo</button><button class="d" onclick="tsEncerrar(' + l.id + ')">Encerrar</button><button onclick="tsDetalhe(' + l.id + ')">Ver</button></div>'
+          ? '<div class="acts"><button onclick="tsEstender(' + l.id + ')">+ prazo</button><button onclick="tsNoclip(' + l.id + ',' + !(l.noclip && l.noclip.ligado) + ')">' + (l.noclip && l.noclip.ligado ? 'Tirar noclip' : 'Dar noclip') + '</button><button class="d" onclick="tsEncerrar(' + l.id + ')">Encerrar</button><button onclick="tsDetalhe(' + l.id + ')">Ver</button></div>'
           : '<div class="acts"><button onclick="tsDetalhe(' + l.id + ')">Ver</button></div>';
         let linha = '<tr><td>' + (l.online ? '<span class="ponto ok"></span>' : '') + '<b>' + esc(l.nome || '?') + '</b><div class="muted" style="font-size:.7rem">#' + l.id + (l.roblox_id ? ' · ' + l.roblox_id : '') + (l.motivo ? ' · ' + esc(l.motivo) : '') + '</div></td>' +
-          '<td>' + corps.length + ' corps · ' + itens.length + ' itens · ' + carros.length + ' carros</td>' +
+          '<td>' + corps.length + ' corps · ' + itens.length + ' itens · ' + carros.length + ' carros' + (l.noclip && l.noclip.ligado ? ' · <b>noclip + Deus</b>' : '') + '</td>' +
           '<td>' + prazo + '</td>' +
           '<td><span class="pill ' + sit[0] + '">' + sit[1] + '</span>' + obs + '</td>' +
           '<td>' + esc(l.dado_por_nome || '?') + '<div class="muted" style="font-size:.7rem">' + fmtT(l.criado_em) + '</div></td>' +
@@ -1005,6 +1011,11 @@
       const h = prompt('Estender quantas horas? (1 a ' + (TST.horas_max || 168) + ')', '24');
       if (!h) return;
       try { const r = await api('POST', '/testers/' + id + '/estender', { horas: Number(h) }); showAlert('Agora vence ' + fmtT(r.expira_em), 'success'); }
+      catch (e) { showAlert(e.message, 'error'); }
+      loadTesters();
+    }
+    async function tsNoclip(id, ativar) {
+      try { const r = await api('POST', '/testers/' + id + '/noclip', { ativar }); showAlert((ativar ? 'Noclip + Modo Deus ligado' : 'Noclip desligado') + (r.online ? '' : ' (vale quando ele entrar)'), 'success'); }
       catch (e) { showAlert(e.message, 'error'); }
       loadTesters();
     }

@@ -164,6 +164,29 @@
     .placa-saida:hover .ps-entrar { background: var(--pista); color: #10131A; }
     .placa-saida.atual .ps-entrar::after { content: " · você está aqui"; font-weight: 600; }
 
+    /* [22/10] placa auxiliar branca pendurada embaixo da verde: regras da cidade */
+    .placa-item { display: flex; flex-direction: column; align-items: center; }
+    .placa-item .placa-saida { width: 100%; }
+    .placa-item:nth-child(2) .placa-saida { animation-delay: -2.4s; }
+    .placa-item:nth-child(3) .placa-saida { animation-delay: -4.1s; }
+    .ps-regras {
+      position: relative; margin-top: 16px; display: inline-flex; align-items: center; gap: .5rem;
+      background: #F4F6F3; color: #10131A !important; text-decoration: none !important;
+      border: 3px solid #10131A; outline: 3px solid #F4F6F3; border-radius: 4px;
+      padding: .45rem .8rem; font-weight: 800; font-size: .95rem; letter-spacing: .01em;
+      font-stretch: 85%; font-variation-settings: "wdth" 85;
+      box-shadow: 0 10px 24px rgba(0,0,0,.45);
+      transform-origin: 50% -16px; animation: balanca 6s ease-in-out infinite; animation-delay: -1.2s;
+      transition: background .15s ease;
+    }
+    .ps-regras::before, .ps-regras::after { /* as duas hastes que prendem na placa de cima */
+      content: ""; position: absolute; top: -19px; width: 3px; height: 16px; background: #4A525C;
+    }
+    .ps-regras::before { left: 22%; } .ps-regras::after { right: 22%; }
+    .ps-regras .ic { width: 1.15em; height: 1.15em; }
+    .ps-regras small { font-weight: 600; color: #46505C; font-size: .76rem; padding-left: .5rem; border-left: 2px solid #10131A; }
+    .ps-regras:hover, .ps-regras:focus-visible { background: var(--pista); }
+
     /* vaga vazia no pórtico: a rede vai crescer */
     .vaga {
       background: rgba(14,17,22,.72); backdrop-filter: blur(2px);
@@ -248,6 +271,7 @@
       <% cidades.forEach(function (c) {
            var link = '/cidade/' + c.slug + (voltar ? '?voltar=' + encodeURIComponent(voltar) : '');
       %>
+      <div class="placa-item">
       <a class="placa-saida<%= atual === c.id ? ' atual' : '' %>" href="<%= link %>">
         <span class="borda">
           <span class="ps-topo">
@@ -266,6 +290,15 @@
           </span>
         </span>
       </a>
+      <%# [22/10] placa auxiliar pendurada embaixo: o regulamento DESTA cidade (não precisa entrar nem logar) %>
+      <% if (c.regras) { %>
+      <a class="ps-regras" href="/cidade/<%= c.slug %>/regras">
+        <svg class="ic" aria-hidden="true"><use href="/icones.svg#livro"/></svg>
+        <span>Regras da cidade</span>
+        <small><%= c.regras %> <%= c.regras === 1 ? 'documento' : 'documentos' %></small>
+      </a>
+      <% } %>
+      </div>
       <% }) %>
       <div class="vaga" aria-hidden="true">Mais cidades em breve</div>
     </nav>

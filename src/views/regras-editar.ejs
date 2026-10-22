@@ -1,0 +1,244 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Editar regras — <%= cidade.nome %></title>
+  <meta name="theme-color" content="#1C2127">
+  <style>
+    body { margin: 0; }
+    .topbar { display: flex; align-items: center; justify-content: space-between; }
+    .casa { max-width: 1280px; margin: 0 auto; padding: 1.2rem clamp(16px, 3vw, 28px) 4rem; display: grid; grid-template-columns: 240px minmax(0, 1fr); gap: 1.2rem; align-items: start; }
+    .lado { background: var(--papel); border: 1px solid var(--linha); border-radius: var(--r); overflow: hidden; }
+    .lado h2 { font-size: 1rem; margin: 0; padding: .8rem .9rem; border-bottom: 1px solid var(--linha); }
+    .lado a { display: block; padding: .6rem .9rem; text-decoration: none; color: var(--tinta); border-left: 3px solid transparent; border-top: 1px solid var(--linha); font-size: .9rem; }
+    .lado a:first-of-type { border-top: 0; }
+    .lado a.on { border-left-color: var(--pista); background: var(--papel-2); font-weight: 700; }
+    .lado a small { display: block; color: var(--tinta-3); font-weight: 400; }
+    .lado .novo { padding: .7rem .9rem; border-top: 1px solid var(--linha); }
+    .form { background: var(--papel); border: 1px solid var(--linha); border-radius: var(--r); padding: 1.1rem 1.2rem; }
+    .grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(170px, 1fr)); gap: .7rem; margin-bottom: .8rem; }
+    label { display: flex; flex-direction: column; gap: .25rem; font-size: .8rem; color: var(--tinta-2); font-weight: 600; }
+    input, select, textarea { padding: .5rem .6rem; border: 1px solid var(--linha-2); border-radius: var(--rs); font-size: .92rem; background: #fff; color: var(--tinta); }
+    textarea.md { min-height: 60vh; font-family: ui-monospace, SFMono-Regular, Consolas, monospace; font-size: .84rem; line-height: 1.5; width: 100%; resize: vertical; }
+    .linha { display: flex; gap: .5rem; flex-wrap: wrap; align-items: center; margin: .7rem 0; }
+    .meta-row { display: grid; grid-template-columns: 160px 1fr 34px; gap: .4rem; margin-bottom: .35rem; }
+    .abas { display: flex; gap: .3rem; border-bottom: 1px solid var(--linha); margin: 1rem 0 .7rem; }
+    .abas button { border: 0; background: transparent; padding: .5rem .8rem; font-weight: 700; color: var(--tinta-3); border-bottom: 3px solid transparent; cursor: pointer; }
+    .abas button.on { color: var(--tinta); border-bottom-color: var(--pista); }
+    .previa { border: 1px solid var(--linha); border-radius: var(--rs); padding: 1rem 1.2rem; max-height: 70vh; overflow: auto; }
+    .previa .rg-cap { border-top: 2px solid var(--asfalto); margin-top: 1rem; padding-top: 1rem; }
+    .previa .rg-cap h2 { display: flex; flex-direction: column; gap: .2rem; margin: 0 0 .6rem; }
+    .previa .rg-capn { font-size: .7rem; letter-spacing: .14em; color: var(--placa); text-transform: uppercase; }
+    .previa .rg-art { margin: .4rem 0; } .previa .rg-art p { margin: 0; line-height: 1.55; }
+    .previa .rg-artn { font-weight: 800; color: var(--placa); text-decoration: none; }
+    .previa .rg-tag { font-size: .64rem; font-weight: 800; padding: .08rem .3rem; border-radius: 3px; text-transform: uppercase; }
+    .previa .rg-novo { background: var(--placa); color: #fff; } .previa .rg-alterado { background: var(--pista); }
+    .previa .rg-nota { background: var(--papel-2); border-left: 3px solid var(--placa); padding: .5rem .7rem; }
+    .previa .rg-tabela { overflow-x: auto; margin: .5rem 0; } .previa th { background: var(--asfalto) !important; color: #fff !important; padding: .4rem .6rem; text-align: left; }
+    .previa td { padding: .4rem .6rem; vertical-align: top; } .previa .rg-tabela ul { margin: 0; padding-left: 1rem; }
+    .ajuda { font-size: .82rem; color: var(--tinta-2); background: var(--papel-2); border-radius: var(--rs); padding: .7rem .9rem; line-height: 1.6; }
+    .ajuda code { background: #fff; border: 1px solid var(--linha); border-radius: 3px; padding: 0 .25rem; }
+    .hist { font-size: .86rem; } .hist div { display: flex; gap: .6rem; align-items: center; padding: .4rem 0; border-bottom: 1px solid var(--linha); }
+    .hist div span:first-child { color: var(--tinta-3); min-width: 9.5rem; }
+    .msg { position: fixed; right: 16px; bottom: 16px; padding: .7rem 1rem; border-radius: var(--rs); color: #fff; font-weight: 700; display: none; z-index: 99; }
+    .msg.ok { background: var(--ok); } .msg.err { background: var(--perigo); }
+    .info { color: var(--tinta-3); font-size: .82rem; }
+    @media (max-width: 860px) { .casa { grid-template-columns: 1fr; } .meta-row { grid-template-columns: 1fr 1fr 34px; } }
+  </style>
+  <link rel="stylesheet" href="/sf.css">
+</head>
+<body>
+  <div class="topbar">
+    <div style="display:flex;align-items:center;gap:1rem">
+      <%- include('partials/placa') %>
+      <h1>Editar regras</h1>
+    </div>
+    <div class="user" style="display:flex;gap:1rem;align-items:center">
+      <a href="/cidade/<%= cidade.slug %>/regras" target="_blank" rel="noopener">Ver página pública</a>
+      <a href="/painel">Painel</a>
+    </div>
+  </div>
+
+  <main class="casa">
+    <nav class="lado" aria-label="Documentos">
+      <h2>Documentos de <%= cidade.nome %></h2>
+      <div id="lista"></div>
+      <div class="novo"><button class="btn sec sm" type="button" id="btn-novo">+ Novo documento</button></div>
+    </nav>
+
+    <section class="form" id="form" hidden>
+      <div class="grid">
+        <label>Título<input id="f-titulo" maxlength="120"></label>
+        <label>Endereço<input id="f-slug" maxlength="40" placeholder="ex.: faccoes"></label>
+        <label>Versão<input id="f-versao" maxlength="20" placeholder="ex.: 2.4"></label>
+        <label>Situação
+          <select id="f-status"><option value="vigente">Vigente</option><option value="rascunho">Rascunho</option><option value="arquivado">Arquivado (some da página)</option></select>
+        </label>
+        <label>Vigente desde<input id="f-desde" type="date"></label>
+        <label>Ordem<input id="f-ordem" type="number" min="0" max="999"></label>
+      </div>
+      <div class="grid">
+        <label style="grid-column:span 2">Subtítulo<input id="f-sub" maxlength="200"></label>
+        <label style="grid-column:span 2">Aviso (aparece no lugar de "Vigente")<input id="f-aviso" maxlength="200" placeholder="ex.: Rascunho: entra em vigor após a votação"></label>
+      </div>
+      <label>Informações do cabeçalho</label>
+      <div id="meta"></div>
+      <button class="btn sec sm" type="button" id="btn-meta">+ Linha</button>
+
+      <div class="abas" role="tablist">
+        <button type="button" class="on" data-aba="texto">Texto</button>
+        <button type="button" data-aba="previa">Pré-visualizar</button>
+        <button type="button" data-aba="pdf">PDF</button>
+        <button type="button" data-aba="hist">Versões anteriores</button>
+      </div>
+      <div data-painel="texto">
+        <textarea class="md" id="f-texto" spellcheck="true"></textarea>
+        <p class="ajuda">
+          <code>## Capítulo 1 · Título</code> abre um capítulo ·
+          <code>### Subtítulo</code> ·
+          <code>**Art. 1.1** [NOVO] — texto</code> é um artigo ([NOVO] e [ALTERADO] viram selo) ·
+          <code>- item</code> lista ·
+          <code>&gt; texto</code> nota ·
+          <code>| A | B |</code> tabela (primeira linha é o cabeçalho; "•" dentro da célula vira lista) ·
+          <code>**negrito**</code>. Deixe uma linha em branco entre blocos.
+          Citações como <code>Art. 7.3</code> e <code>Cap. 5</code> viram link sozinhas.
+        </p>
+      </div>
+      <div data-painel="previa" hidden><div class="previa" id="previa"></div></div>
+      <div data-painel="pdf" hidden>
+        <p class="info" id="pdf-info"></p>
+        <input type="file" id="f-pdf" accept="application/pdf">
+        <button class="btn sec sm" type="button" id="btn-pdf">Enviar PDF</button>
+      </div>
+      <div data-painel="hist" hidden><div class="hist" id="hist"></div></div>
+
+      <div class="linha">
+        <button class="btn" type="button" id="btn-salvar">Salvar</button>
+        <a class="btn sec" id="btn-ver" target="_blank" rel="noopener">Abrir página</a>
+        <span class="info" id="status-salvo"></span>
+      </div>
+    </section>
+  </main>
+  <div class="msg" id="msg"></div>
+
+<script>
+(function () {
+  var CID = <%- JSON.stringify(cidade.slug) %>;
+  var $ = function (id) { return document.getElementById(id); };
+  var atual = null, novo = false, sujo = false;
+  function msg(t, ok) { var m = $('msg'); m.textContent = t; m.className = 'msg ' + (ok ? 'ok' : 'err'); m.style.display = 'block'; clearTimeout(m._t); m._t = setTimeout(function () { m.style.display = 'none'; }, 3200); }
+  async function api(met, url, body, tipo) {
+    var o = { method: met, headers: {} };
+    if (body !== undefined) { o.headers['Content-Type'] = tipo || 'application/json'; o.body = tipo ? body : JSON.stringify(body); }
+    var r = await fetch(url, o); var j = {}; try { j = await r.json(); } catch (e) {}
+    if (!r.ok) throw new Error(j.error || ('Erro ' + r.status)); return j;
+  }
+  function esc(s) { var d = document.createElement('div'); d.textContent = s == null ? '' : String(s); return d.innerHTML; }
+
+  async function carregarLista(sel) {
+    var j = await api('GET', '/api/regras');
+    $('lista').innerHTML = j.docs.map(function (d) {
+      return '<a href="#" data-slug="' + esc(d.slug) + '" class="' + (sel === d.slug ? 'on' : '') + '">' + esc(d.titulo) +
+        '<small>' + (d.versao ? 'v' + esc(d.versao) + ' · ' : '') + esc(d.status) + '</small></a>';
+    }).join('') || '<p class="info" style="padding:.7rem .9rem">Nenhum documento ainda.</p>';
+    $('lista').querySelectorAll('a').forEach(function (a) { a.onclick = function (e) { e.preventDefault(); abrir(a.dataset.slug); }; });
+    return j.docs;
+  }
+  function linhaMeta(k, v) {
+    var d = document.createElement('div'); d.className = 'meta-row';
+    d.innerHTML = '<input placeholder="Rótulo" maxlength="40"><input placeholder="Valor" maxlength="160"><button type="button" class="btn sec sm" title="Tirar">×</button>';
+    d.children[0].value = k || ''; d.children[1].value = v || '';
+    d.children[2].onclick = function () { d.remove(); sujo = true; };
+    $('meta').appendChild(d);
+  }
+  function preencher(d) {
+    $('form').hidden = false;
+    $('f-titulo').value = d.titulo || ''; $('f-slug').value = d.slug || ''; $('f-slug').disabled = !novo;
+    $('f-versao').value = d.versao || ''; $('f-status').value = d.status || 'rascunho';
+    $('f-desde').value = d.vigente_desde ? String(d.vigente_desde).slice(0, 10) : '';
+    $('f-ordem').value = d.ordem != null ? d.ordem : 100; $('f-sub').value = d.subtitulo || ''; $('f-aviso').value = d.aviso || '';
+    $('meta').innerHTML = ''; (d.meta || []).forEach(function (m) { linhaMeta(m.k, m.v); });
+    $('f-texto').value = d.conteudo || '';
+    $('pdf-info').textContent = d.tem_pdf ? ('PDF atual: ' + (d.pdf_nome || 'arquivo')) : 'Sem PDF. A página funciona sem ele; o PDF é só pra baixar.';
+    $('btn-ver').href = '/cidade/' + CID + '/regras/' + (d.slug || '');
+    $('status-salvo').textContent = d.atualizado_em ? 'Última mudança: ' + new Date(d.atualizado_em).toLocaleString('pt-BR') : '';
+    sujo = false; trocarAba('texto');
+  }
+  async function abrir(slug) {
+    if (sujo && !confirm('Tem mudança não salva. Descartar?')) return;
+    novo = false; atual = slug;
+    await carregarLista(slug);
+    preencher(await api('GET', '/api/regras/' + encodeURIComponent(slug)));
+    history.replaceState(null, '', '?doc=' + encodeURIComponent(slug));
+  }
+  $('btn-novo').onclick = function () {
+    if (sujo && !confirm('Tem mudança não salva. Descartar?')) return;
+    novo = true; atual = null;
+    preencher({ titulo: '', slug: '', status: 'rascunho', ordem: 100, meta: [], conteudo: '## Capítulo 1 · Disposições gerais\n\n**Art. 1.1** — ' });
+    $('f-titulo').focus();
+  };
+  $('btn-meta').onclick = function () { linhaMeta('', ''); };
+  document.querySelector('.form').addEventListener('input', function () { sujo = true; });
+
+  function trocarAba(a) {
+    document.querySelectorAll('.abas button').forEach(function (b) { b.classList.toggle('on', b.dataset.aba === a); });
+    document.querySelectorAll('[data-painel]').forEach(function (p) { p.hidden = p.dataset.painel !== a; });
+    if (a === 'previa') previa();
+    if (a === 'hist') historico();
+  }
+  document.querySelectorAll('.abas button').forEach(function (b) { b.onclick = function () { trocarAba(b.dataset.aba); }; });
+  async function previa() {
+    try { var j = await api('POST', '/api/regras/previa', $('f-texto').value, 'text/plain');
+      $('previa').innerHTML = '<p class="info">' + j.capitulos.length + ' capítulos · ' + j.artigos + ' artigos</p>' + j.html; }
+    catch (e) { $('previa').textContent = e.message; }
+  }
+  async function historico() {
+    if (!atual) { $('hist').innerHTML = '<p class="info">Salve o documento primeiro.</p>'; return; }
+    var h = await api('GET', '/api/regras/' + encodeURIComponent(atual) + '/historico');
+    $('hist').innerHTML = h.length ? h.map(function (x) {
+      return '<div><span>' + new Date(x.em).toLocaleString('pt-BR') + '</span><span>' + esc(x.por_nome || '') + (x.versao ? ' · v' + esc(x.versao) : '') +
+        ' · ' + (x.tamanho || 0) + ' caracteres</span><button class="btn sec sm" data-h="' + x.id + '">Restaurar</button></div>';
+    }).join('') : '<p class="info">Nenhuma versão anterior ainda. Cada vez que você salva, a versão de antes fica guardada aqui.</p>';
+    $('hist').querySelectorAll('button').forEach(function (b) {
+      b.onclick = async function () {
+        if (!confirm('Voltar o documento pra esta versão? A versão de agora também fica guardada.')) return;
+        try { await api('POST', '/api/regras/' + encodeURIComponent(atual) + '/restaurar/' + b.dataset.h); msg('Versão restaurada', true); sujo = false; abrir(atual); }
+        catch (e) { msg(e.message); }
+      };
+    });
+  }
+  $('btn-salvar').onclick = async function () {
+    var slug = novo ? $('f-slug').value.trim().toLowerCase() : atual;
+    if (!slug) return msg('Preencha o endereço (ex.: faccoes)');
+    var meta = Array.prototype.map.call($('meta').children, function (r) { return { k: r.children[0].value.trim(), v: r.children[1].value.trim() }; }).filter(function (m) { return m.k && m.v; });
+    var b = $('btn-salvar'); b.disabled = true;
+    try {
+      await api('PUT', '/api/regras/' + encodeURIComponent(slug), {
+        titulo: $('f-titulo').value, versao: $('f-versao').value, status: $('f-status').value, vigente_desde: $('f-desde').value || null,
+        ordem: $('f-ordem').value, subtitulo: $('f-sub').value, aviso: $('f-aviso').value, meta: meta });
+      var t = await api('PUT', '/api/regras/' + encodeURIComponent(slug) + '/texto', $('f-texto').value, 'text/plain');
+      sujo = false; novo = false; atual = slug;
+      msg('Salvo · ' + t.capitulos + ' capítulos, ' + t.artigos + ' artigos', true);
+      abrir(slug);
+    } catch (e) { msg(e.message); }
+    finally { b.disabled = false; }
+  };
+  $('btn-pdf').onclick = async function () {
+    var f = $('f-pdf').files[0];
+    if (!atual) return msg('Salve o documento primeiro');
+    if (!f) return msg('Escolha o PDF');
+    try {
+      var r = await fetch('/api/regras/' + encodeURIComponent(atual) + '/pdf', { method: 'POST', headers: { 'Content-Type': 'application/pdf', 'X-Nome-Arquivo': f.name.replace(/[^\w.\-]+/g, '-') }, body: f });
+      var j = await r.json(); if (!r.ok) throw new Error(j.error || 'Erro');
+      msg('PDF enviado', true); abrir(atual);
+    } catch (e) { msg(e.message); }
+  };
+  window.addEventListener('beforeunload', function (e) { if (sujo) { e.preventDefault(); e.returnValue = ''; } });
+
+  var q = new URLSearchParams(location.search).get('doc');
+  carregarLista(q).then(function (docs) { if (q) abrir(q); else if (docs[0]) abrir(docs[0].slug); });
+})();
+</script>
+</body>
+</html>

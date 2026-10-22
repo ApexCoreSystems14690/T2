@@ -74,25 +74,47 @@ function montar(movs, totalCirculando) {
   };
 }
 
+// [22/10] Quando começou a temporada atual. Wipe não apaga game_patrimonio (ele só vira a
+// temporada), então sem este corte a aba somava o dinheiro dos testers do wipe velho.
+async function inicioTemporada() {
+  try {
+    const r = await pool.query(
+      `SELECT key, value FROM game_config WHERE key IN ('wipe_em','temporada')`);
+    let em = null;
+    for (const x of r.rows) {
+      const v = x.value && x.value.em;
+      if (v && (!em || new Date(v) > new Date(em))) em = v;
+    }
+    return em;
+  } catch (e) { return null; }
+}
+
 async function relatorio(dias, cidadeId) {
   cidadeId = cidadeId || 1;
-  const janela = dias > 0 ? `NOW() - ($1 || ' days')::interval` : `'-infinity'::timestamp`;
-  const pj = dias > 0 ? [String(dias)] : [];
+  const desde = await inicioTemporada();                       // null = nunca houve wipe
+  // janela = o mais recente entre "últimos N dias" e "início da temporada"
+  // ($1 sempre usado, senão o Postgres não sabe o tipo dele; "tudo" = 100 anos)
+  const corte = `GREATEST(NOW() - ($1::text || ' days')::interval, COALESCE($2::timestamptz, '-infinity'::timestamptz))`;
+  const pj = [String(dias > 0 ? dias : 36500), desde];
 
   // ---------------------------------------------------------------- CIRCULANDO
+  // Só quem tem foto DESTA temporada e DESTA cidade (offline conta: a foto fica até ele voltar).
+  const filtroPat = `cidade_id = $1 AND ($2::timestamptz IS NULL OR atualizado_em >= $2::timestamptz)`;
   const jog = (await pool.query(
     `SELECT COUNT(*)::int AS n, COALESCE(SUM(GREATEST(bolso,0)),0)::bigint AS carteira,
-            COALESCE(SUM(GREATEST(banco,0)),0)::bigint AS banco FROM game_patrimonio`)).rows[0];
+            COALESCE(SUM(GREATEST(banco,0)),0)::bigint AS banco FROM game_patrimonio WHERE ${filtroPat}`,
+    [cidadeId, desde])).rows[0];
   const corps = (await pool.query(
     `SELECT c.id, c.name AS nome, c.tipo, COALESCE(cx.saldo,0)::bigint AS saldo
        FROM corp_caixa cx JOIN corporations c ON c.id = cx.corporation_id
-      ORDER BY cx.saldo DESC`).catch(() => ({ rows: [] }))).rows;
+      WHERE c.cidade_id = $1 AND c.is_active = true
+      ORDER BY cx.saldo DESC`, [cidadeId]).catch(() => ({ rows: [] }))).rows;
   const carteira = Number(jog.carteira), banco = Number(jog.banco);
   const caixas = corps.reduce((t, c) => t + Number(c.saldo), 0);
   const total = carteira + banco + caixas;
   const ricos = (await pool.query(
     `SELECT roblox_id, nome, bolso, banco, (GREATEST(bolso,0) + GREATEST(banco,0))::bigint AS total, atualizado_em
-       FROM game_patrimonio ORDER BY total DESC LIMIT 15`)).rows
+       FROM game_patrimonio WHERE ${filtroPat} ORDER BY total DESC LIMIT 15`, [cidadeId, desde])).rows
     .map(r => ({ ...r, total: Number(r.total), bolso: Number(r.bolso), banco: Number(r.banco),
       pct: total > 0 ? Number(r.total) / total : 0 }));
 
@@ -117,8 +139,8 @@ async function relatorio(dias, cidadeId) {
             gc.created_by
        FROM game_logs l
        LEFT JOIN game_commands gc ON gc.id = NULLIF(l.detalhe->>'cmd_id','')::int
-      WHERE l.tipo = 'dinheiro_staff' AND COALESCE(l.ocorrido_em, l.created_at) > ${janela}
-      ORDER BY l.id DESC LIMIT 2000`, pj)).rows;
+      WHERE l.tipo = 'dinheiro_staff' AND l.cidade_id = $3 AND COALESCE(l.ocorrido_em, l.created_at) > ${corte}
+      ORDER BY l.id DESC LIMIT 2000`, [...pj, cidadeId])).rows;
   const cmdsComLog = new Set(logs.map(l => Number(l.detalhe && l.detalhe.cmd_id)).filter(Boolean));
 
   const movs = [];
@@ -147,8 +169,8 @@ async function relatorio(dias, cidadeId) {
   const cmds = (await pool.query(
     `SELECT id, tipo, target_roblox_id, target_name, payload, created_by, result,
             COALESCE(executed_at, created_at) AS quando
-       FROM game_commands WHERE tipo = ANY($1) AND status = 'done' AND created_at > ${janela.replace('$1', '$2')}
-      ORDER BY id DESC LIMIT 2000`, [TIPOS_CMD, ...pj])).rows;
+       FROM game_commands WHERE tipo = ANY($3) AND cidade_id = $4 AND status = 'done' AND created_at > ${corte}
+      ORDER BY id DESC LIMIT 2000`, [...pj, TIPOS_CMD, cidadeId])).rows;
   for (const c of cmds) {
     if (cmdsComLog.has(c.id)) continue;
     const u = porId.get(c.created_by) || null;
@@ -172,10 +194,10 @@ async function relatorio(dias, cidadeId) {
   const aportes = (await pool.query(
     `SELECT l.criado_em AS quando, l.valor, l.saldo_depois, l.por, l.detalhe, c.name AS corp
        FROM corp_lancamentos l JOIN corporations c ON c.id = l.corporation_id
-      WHERE l.tipo = 'aporte' AND COALESCE(l.por,'') <> 'Governo'
+      WHERE l.tipo = 'aporte' AND COALESCE(l.por,'') <> 'Governo' AND c.cidade_id = $3
         AND l.detalhe->>'origem' IS NULL AND l.detalhe->>'orcamento' IS NULL
-        AND l.criado_em > ${janela}
-      ORDER BY l.id DESC LIMIT 1000`, pj).catch(() => ({ rows: [] }))).rows;
+        AND l.criado_em > ${corte}
+      ORDER BY l.id DESC LIMIT 1000`, [...pj, cidadeId]).catch(() => ({ rows: [] }))).rows;
   for (const a of aportes) {
     const d = a.detalhe || {};
     const u = (d.staff_user_id ? porId.get(Number(d.staff_user_id)) : null) || acharNome(a.por);
@@ -203,7 +225,7 @@ async function relatorio(dias, cidadeId) {
   }
 
   return {
-    dias,
+    dias, temporadaDesde: desde,
     circulando: { total, carteira, banco, caixas, jogadores: jog.n, corps },
     ricos,
     staff: r.totais,

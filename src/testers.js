@@ -59,10 +59,12 @@ function normalizarPedido(b) {
     .filter(c => typeof c === 'string' && c.trim() && c.length <= 64).map(c => c.trim()))];
   if (carros.length > MAX_CARROS) return { erro: `Máximo de ${MAX_CARROS} carros por liberação` };
 
-  if (!tipos.length && !itens.length && !carros.length) return { erro: 'Nada pra liberar: marque corps, itens ou carros' };
+  // [22/10] noclip + Modo Deus (o AdminGodServer só deixa pegar/mover/apagar quem tem AdminNoclip)
+  const noclip = b.noclip === true || b.noclip === 'true' || b.noclip === 1;
+  if (!tipos.length && !itens.length && !carros.length && !noclip) return { erro: 'Nada pra liberar: marque corps, itens, carros ou noclip' };
 
   const motivo = typeof b.motivo === 'string' ? b.motivo.trim().slice(0, 200) : '';
-  return { pedido: { user_id, horas, tipos, nivel, itens, carros, motivo } };
+  return { pedido: { user_id, horas, tipos, nivel, itens, carros, noclip, motivo } };
 }
 
 // Escolhe o cargo de cada corp: mais alto ou mais baixo nível. Empate -> menor id.
@@ -111,6 +113,8 @@ async function garantir(pool) {
     );
     CREATE INDEX IF NOT EXISTS idx_tester_lib_status ON tester_liberacoes(status);
     CREATE UNIQUE INDEX IF NOT EXISTS idx_tester_lib_uma_ativa ON tester_liberacoes(user_id) WHERE status = 'ativa';
+    -- [22/10] noclip + Modo Deus: { ligado, job_id (servidor em que foi mandado), enviado_em }. NULL = não pediu.
+    ALTER TABLE tester_liberacoes ADD COLUMN IF NOT EXISTS noclip JSONB;
   `);
 }
 
@@ -144,9 +148,9 @@ async function conceder(pool, gestor, pedido) {
     if (!u.rows[0]) { await cli.query('ROLLBACK'); return { erro: 'Usuário não encontrado' }; }
     const alvo = u.rows[0];
     const rid = alvo.roblox_id ? Number(alvo.roblox_id) : null;
-    if ((pedido.itens.length || pedido.carros.length) && !rid) {
+    if ((pedido.itens.length || pedido.carros.length || pedido.noclip) && !rid) {
       await cli.query('ROLLBACK');
-      return { erro: 'Esse usuário não vinculou o Roblox no site — sem isso não dá pra mandar item nem carro' };
+      return { erro: 'Esse usuário não vinculou o Roblox no site — sem isso não dá pra mandar item, carro nem noclip' };
     }
     const ja = await cli.query(`SELECT id FROM tester_liberacoes WHERE user_id = $1 AND status = 'ativa' AND cidade_id = $2 FOR UPDATE`, [alvo.id, gestor.cidade_id || 1]);
     if (ja.rows[0]) { await cli.query('ROLLBACK'); return { erro: 'Esse tester já tem uma liberação ativa (#' + ja.rows[0].id + '). Estenda ou encerre ela antes.' }; }
@@ -217,17 +221,25 @@ async function conceder(pool, gestor, pedido) {
 
     if (on && corps.length) await comando(cli, 'corp_refresh', rid, on, {}, gestor.id);
 
+    // --- noclip + Modo Deus: online liga agora; offline liga quando ele entrar (relógio) ---
+    let noclip = null;
+    if (pedido.noclip) {
+      noclip = { ligado: true, job_id: null, enviado_em: null };
+      if (on) { await comando(cli, 'noclip', rid, on, NOCLIP_ON, gestor.id); noclip.job_id = on.job_id; noclip.enviado_em = new Date().toISOString(); }
+    }
+
     const r = await cli.query(
-      `INSERT INTO tester_liberacoes (user_id, roblox_id, nome, dado_por, dado_por_nome, motivo, expira_em, corps, itens, carros, historico, cidade_id)
-       VALUES ($1,$2,$3,$4,$5,$6, NOW() + ($7 || ' hours')::interval, $8,$9,$10,$11,$12) RETURNING id, expira_em`,
+      `INSERT INTO tester_liberacoes (user_id, roblox_id, nome, dado_por, dado_por_nome, motivo, expira_em, corps, itens, carros, historico, cidade_id, noclip)
+       VALUES ($1,$2,$3,$4,$5,$6, NOW() + ($7 || ' hours')::interval, $8,$9,$10,$11,$12,$13) RETURNING id, expira_em`,
       [alvo.id, rid, nomeAlvo, gestor.id, gestorNome, pedido.motivo || null, String(pedido.horas),
        JSON.stringify(corps), JSON.stringify(itens), JSON.stringify(carros),
-       linhaHist(`Liberado por ${pedido.horas} h: ${corps.length} corps, ${itens.length} itens, ${carros.filter(c => !c.pulado).length} carros`, gestorNome),
-       gestor.cidade_id || 1]);
+       linhaHist(`Liberado por ${pedido.horas} h: ${corps.length} corps, ${itens.length} itens, ${carros.filter(c => !c.pulado).length} carros${noclip ? ', noclip + Modo Deus' : ''}`, gestorNome),
+       gestor.cidade_id || 1, noclip ? JSON.stringify(noclip) : null]);
     await cli.query('COMMIT');
     return {
       ok: true, id: r.rows[0].id, expira_em: r.rows[0].expira_em, online: !!on,
       resumo: { corps: corps.length, itens: itens.length, carros: carros.filter(c => !c.pulado).length,
+                noclip: noclip ? (noclip.enviado_em ? 'ligado' : 'liga quando ele entrar') : null,
                 carros_pulados: carros.filter(c => c.pulado).length, carros_pendentes: carros.filter(c => !c.entregue && !c.pulado).length },
     };
   } catch (e) {
@@ -275,15 +287,24 @@ async function _encerrarLinha(cli, lib, quem, fimMotivo) {
     }
   }
   for (const c of (lib.carros || [])) c.tirar = !!c.entregue;
+  // noclip: se ele está online, desliga agora. Offline o atributo já morreu com a sessão
+  // e o relógio não religa mais (status deixa de ser 'ativa').
+  let noclip = lib.noclip || null;
+  if (noclip && noclip.ligado) {
+    const on = lib.roblox_id ? (await onlineAgora(cli)).get(Number(lib.roblox_id)) : null;
+    if (on) await comando(cli, 'noclip', Number(lib.roblox_id), on, { ativar: false, velocidade: 80 }, null);
+    noclip = Object.assign({}, noclip, { ligado: false, desligado_em: new Date().toISOString() });
+  }
   const falta = (lib.itens || []).some(i => i.tirar) || (lib.carros || []).some(c => c.tirar);
   await cli.query(
     `UPDATE tester_liberacoes
         SET status = $2, encerrada_em = NOW(), encerrada_por = $3, fim_motivo = $4,
-            corps = $5, itens = $6, carros = $7, historico = historico || $8::jsonb
+            corps = $5, itens = $6, carros = $7, historico = historico || $8::jsonb, noclip = $9
       WHERE id = $1`,
     [lib.id, falta ? 'revertendo' : 'encerrada', quem, fimMotivo,
      JSON.stringify(lib.corps || []), JSON.stringify(lib.itens || []), JSON.stringify(lib.carros || []),
-     linhaHist(fimMotivo === 'expirou' ? 'Prazo acabou — corps devolvidas' : 'Encerrado — corps devolvidas', quem)]);
+     linhaHist(fimMotivo === 'expirou' ? 'Prazo acabou — corps devolvidas' : 'Encerrado — corps devolvidas', quem),
+     noclip ? JSON.stringify(noclip) : null]);
   return falta;
 }
 
@@ -346,6 +367,15 @@ async function tick(pool) {
             [lib.id, JSON.stringify(lib.carros), linhaHist(`${n} carro(s) entregue(s) quando ficou online`)]);
           feito.carros_entregues += n;
         }
+        // noclip: o atributo do jogo morre quando ele sai. Religa em sessão nova
+        // (outro servidor, ou entrou de novo depois do último envio).
+        const nc = lib.noclip;
+        if (nc && nc.ligado && await precisaReligar(cli, rid, nc, on)) {
+          await comando(cli, 'noclip', rid, on, NOCLIP_ON, lib.dado_por);
+          const novo = Object.assign({}, nc, { job_id: on.job_id, enviado_em: new Date().toISOString() });
+          await cli.query(`UPDATE tester_liberacoes SET noclip = $2 WHERE id = $1`, [lib.id, JSON.stringify(novo)]);
+          feito.noclip = (feito.noclip || 0) + 1;
+        }
       } else if (lib.status === 'revertendo') {
         for (const it of lib.itens) if (it.tirar) { await comando(cli, 'item_remove', rid, on, { item: it.item, qtd: it.qtd }, null); it.tirar = false; it.tirado = true; }
         for (const c of lib.carros) if (c.tirar) { await comando(cli, 'carro_remove', rid, on, { carro: c.carro }, null); c.tirar = false; c.tirado = true; }
@@ -360,6 +390,43 @@ async function tick(pool) {
     finally { cli.release(); }
   }
   return feito;
+}
+
+const NOCLIP_ON = { ativar: true, velocidade: 80 };
+
+// Sessão nova = nunca mandou, mandou em outro servidor, ou ele ENTROU de novo depois do envio.
+async function precisaReligar(db, rid, nc, on) {
+  if (!nc.enviado_em || nc.job_id !== on.job_id) return true;
+  try {
+    const r = await db.query(
+      `SELECT 1 FROM game_logs WHERE tipo = 'entrou' AND detalhe->>'userId' = $1
+          AND COALESCE(ocorrido_em, created_at) > $2::timestamptz LIMIT 1`, [String(rid), nc.enviado_em]);
+    return !!r.rows[0];
+  } catch (e) { return false; }
+}
+
+// Liga/desliga o noclip de uma liberação ATIVA pelo painel (sem mexer no resto).
+async function noclip(pool, id, ativar, quem, cidadeId) {
+  const cli = await pool.connect();
+  try {
+    await cli.query('BEGIN');
+    const r = await cli.query(`SELECT * FROM tester_liberacoes WHERE id = $1 AND status = 'ativa' AND cidade_id = $2 FOR UPDATE`, [id, cidadeId || 1]);
+    const lib = r.rows[0];
+    if (!lib) { await cli.query('ROLLBACK'); return { erro: 'Liberação não está ativa' }; }
+    if (!lib.roblox_id) { await cli.query('ROLLBACK'); return { erro: 'Esse tester não vinculou o Roblox no site' }; }
+    const rid = Number(lib.roblox_id);
+    const on = (await onlineAgora(cli)).get(rid);
+    const nc = { ligado: !!ativar, job_id: null, enviado_em: null };
+    if (on) {
+      await comando(cli, 'noclip', rid, on, ativar ? NOCLIP_ON : { ativar: false, velocidade: 80 }, null);
+      if (ativar) { nc.job_id = on.job_id; nc.enviado_em = new Date().toISOString(); }
+    }
+    await cli.query(`UPDATE tester_liberacoes SET noclip = $2, historico = historico || $3::jsonb WHERE id = $1`,
+      [id, JSON.stringify(nc), linhaHist(ativar ? 'Noclip + Modo Deus ligado' : 'Noclip + Modo Deus desligado', quem)]);
+    await cli.query('COMMIT');
+    return { ok: true, online: !!on };
+  } catch (e) { try { await cli.query('ROLLBACK'); } catch (_) {} throw e; }
+  finally { cli.release(); }
 }
 
 let _timer = null;
@@ -379,5 +446,5 @@ async function listar(pool, cidadeId) {
 module.exports = {
   HORAS_MIN, HORAS_MAX, TIPOS,
   normalizarPedido, escolherCargo, desfazerCorp,
-  garantir, conceder, estender, encerrar, tick, iniciar, listar, onlineAgora,
+  garantir, conceder, estender, encerrar, tick, iniciar, listar, onlineAgora, noclip, precisaReligar,
 };

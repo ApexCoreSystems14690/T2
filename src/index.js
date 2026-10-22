@@ -1253,6 +1253,9 @@ async function start() {
   // [22/10] boost automático do Discord (src/booster.js)
   try { await require('./booster').garantir(pool); }
   catch (e) { console.error('[booster] garantir:', e.message); }
+  // [22/10] regulamentos de cada cidade, nativos no site (semente: os do Santa Fé Oficial)
+  try { await require('./regulamentos').garantir(pool); }
+  catch (e) { console.error('[regras] garantir:', e.message); }
 
   // Sessão com PostgreSQL
   app.use(session({
@@ -1325,15 +1328,18 @@ async function start() {
   app.use('/empresas', exige(), require('./routes/empresas'));   // [30/09] Empresas Oficiais
   app.use('/organizacoes', exige(), require('./routes/organizacoes'));  // [30/09] vista de staff: corp + faccao + empresa
   app.use('/faccoes', exige(), require('./routes/faccoes'));
+  // [22/10] regulamentos por cidade: /cidade/:slug/regras (público) + /painel/regras (Dono)
+  app.use(require('./routes/regras'));
 
   // [21/10] ENTRADA = tela CIDADES. Mostra as cidades da rede (hoje só o Santa
   // Fé Oficial), quantos estão jogando em cada uma e o cargo de staff que a
   // pessoa tem em cada uma.
   app.get('/', async (req, res) => {
     try {
-      const [lista, mov, cargos] = await Promise.all([
+      const [lista, mov, cargos, regras] = await Promise.all([
         CID.todas(pool), CID.movimento(pool),
         CID.meusCargos(pool, req.usuarioPlataforma && req.usuarioPlataforma.id),
+        require('./regulamentos').contagem(pool),
       ]);
       const perm = require('./permissoes');
       const plataforma = !!(req.usuarioPlataforma && perm.ehDono(req.usuarioPlataforma));
@@ -1345,6 +1351,7 @@ async function start() {
           online: (mov[c.id] || {}).online || 0,
           servidores: (mov[c.id] || {}).servidores || 0,
           meu_cargo: cargo,
+          regras: regras[c.id] || 0,
           meu_cargo_nome: cargo ? ((perm.CARGOS[cargo] || {}).nome || cargo) : null,
         });
       });

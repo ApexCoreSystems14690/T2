@@ -947,7 +947,7 @@ router.post('/testers/conceder', requirePoder('testers'), async (req, res) => {
     const r = await TESTERS.conceder(pool, req.user, n.pedido);
     if (r.erro) return res.status(400).json({ error: r.erro });
     await audit(req, 'testers:liberar', { id: r.id, user_id: n.pedido.user_id, horas: n.pedido.horas, tipos: n.pedido.tipos,
-      nivel: n.pedido.nivel, itens: n.pedido.itens.length, carros: n.pedido.carros.length, resumo: r.resumo });
+      nivel: n.pedido.nivel, itens: n.pedido.itens.length, carros: n.pedido.carros.length, noclip: n.pedido.noclip, resumo: r.resumo });
     res.json(r);
   } catch (err) { console.error('testers/conceder:', err.message); res.status(500).json({ error: 'Erro interno: ' + err.message }); }
 });
@@ -960,6 +960,18 @@ router.post('/testers/:id/estender', requirePoder('testers'), async (req, res) =
     await audit(req, 'testers:estender', { id, horas: Number(req.body.horas) });
     res.json(r);
   } catch (err) { console.error('testers/estender:', err.message); res.status(500).json({ error: 'Erro interno' }); }
+});
+
+// [22/10] liga/desliga noclip + Modo Deus de uma liberação ativa
+router.post('/testers/:id/noclip', requirePoder('testers'), async (req, res) => {
+  try {
+    const id = parseInt(req.params.id);
+    const ativar = !!(req.body && req.body.ativar);
+    const r = await TESTERS.noclip(pool, id, ativar, quemSou(req), req.cidade.id);
+    if (r.erro) return res.status(400).json({ error: r.erro });
+    await audit(req, 'testers:noclip', { id, ativar });
+    res.json(r);
+  } catch (err) { console.error('testers/noclip:', err.message); res.status(500).json({ error: 'Erro interno' }); }
 });
 
 router.post('/testers/:id/encerrar', requirePoder('testers'), async (req, res) => {
