@@ -1250,6 +1250,9 @@ async function start() {
   const CID = require('./cidades');
   try { await CID.garantir(pool); }
   catch (e) { console.error('[cidades] garantir:', e.message); throw e; }
+  // [22/10] boost automático do Discord (src/booster.js)
+  try { await require('./booster').garantir(pool); }
+  catch (e) { console.error('[booster] garantir:', e.message); }
 
   // Sessão com PostgreSQL
   app.use(session({

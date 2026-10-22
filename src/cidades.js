@@ -91,6 +91,9 @@ async function garantir(pool) {
     -- reservado dela no Roblox (preenchida quando a cidade for aberta no jogo).
     ALTER TABLE cidades ADD COLUMN IF NOT EXISTS vagas INTEGER NOT NULL DEFAULT 100;
     ALTER TABLE cidades ADD COLUMN IF NOT EXISTS servidor_privado_id VARCHAR(64);
+    -- [22/10] servidor do Discord de cada cidade (boost automático, avisos)
+    ALTER TABLE cidades ADD COLUMN IF NOT EXISTS discord_guild_id VARCHAR(32);
+    UPDATE cidades SET discord_guild_id = '1544515870154293290' WHERE id = 1 AND discord_guild_id IS NULL;
     INSERT INTO cidades (id, slug, nome, sigla, tipo, status, loja_prefixo, cor, descricao, ordem)
     VALUES (1, 'santa-fe', 'Santa Fé', 'SFE', 'oficial', 'ativa', 'CBRP', '#1D3F94',
             'A cidade oficial. Polícia, SAMU, facções, empresas e eleição.', 0)

@@ -628,6 +628,11 @@ router.post('/heartbeat', async (req, res) => {
       entregas = Object.keys(map).map(uid => ({ userId: Number(uid), itens: map[uid] }));
     }
 
+    // [22/10] BOOST AUTOMÁTICO: confere no Discord quem desta lista está boostando e
+    // manda o kit/mesada devidos. Corre por fora: o heartbeat não espera por isso.
+    require('../booster').aoBatimento(pool, { cidadeId: req._cidadeJogo, players: lista, jobId: job_id })
+      .catch(e => console.error('[booster] heartbeat:', e.message));
+
     // config persistida (clima etc.) volta no heartbeat: servidor novo já nasce com o estado certo
     const cfg = await pool.query(`SELECT key, value FROM game_config`);
     const config = {};

@@ -880,6 +880,36 @@ router.post('/registro/dar-todos', requirePoder('item_todos'), async (req, res) 
   } catch (err) { console.error('registro/dar-todos:', err.message); res.status(500).json({ error: 'Erro interno' }); }
 });
 
+// [22/10] BOOST AUTOMÁTICO: quem recebeu o quê e o que ficou pra revisar.
+router.get('/booster', requirePoder('ver_registro'), async (req, res) => {
+  try {
+    const B = require('../booster');
+    res.json({ config: await B.lerConfig(pool), entregas: await B.listar(pool, req.cidade.id),
+      token: !!process.env.DISCORD_BOT_TOKEN });
+  } catch (err) { console.error('booster:', err.message); res.status(500).json({ error: 'Erro interno' }); }
+});
+
+// Quem a staff JÁ setou na mão (pelos tickets, antes do automático) é marcado como
+// "já recebeu o kit nesta temporada", senão o automático pagaria de novo.
+// body: { roblox_id }  -> usa o Discord vinculado àquela conta Roblox.
+router.post('/booster/ja-recebeu', requirePoder('admins'), async (req, res) => {
+  try {
+    const rid = Number(req.body && req.body.roblox_id);
+    if (!Number.isFinite(rid) || rid <= 0) return res.status(400).json({ error: 'roblox_id inválido' });
+    const u = await pool.query(`SELECT id, discord_id, roblox_username FROM users WHERE roblox_id = $1`, [rid]);
+    if (!u.rows[0]) return res.status(404).json({ error: 'Essa conta Roblox não está vinculada a ninguém no site' });
+    const t = await pool.query(`SELECT value FROM game_config WHERE key = 'temporada'`);
+    const temporada = Math.max(1, parseInt(t.rows[0] && t.rows[0].value && t.rows[0].value.n) || 1);
+    const r = await pool.query(
+      `INSERT INTO booster_entregas (cidade_id, temporada, tipo, discord_id, user_id, roblox_id, nome, status, nota, entregue_em)
+       VALUES ($1,$2,'kit',$3,$4,$5,$6,'entregue','setado na mão pela staff antes do automático', NOW())
+       ON CONFLICT DO NOTHING RETURNING id`,
+      [req.cidade.id, temporada, u.rows[0].discord_id, u.rows[0].id, rid, u.rows[0].roblox_username]);
+    await audit(req, 'booster:ja-recebeu', { roblox_id: rid, temporada, novo: !!r.rows[0] });
+    res.json({ ok: true, marcado: !!r.rows[0], temporada });
+  } catch (err) { console.error('booster/ja-recebeu:', err.message); res.status(500).json({ error: 'Erro interno' }); }
+});
+
 // ============================================================
 // [21/10] PAINEL TESTERS — liberação temporária (itens, carros, todas as corps)
 // Quem usa: Diretor Geral+ e o cargo lateral "Gestor testers" (poder 'testers').
