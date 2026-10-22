@@ -131,10 +131,12 @@ router.post('/link-roblox/codigo', async (req, res) => {
 router.post('/link-roblox/verificar-bio', async (req, res) => {
   try {
     const u = await pool.query(
-      `SELECT roblox_id, roblox_username, vinculo_codigo, vinculo_codigo_em > NOW() - ($2 || ' minutes')::interval AS valido
+      `SELECT COALESCE(vinculo_pendente_rid, roblox_id) AS roblox_id, COALESCE(vinculo_pendente_nome, roblox_username) AS roblox_username,
+              vinculo_codigo, vinculo_codigo_em > NOW() - ($2 || ' minutes')::interval AS valido
          FROM users WHERE id = $1`, [req.user.id, String(SEG.CODIGO_VALIDADE_MIN)]);
     const me = u.rows[0];
-    if (!me || !me.roblox_id) return res.redirect('/dashboard/link-roblox?error=id_required');
+    // [22/10] antes mostrava "escreve o seu nome" aqui, que não tinha nada a ver com o problema
+    if (!me || !me.roblox_id) return res.redirect('/dashboard/link-roblox?error=sem_roblox_pra_verificar');
     if (!me.vinculo_codigo || !me.valido) return res.redirect('/dashboard/link-roblox?error=codigo_vencido');
     const r = await fetch('https://users.roblox.com/v1/users/' + encodeURIComponent(me.roblox_id));
     if (!r.ok) return res.redirect('/dashboard/link-roblox?error=roblox_fora');
@@ -184,6 +186,7 @@ router.post('/link-roblox', async (req, res) => {
     nomeRoblox = achado.nome;   // guarda com a grafia certa do Roblox
   }
   if (!rid) return res.redirect('/dashboard/link-roblox?error=id_required');
+  // vinculo normal (sem conflito) apaga qualquer pendência antiga
 
   const client = await pool.connect();
   try {
@@ -193,7 +196,27 @@ router.post('/link-roblox', async (req, res) => {
     const outro = await client.query(
       'SELECT id, discord_id, discord_username FROM users WHERE roblox_id = $1 AND id <> $2',
       [rid, req.user.id]);
+    // [22/10] Caso do _viniciusbr01: o Roblox dele já estava numa linha SEM prova (placeholder
+    // criado quando a corp registrou pelo id, ou alguém que digitou o nome). A recusa deixava
+    // ele sem saída, porque a verificação só aparecia pra quem já estava vinculado. Agora:
+    // se ninguém PROVOU essa conta, ela fica pendente aqui e a tela pede a prova (código no
+    // jogo ou na bio). Quando provar, o confirmarVinculo tira o id da outra linha e, se for
+    // placeholder, traz as corps junto. Ninguém perde nada sem prova.
     if (outro.rows.length > 0) {
+      const verif = await client.query('SELECT 1 FROM users WHERE roblox_id = $1 AND id <> $2 AND roblox_verificado = true', [rid, req.user.id]);
+      if (!verif.rows.length) {
+        await client.query(
+          `UPDATE users SET vinculo_pendente_rid = $1, vinculo_pendente_nome = $2,
+                  vinculo_codigo = COALESCE(CASE WHEN vinculo_codigo_em > NOW() - ($4 || ' minutes')::interval THEN vinculo_codigo END, $5),
+                  vinculo_codigo_em = CASE WHEN vinculo_codigo_em > NOW() - ($4 || ' minutes')::interval THEN vinculo_codigo_em ELSE NOW() END,
+                  updated_at = NOW()
+            WHERE id = $3`,
+          [rid, nomeRoblox || null, req.user.id, String(SEG.CODIGO_VALIDADE_MIN), SEG.novoCodigo()]);
+        await client.query('COMMIT');
+        console.log('[seguranca] link-roblox PENDENTE: user ' + req.user.id + ' quer roblox ' + rid + ' (hoje em user ' + outro.rows[0].id + ' sem prova)');
+        return res.redirect('/dashboard/link-roblox?ok=provar');
+      }
+
       // =====================================================================
       // [05/10 INCIDENTE] AQUI O SITE APAGAVA CONTA DE JOGADOR.
       //
@@ -224,6 +247,7 @@ router.post('/link-roblox', async (req, res) => {
     await client.query(
       `UPDATE users SET roblox_id = $1, roblox_username = $2,
               roblox_verificado = (roblox_verificado AND roblox_id IS NOT DISTINCT FROM $1),
+              vinculo_pendente_rid = NULL, vinculo_pendente_nome = NULL,
               updated_at = NOW() WHERE id = $3`,
       [rid, nomeRoblox || null, req.user.id]
     );

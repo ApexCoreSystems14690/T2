@@ -60,6 +60,10 @@ async function migrar(pool) {
     ALTER TABLE users ADD COLUMN IF NOT EXISTS roblox_verificado BOOLEAN NOT NULL DEFAULT false;
     ALTER TABLE users ADD COLUMN IF NOT EXISTS vinculo_codigo VARCHAR(12);
     ALTER TABLE users ADD COLUMN IF NOT EXISTS vinculo_codigo_em TIMESTAMP;
+    -- [22/10] Roblox que a pessoa diz ser dela mas que já aparece em OUTRA conta sem prova
+    -- (placeholder da corp ou alguém que digitou o nome). Fica aqui até ela provar.
+    ALTER TABLE users ADD COLUMN IF NOT EXISTS vinculo_pendente_rid BIGINT;
+    ALTER TABLE users ADD COLUMN IF NOT EXISTS vinculo_pendente_nome VARCHAR(64);
     INSERT INTO game_config (key, value) VALUES ('seguranca', '{"exige_vinculo": false, "bloquear_alt_de_banido": true}')
       ON CONFLICT (key) DO NOTHING;
   `);
@@ -175,7 +179,8 @@ async function confirmarVinculo(pool, userId, rid, nome) {
     }
     await cli.query(
       `UPDATE users SET roblox_id = $1, roblox_username = COALESCE($2, roblox_username), roblox_verificado = true,
-              vinculo_codigo = NULL, vinculo_codigo_em = NULL, updated_at = NOW() WHERE id = $3`,
+              vinculo_codigo = NULL, vinculo_codigo_em = NULL,
+              vinculo_pendente_rid = NULL, vinculo_pendente_nome = NULL, updated_at = NOW() WHERE id = $3`,
       [rid, nome, user.id]);
     await cli.query('COMMIT');
   } catch (e) {

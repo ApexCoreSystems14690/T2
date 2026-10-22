@@ -37,8 +37,9 @@
       as corporações em que você já entrou dentro do jogo não aparecem no painel.</p>
     <% if (typeof error !== 'undefined' && error) { %>
       <div class="error">
-        <% if (error === 'already_linked') { %>Esse Roblox já está vinculado a outra conta.<% } %>
+        <% if (error === 'already_linked') { %>Esse Roblox já está verificado em outra conta do site. Se é seu, abra um ticket.<% } %>
         <% if (error === 'id_required') { %>Escreve o seu nome de usuário do Roblox.<% } %>
+        <% if (error === 'sem_roblox_pra_verificar') { %>Primeiro escreva o seu nome de usuário do Roblox e clique em Vincular.<% } %>
         <% if (error === 'nome_nao_achado') { %>Não achei esse nome no Roblox. Confere a escrita (é o nome de usuário, não o apelido).<% } %>
         <% if (error === 'internal') { %>Deu erro aqui do nosso lado. Tenta de novo.<% } %>
         <% if (error === 'codigo_vencido') { %>Seu código venceu (vale 30 min). Gere outro.<% } %>
@@ -47,22 +48,28 @@
       </div>
     <% } %>
     <% if (typeof ok !== 'undefined' && ok === 'verificado') { %><div class="ok">Conta Roblox verificada.</div><% } %>
+    <% if (user.vinculo_pendente_rid) { %>
+      <div class="error" style="background:#FBF0DD;color:#A86400;border-color:#EDD3A8">
+        <b><%= user.vinculo_pendente_nome || user.vinculo_pendente_rid %></b> já aparece no sistema, mas ninguém provou que é dono.
+        Prove que é seu com o código abaixo e a conta passa pra você, com as corporações que estavam nela.
+      </div>
+    <% } %>
     <form method="POST" action="/dashboard/link-roblox">
       <div class="form-group">
         <label>Seu nome de usuário do Roblox</label>
-        <input type="text" name="roblox_username" placeholder="Ex: JogadorX" value="<%= user.roblox_username || '' %>" autofocus>
+        <input type="text" name="roblox_username" placeholder="Ex: JogadorX" value="<%= user.vinculo_pendente_nome || user.roblox_username || '' %>" autofocus>
       </div>
       <div class="form-group">
         <label>User ID (opcional — só se souber de cabeça)</label>
-        <input type="number" name="roblox_id" placeholder="Ex: 123456789" value="<%= user.roblox_id || '' %>">
+        <input type="number" name="roblox_id" placeholder="Ex: 123456789" value="<%= user.vinculo_pendente_rid || user.roblox_id || '' %>">
       </div>
       <button type="submit" class="btn">Vincular</button>
     </form>
 
-    <% if (user.roblox_id) { %>
+    <% if (user.roblox_id || user.vinculo_pendente_rid) { %>
     <div class="verif">
-      <h2 style="font-size:1rem">Verificação <span class="selo <%= user.roblox_verificado ? 'sim' : 'nao' %>"><%= user.roblox_verificado ? 'verificada' : 'não verificada' %></span></h2>
-      <% if (!user.roblox_verificado) { %>
+      <h2 style="font-size:1rem">Verificação <% var _ok = user.roblox_verificado && !user.vinculo_pendente_rid; %><span class="selo <%= _ok ? 'sim' : 'nao' %>"><%= _ok ? 'verificada' : 'não verificada' %></span></h2>
+      <% if (!_ok) { %>
         <p class="hint" style="margin-bottom:.6rem">Prova que essa conta Roblox é sua. Sem isso ela não conta como sua pro sistema de segurança do servidor.</p>
         <% if (user.vinculo_codigo) { %>
           <div class="codigo"><%= user.vinculo_codigo %></div>
