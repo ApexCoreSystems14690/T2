@@ -43,12 +43,12 @@ const OBRAS_PADRAO = [
 ];
 
 // Cargos do Governo (servidor do Governo, 19-21/10). [nome, nível, salário a cada 3 dias]
-// O Dono pode mudar o salário na aba Cargos da corporação.
+// ~10x o que um cargo de corp ganha por hora (o Governo recebe 1x a cada 3 dias). O Dono muda na aba Cargos.
 const CARGOS_PADRAO = [
-  ['Presidente da República', 100, 30000], ['Vice-Presidente', 95, 24000], ['Presidente da Câmara', 90, 20000],
-  ['Presidente do STF', 88, 20000], ['Secretário de Estado', 80, 16000], ['Ministro da Saúde', 75, 15000],
-  ['Ministro da Segurança', 74, 15000], ['Responsável das Corporações', 70, 14000], ['Ministro do STF', 60, 12000],
-  ['Parlamentar', 50, 10000],
+  ['Presidente da República', 100, 300000], ['Vice-Presidente', 95, 240000], ['Presidente da Câmara', 90, 200000],
+  ['Presidente do STF', 88, 200000], ['Secretário de Estado', 80, 160000], ['Ministro da Saúde', 75, 150000],
+  ['Ministro da Segurança', 74, 150000], ['Responsável das Corporações', 70, 140000], ['Ministro do STF', 60, 120000],
+  ['Parlamentar', 50, 100000],
 ];
 
 // ------------------------------------------------------------ puro
@@ -123,6 +123,8 @@ async function garantir(pool) {
   } else if (c.tipo !== 'governo') {
     await pool.query(`UPDATE corporations SET tipo = 'governo', updated_at = NOW() WHERE id = $1`, [c.id]);
   }
+  // [23/10] capinha: brasão próprio (public/governo-brasao.svg) se ninguém pôs foto ainda
+  await pool.query(`UPDATE corporations SET icon_url = '/governo-brasao.svg' WHERE id = $1 AND icon_url IS NULL AND icon_data IS NULL`, [c.id]);
   await pool.query(`INSERT INTO corp_caixa (corporation_id, saldo) VALUES ($1, 0) ON CONFLICT DO NOTHING`, [c.id]);
   const nRanks = (await pool.query(`SELECT COUNT(*)::int n FROM ranks WHERE corporation_id = $1`, [c.id])).rows[0].n;
   if (!nRanks) {

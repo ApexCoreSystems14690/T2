@@ -108,7 +108,7 @@
     <div class="tabs">
       <div class="tab active" data-tab="cargos">Cargos (<%= ranks.length %>)</div>
       <div class="tab" data-tab="membros">Membros (<%= members.length %>)</div>
-      <% if (P.ver_caixa) { %><div class="tab" data-tab="caixa">Caixa</div><% } %>
+      <% if (P.ver_caixa) { %><div class="tab" data-tab="caixa"><%= corporation.tipo === 'governo' ? 'Tesouro' : 'Caixa' %></div><% } %>
       <% if (P.editar_corp || P.gerir_gerentes) { %><div class="tab" data-tab="config">Configurações</div><% } %>
     </div>
 
@@ -289,7 +289,35 @@
          O chefe VÊ (precisa saber o que a equipe tem); quem compra e paga bônus
          é dono/co-gerente, mesmo critério do salário. Aqui a view só esconde
          botão: quem barra de verdade é o requireCorpPoder nas rotas. -->
-    <% if (P.ver_caixa) { %>
+    <% if (P.ver_caixa && corporation.tipo === 'governo') { %>
+    <!-- [23/10] TESOURO DO GOVERNO — não é caixa de corp: sem vestiário, aporte, bônus nem repasse.
+         Entra pelas compras do jogo (x multiplicador), sai só por obra (Dono) e salário (a cada 3 dias). -->
+    <div class="panel" id="panel-caixa">
+      <div style="display:flex;gap:2rem;align-items:baseline;margin-bottom:1rem;flex-wrap:wrap">
+        <div>
+          <div style="color:#5B6573;font-size:0.75rem;">Tesouro do Governo</div>
+          <div id="tg-saldo" style="color:#1D3F94;font-size:2rem;font-weight:700;font-variant-numeric:tabular-nums">—</div>
+        </div>
+        <div><div style="color:#5B6573;font-size:0.75rem;">Arrecadou 24h</div><div id="tg-24h" style="color:#15803D;font-weight:700">—</div></div>
+        <div><div style="color:#5B6573;font-size:0.75rem;">Arrecadou 7 dias</div><div id="tg-7d" style="color:#15803D;font-weight:700">—</div></div>
+        <div><div style="color:#5B6573;font-size:0.75rem;">Multiplicador</div><div id="tg-mult" style="font-weight:700">—</div></div>
+      </div>
+      <div style="background:#DCE6EE;border-left:4px solid #1D3F94;padding:0.75rem 1rem;border-radius:4px;font-size:0.85rem;margin-bottom:1rem" id="tg-folha">—</div>
+      <p style="font-size:0.8rem;color:#5B6573;margin:0 0 1rem">Entra: toda compra honesta feita na cidade (loja, carro, casa, roupa, comida, gasolina, documento…), multiplicada. Sai: só obras retiradas pelo Dono e o salário do Governo. Sem vestiário, aporte, bônus ou repasse.</p>
+      <a href="/governo" class="btn" style="display:inline-block;background:#1D3F94;color:#fff;padding:0.6rem 1.2rem;border-radius:6px;text-decoration:none;font-weight:600;margin-bottom:1.25rem">Abrir o Tesouro completo (obras, gráfico, salários)</a>
+
+      <h3 style="color:#161A1F;font-size:0.9rem;margin:0.5rem 0">Obras (valores fixos)</h3>
+      <table class="member-table">
+        <thead><tr><th>Obra</th><th style="text-align:right">Custo</th></tr></thead>
+        <tbody id="tg-obras"><tr><td colspan="2" class="empty">Carregando…</td></tr></tbody>
+      </table>
+      <h3 style="color:#161A1F;font-size:0.9rem;margin:1.5rem 0 0.5rem">Extrato do Tesouro</h3>
+      <table class="member-table">
+        <thead><tr><th>Quando</th><th>O quê</th><th>Quem</th><th style="text-align:right">Valor</th><th style="text-align:right">Saldo</th></tr></thead>
+        <tbody id="tg-extrato"><tr><td colspan="5" class="empty">Carregando…</td></tr></tbody>
+      </table>
+    </div>
+    <% } else if (P.ver_caixa) { %>
     <div class="panel" id="panel-caixa">
       <div style="display:flex;gap:2rem;align-items:baseline;margin-bottom:1.25rem;flex-wrap:wrap">
         <div>
@@ -798,9 +826,36 @@
       var d = new Date(iso);
       return d.toLocaleDateString('pt-BR') + ' ' + d.toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit' });
     }
+    // [23/10] Governo: a aba mostra o Tesouro (dados de /api/governo), nunca o caixa de corp.
+    var EH_GOVERNO = <%- JSON.stringify(corporation.tipo === 'governo') %>;
+    function escT(t) { return String(t == null ? '' : t).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;'); }
+    async function loadTesouro() {
+      var res = await fetch('/api/governo');
+      var d = await res.json().catch(function () { return {}; });
+      if (!res.ok || d.error) return showAlert(d.error || 'Não deu pra abrir o Tesouro', 'error');
+      var soma = function (l) { return (l || []).reduce(function (t, c) { return t + (Number(c.inflado) || 0); }, 0); };
+      document.getElementById('tg-saldo').textContent = dinheiro(d.saldo);
+      document.getElementById('tg-24h').textContent = dinheiro(soma(d.arrecadacao.h24));
+      document.getElementById('tg-7d').textContent = dinheiro(soma(d.arrecadacao.d7));
+      document.getElementById('tg-mult').textContent = '×' + Number(d.multiplicador).toLocaleString('pt-BR');
+      var s = d.salarios;
+      document.getElementById('tg-folha').innerHTML = '<b style="color:#1D3F94">Salário do Governo</b> · a cada ' + s.periodo_dias +
+        ' dias · próximo pagamento <b>' + quando(s.proximo_pagamento) + '</b><br>folha ' + dinheiro(s.folha) +
+        ' · recebe só quem entrou no jogo no período';
+      document.getElementById('tg-obras').innerHTML = (d.obras || []).map(function (o) {
+        return '<tr><td>' + escT(o.nome) + '</td><td style="text-align:right">' + dinheiro(o.valor) + '</td></tr>';
+      }).join('') || '<tr><td colspan="2" class="empty">Nenhuma obra.</td></tr>';
+      document.getElementById('tg-extrato').innerHTML = (d.extrato || []).slice(0, 30).map(function (l) {
+        var cor = l.valor < 0 ? '#B91C1C' : '#15803D';
+        return '<tr><td>' + quando(l.criado_em) + '</td><td>' + escT(({ obra: 'Obra', salario: 'Salário' })[l.tipo] || l.tipo) + '</td><td>' + escT(l.quem || '') +
+          '</td><td style="text-align:right;color:' + cor + '">' + dinheiro(l.valor) + '</td><td style="text-align:right">' + dinheiro(l.saldo_depois) + '</td></tr>';
+      }).join('') || '<tr><td colspan="5" class="empty">Nada ainda.</td></tr>';
+    }
+
     var CAIXA_PRECOS = {};
 
     async function loadCaixa() {
+      if (EH_GOVERNO) return loadTesouro();
       var res = await fetch('/api/corps/' + CORP_ID + '/caixa');
       var d = await res.json();
       if (d.error) return showAlert(d.error, 'error');
