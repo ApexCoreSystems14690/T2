@@ -1756,7 +1756,7 @@ router.post('/corp/estoque', async (req, res) => {
     const m = String(motivo || '');
     // `comprou` e `baixa` são do COMANDO, pelo painel — o jogo não cria peça.
     // [30/09] `recuperou` entra aqui: e o armario de devolucao, disparado pelo jogo.
-    if (!['retirou', 'devolveu', 'saiu', 'roubada', 'morreu', 'recuperou', 'abasteceu'].includes(m)) {
+    if (!['retirou', 'devolveu', 'saiu', 'roubada', 'morreu', 'quebrou', 'recuperou', 'abasteceu'].includes(m)) {
       return res.status(400).json({ error: 'motivo inválido' });
     }
     const c = await corpPorSlug(corp);
