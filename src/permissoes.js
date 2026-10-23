@@ -111,6 +111,9 @@ const PODERES = {
   // corps pra um tester. Diretor+ pela escada, e o Gestor testers pela lista dele.
   testers:       { rotulo: 'Painel Testers (liberação temporária)', min: 'diretor' },
 
+  // [23/10] Loja de Royalties: creditar/estornar pontos (sempre com comprovação). Diretor Geral+.
+  royalties:     { rotulo: 'Royalties: creditar e estornar', min: 'diretor' },
+
   wipe:          { rotulo: 'WIPE GERAL (reset da temporada)', min: 'dono'      },
 };
 

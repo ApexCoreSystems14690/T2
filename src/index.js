@@ -1256,6 +1256,9 @@ async function start() {
   // [22/10] regulamentos de cada cidade, nativos no site (semente: os do Santa Fé Oficial)
   try { await require('./regulamentos').garantir(pool); }
   catch (e) { console.error('[regras] garantir:', e.message); }
+  // [23/10] Loja de Royalties (tabelas + semente do catálogo e dos motivos do Santa Fé)
+  try { await require('./royalties').garantir(pool); }
+  catch (e) { console.error('[royalties] garantir:', e.message); }
 
   // Sessão com PostgreSQL
   app.use(session({
@@ -1330,6 +1333,8 @@ async function start() {
   app.use('/faccoes', exige(), require('./routes/faccoes'));
   // [22/10] regulamentos por cidade: /cidade/:slug/regras (público) + /painel/regras (Dono)
   app.use(require('./routes/regras'));
+  // [23/10] Loja de Royalties: /royalties + /api/royalties (jogador)
+  app.use(require('./routes/royalties').publico);
 
   // [21/10] ENTRADA = tela CIDADES. Mostra as cidades da rede (hoje só o Santa
   // Fé Oficial), quantos estão jogando em cada uma e o cargo de staff que a
@@ -1387,7 +1392,8 @@ async function start() {
     if (!req.user) return res.redirect('/');
     let ehDiretor = false;
     try { ehDiretor = !!require('./permissoes').ehDiretorOuMais(req.user); } catch (_) {}
-    res.render('home', { user: req.user, ehDiretor });
+    // [23/10] saldo de Royalties no item da home (null = sem vínculo verificado)
+    require('./routes/royalties').saldoDaHome(req).then(roy => res.render('home', { user: req.user, ehDiretor, royalties: roy }));
   });
 
   // 404

@@ -140,6 +140,8 @@ async function relatorio(dias, cidadeId) {
        FROM game_logs l
        LEFT JOIN game_commands gc ON gc.id = NULLIF(l.detalhe->>'cmd_id','')::int
       WHERE l.tipo = 'dinheiro_staff' AND l.cidade_id = $3 AND COALESCE(l.ocorrido_em, l.created_at) > ${corte}
+        -- [23/10] dinheiro do benefício de booster e da Loja de Royalties é automático, não é da staff
+        AND COALESCE(gc.payload->>'motivo', '') NOT IN ('booster', 'royalties')
       ORDER BY l.id DESC LIMIT 2000`, [...pj, cidadeId])).rows;
   const cmdsComLog = new Set(logs.map(l => Number(l.detalhe && l.detalhe.cmd_id)).filter(Boolean));
 
@@ -170,6 +172,7 @@ async function relatorio(dias, cidadeId) {
     `SELECT id, tipo, target_roblox_id, target_name, payload, created_by, result,
             COALESCE(executed_at, created_at) AS quando
        FROM game_commands WHERE tipo = ANY($3) AND cidade_id = $4 AND status = 'done' AND created_at > ${corte}
+        AND COALESCE(payload->>'motivo', '') NOT IN ('booster', 'royalties')
       ORDER BY id DESC LIMIT 2000`, [...pj, TIPOS_CMD, cidadeId])).rows;
   for (const c of cmds) {
     if (cmdsComLog.has(c.id)) continue;
@@ -224,8 +227,16 @@ async function relatorio(dias, cidadeId) {
     porDia.set(k, e);
   }
 
+  // [23/10] Royalties creditados/estornados pela staff (quem, quanto, pra quem, com a prova)
+  let royalties = [];
+  try {
+    const desdeRoy = (await pool.query(`SELECT ${corte} AS d`, pj)).rows[0].d;
+    const okData = desdeRoy instanceof Date && isFinite(desdeRoy.getTime());
+    royalties = await require('./royalties').lancamentosStaff(pool, cidadeId, okData ? desdeRoy.toISOString() : null);
+  } catch (e) { /* tabela ainda não existe */ }
+
   return {
-    dias, temporadaDesde: desde,
+    dias, temporadaDesde: desde, royalties,
     circulando: { total, carteira, banco, caixas, jogadores: jog.n, corps },
     ricos,
     staff: r.totais,

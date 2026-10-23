@@ -114,6 +114,7 @@
       <div class="tab" data-tab="pds">PDs</div>
       <div class="tab" data-tab="seguranca">Segurança</div>
       <div class="tab" data-tab="testers">Testers</div>
+      <div class="tab" data-tab="royalties">Royalties</div>
       <div class="tab" data-tab="economia" id="tab-economia" style="display:none">Economia</div>
     </div>
 
@@ -444,6 +445,50 @@
     </div>
 
     <!-- ECONOMIA (15/10) — só o Dono -->
+    <!-- ROYALTIES (23/10) — só Diretor Geral pra cima; o back barra com 403 -->
+    <div class="panel" id="panel-royalties">
+      <div class="card">
+        <h3>Royalties de um jogador</h3>
+        <p class="muted" style="font-size:.8rem;margin-bottom:.7rem">Todo crédito precisa de motivo da lista e comprovação (link do print, do clip, do post ou o número do ticket). Nada é apagado: pra corrigir, estorne o lançamento.</p>
+        <div class="fg picker" style="max-width:420px">
+          <label>Jogador</label>
+          <input id="ry-busca" placeholder="nome do Roblox, Roblox ID ou Discord" autocomplete="off">
+          <div class="picker-list" id="ry-lista"></div>
+        </div>
+        <div id="ry-jogador" style="display:none;margin-top:.9rem">
+          <div class="row" style="align-items:center;gap:1rem;flex-wrap:wrap;margin-bottom:.6rem">
+            <div><div class="muted" style="font-size:.72rem">Jogador</div><b id="ry-nome"></b> <span class="muted" id="ry-rid" style="font-size:.78rem"></span></div>
+            <div><div class="muted" style="font-size:.72rem">Saldo</div><b id="ry-saldo" style="font-size:1.5rem;color:#1D3F94"></b></div>
+            <div><div class="muted" style="font-size:.72rem">Trocas na semana</div><b id="ry-semana"></b></div>
+          </div>
+          <div class="pt-box" style="margin-bottom:.8rem">
+            <div style="font-weight:700;font-size:.82rem;margin-bottom:.4rem">Creditar</div>
+            <div class="row" style="gap:.5rem;flex-wrap:wrap;align-items:flex-end">
+              <div class="fg" style="max-width:340px"><label>Motivo</label><select id="ry-motivo"></select></div>
+              <div class="fg" style="max-width:120px"><label>Quantidade</label><input id="ry-valor" type="number" readonly></div>
+              <div class="fg" style="flex:1;min-width:220px"><label>Comprovação (obrigatória)</label><input id="ry-prova" maxlength="500" placeholder="link do print/clip/post ou ticket-123"></div>
+              <button class="btn" id="ry-go" onclick="ryCreditar()">Creditar</button>
+            </div>
+          </div>
+          <h4 style="margin:.4rem 0">Extrato completo</h4>
+          <div style="overflow-x:auto"><table><thead><tr><th>#</th><th>Quando</th><th>Tipo</th><th>Royalties</th><th>Saldo depois</th><th>Motivo</th><th>Comprovação</th><th>Quem lançou</th><th></th></tr></thead><tbody id="ry-ext"></tbody></table></div>
+        </div>
+      </div>
+      <div class="card">
+        <div class="row" style="margin-bottom:.5rem;align-items:center"><h3 style="margin:0;flex:1">Trocas</h3>
+          <select id="ry-filtro" onchange="ryTrocas()"><option value="">Todas</option><option value="pendente,enviando,revisar">Pendentes</option><option value="entregue">Entregues</option><option value="revisar">Pra revisar</option></select>
+          <button class="btn sec sm" onclick="ryTrocas()">Atualizar</button></div>
+        <div style="overflow-x:auto"><table><thead><tr><th>#</th><th>Quando</th><th>Jogador</th><th>Prêmio</th><th>Custo</th><th>Situação</th></tr></thead><tbody id="ry-trocas"></tbody></table></div>
+      </div>
+      <div class="card" id="ry-config" style="display:none">
+        <h3>Catálogo e motivos <span class="muted" style="font-size:.78rem;font-weight:400">só o Dono muda</span></h3>
+        <h4 style="margin:.6rem 0 .3rem">Prêmios</h4>
+        <div style="overflow-x:auto"><table><thead><tr><th>Prêmio</th><th>Tipo</th><th>Custo</th><th>Limite</th><th>Ligado</th><th>Observação</th><th></th></tr></thead><tbody id="ry-cat"></tbody></table></div>
+        <h4 style="margin:.9rem 0 .3rem">Motivos de crédito</h4>
+        <div style="overflow-x:auto"><table><thead><tr><th>Motivo</th><th>Royalties</th><th>Ligado</th><th></th></tr></thead><tbody id="ry-mot"></tbody></table></div>
+      </div>
+    </div>
+
     <div class="panel" id="panel-economia">
       <div class="row" style="margin-bottom:.6rem;align-items:center;gap:.6rem;flex-wrap:wrap">
         <b>Economia da cidade</b>
@@ -466,6 +511,8 @@
         <label style="font-size:.82rem"><input type="checkbox" id="ec-so-sinal" onchange="desenhaMovs()"> Só com sinal</label>
       </div>
       <div style="overflow-x:auto"><table><thead><tr><th>Quando</th><th>Staff</th><th>Por onde</th><th>Alvo</th><th>Conta</th><th>Ação</th><th>Antes → depois</th><th>Diferença</th><th>%</th><th>Motivo</th></tr></thead><tbody id="ec-movs"></tbody></table></div>
+      <h4 style="margin:.9rem 0 .4rem">Royalties lançados pela staff <span class="muted" style="font-size:.78rem;font-weight:400">— créditos e estornos no período, com a prova</span></h4>
+      <div style="overflow-x:auto"><table><thead><tr><th>Quando</th><th>Quem lançou</th><th>Pra quem</th><th>Tipo</th><th>Royalties</th><th>Motivo</th><th>Comprovação</th></tr></thead><tbody id="ec-roy"></tbody></table></div>
       <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(320px,1fr));gap:1rem;margin-top:.9rem">
         <div><h4 style="margin:0 0 .4rem">Mais ricos da cidade</h4>
           <div style="overflow-x:auto"><table><thead><tr><th>Jogador</th><th>Carteira</th><th>Banco</th><th>Total</th><th>%</th></tr></thead><tbody id="ec-ricos"></tbody></table></div></div>
@@ -589,7 +636,7 @@
     const btnSe = (tipo, html) => podeCmd(tipo) ? html : '';
 
     // Painéis e abas por poder. Aba sem nenhum poder some do topo.
-    const PODER_DA_ABA = { jogadores: null, registro: 'ver_registro', servidor: 'servidor', logs: 'ver_registro', cargos: 'corp', usuarios: 'admins', historico: 'admins', analise: 'ver_registro', banidos: 'banir', pds: 'ver_registro', seguranca: 'ver_registro', testers: 'testers' };
+    const PODER_DA_ABA = { jogadores: null, registro: 'ver_registro', servidor: 'servidor', logs: 'ver_registro', cargos: 'corp', usuarios: 'admins', historico: 'admins', analise: 'ver_registro', banidos: 'banir', pds: 'ver_registro', seguranca: 'ver_registro', testers: 'testers', royalties: 'royalties' };
 
     async function carregarEu() {
       EU = await api('GET', '/eu');
@@ -1042,7 +1089,120 @@
       if (tab.dataset.tab === 'seguranca') loadSeg();
       if (tab.dataset.tab === 'economia') loadEcon();
       if (tab.dataset.tab === 'testers') loadTesters();
+      if (tab.dataset.tab === 'royalties') loadRoy();
     }));
+
+    // ---------------------------------------------------------------- ROYALTIES (23/10)
+    let RY = { cfg: null, rid: null, nome: '' };
+    async function loadRoy() {
+      try { RY.cfg = await api('GET', '/royalties/config'); } catch (e) { showAlert(e.message, 'error'); return; }
+      const mots = RY.cfg.motivos.filter(m => m.ativo && (!m.so_dono || RY.cfg.eh_dono));
+      $('ry-motivo').innerHTML = mots.map(m => '<option value="' + esc(m.chave) + '" data-valor="' + m.valor + '" data-livre="' + (m.livre ? 1 : 0) + '">' + esc(m.nome) + (m.livre ? ' (livre)' : ' (+' + m.valor + ')') + '</option>').join('');
+      ryMotivo();
+      ryDesenhaTrocas(RY.cfg.trocas);
+      $('ry-config').style.display = RY.cfg.eh_dono ? '' : 'none';
+      if (RY.cfg.eh_dono) ryDesenhaConfig();
+      if (RY.rid) ryAbrir(RY.rid, RY.nome);
+    }
+    function ryMotivo() {
+      const o = $('ry-motivo').selectedOptions[0]; if (!o) return;
+      const livre = o.dataset.livre === '1';
+      $('ry-valor').readOnly = !livre;
+      $('ry-valor').value = livre ? '' : o.dataset.valor;
+      $('ry-valor').placeholder = livre ? 'ex.: 50 ou -20' : '';
+    }
+    $('ry-motivo').addEventListener('change', ryMotivo);
+    let ryT = null;
+    $('ry-busca').addEventListener('input', () => {
+      clearTimeout(ryT);
+      ryT = setTimeout(async () => {
+        const q = $('ry-busca').value.trim();
+        if (q.length < 2) { $('ry-lista').classList.remove('open'); return; }
+        try {
+          const L = await api('GET', '/royalties/busca?q=' + encodeURIComponent(q));
+          $('ry-lista').innerHTML = L.length ? L.map(x => '<div data-rid="' + x.roblox_id + '" data-nome="' + esc(x.nome || '') + '"><b>' + esc(x.nome || x.roblox_id) + '</b> <span class="muted">' + x.roblox_id + (x.discord ? ' · ' + esc(x.discord) : '') + (x.verificado ? ' · verificado' : '') + ' · ' + fmtN(x.saldo) + ' Royalties</span></div>').join('') : '<div class="muted">Ninguém com esse nome</div>';
+          $('ry-lista').classList.add('open');
+          $('ry-lista').querySelectorAll('[data-rid]').forEach(d => d.onclick = () => { $('ry-lista').classList.remove('open'); $('ry-busca').value = d.dataset.nome || d.dataset.rid; ryAbrir(Number(d.dataset.rid), d.dataset.nome); });
+        } catch (e) { showAlert(e.message, 'error'); }
+      }, 220);
+    });
+    document.addEventListener('click', e => { if (!e.target.closest('#panel-royalties .picker')) $('ry-lista').classList.remove('open'); });
+    async function ryAbrir(rid, nome) {
+      RY.rid = rid; RY.nome = nome || '';
+      let x; try { x = await api('GET', '/royalties/' + rid); } catch (e) { showAlert(e.message, 'error'); return; }
+      $('ry-jogador').style.display = '';
+      $('ry-nome').textContent = nome || ('#' + rid); $('ry-rid').textContent = rid;
+      $('ry-saldo').textContent = fmtN(x.saldo);
+      $('ry-semana').textContent = x.semana.usadas + ' de ' + x.semana.max + (x.semana.dinheiro ? ' · pacote de dinheiro usado' : '');
+      const TIPO = { credito: 'Crédito', estorno: 'Estorno', troca: 'Troca' };
+      $('ry-ext').innerHTML = x.lancamentos.length ? x.lancamentos.map(l => {
+        const podeEstornar = l.tipo !== 'estorno' && !l.estornado_por && (l.tipo !== 'troca' || l.troca_status === 'pendente');
+        return '<tr><td class="muted">' + l.id + '</td><td class="muted">' + fmtT(l.criado_em) + '</td><td>' + TIPO[l.tipo] + (l.troca_status ? ' <span class="pill ' + (l.troca_status === 'entregue' ? 'ok' : l.troca_status === 'cancelada' ? '' : 'warn') + '">' + esc(l.troca_status) + '</span>' : '') + '</td>'
+          + '<td style="font-weight:700;color:' + (l.valor > 0 ? '#1D7A45' : '#161A1F') + '">' + (l.valor > 0 ? '+' : '') + fmtN(l.valor) + '</td><td>' + fmtN(l.saldo_depois) + '</td>'
+          + '<td>' + esc(l.motivo) + '</td><td class="muted" style="font-size:.78rem;max-width:240px;overflow-wrap:anywhere">' + esc(l.comprovacao || '') + '</td>'
+          + '<td>' + esc(l.por_nome || (l.tipo === 'troca' ? 'o jogador' : '')) + '</td>'
+          + '<td>' + (l.estornado_por ? '<span class="muted" style="font-size:.75rem">estornado (#' + l.estornado_por + ')</span>' : podeEstornar ? '<button class="btn sec sm" onclick="ryEstornar(' + l.id + ')">Estornar</button>' : '') + '</td></tr>';
+      }).join('') : '<tr><td colspan="9" class="empty">Nenhum lançamento ainda.</td></tr>';
+    }
+    async function ryCreditar() {
+      if (!RY.rid) return showAlert('Escolha o jogador', 'error');
+      const prova = $('ry-prova').value.trim();
+      if (prova.length < 4) return showAlert('A comprovação é obrigatória', 'error');
+      const o = $('ry-motivo').selectedOptions[0];
+      const body = { roblox_id: RY.rid, motivo: $('ry-motivo').value, comprovacao: prova };
+      if (o && o.dataset.livre === '1') body.valor = Number($('ry-valor').value);
+      if (!confirm('Creditar ' + (body.valor != null ? body.valor : o.dataset.valor) + ' Royalties pra ' + (RY.nome || RY.rid) + '?\nMotivo: ' + o.textContent)) return;
+      $('ry-go').disabled = true;
+      try { const r = await api('POST', '/royalties/creditar', body); showAlert('Creditado. Saldo agora: ' + fmtN(r.saldo), 'success'); $('ry-prova').value = ''; ryAbrir(RY.rid, RY.nome); ryTrocas(); }
+      catch (e) { showAlert(e.message, 'error'); }
+      $('ry-go').disabled = false;
+    }
+    async function ryEstornar(id) {
+      const m = prompt('Motivo do estorno (fica no extrato):');
+      if (!m) return;
+      try { const r = await api('POST', '/royalties/estornar', { lancamento_id: id, motivo: m }); showAlert('Estornado. Saldo agora: ' + fmtN(r.saldo), 'success'); ryAbrir(RY.rid, RY.nome); ryTrocas(); }
+      catch (e) { showAlert(e.message, 'error'); }
+    }
+    async function ryTrocas() {
+      const st = $('ry-filtro').value;
+      try { ryDesenhaTrocas(await api('GET', '/royalties/trocas' + (st ? '?status=' + encodeURIComponent(st) : ''))); } catch (e) { showAlert(e.message, 'error'); }
+    }
+    function ryDesenhaTrocas(L) {
+      const SIT = { pendente: ['warn', 'Esperando ele entrar'], enviando: ['info', 'Enviando'], entregue: ['ok', 'Entregue'], revisar: ['err', 'Revisar'], cancelada: ['', 'Cancelada'] };
+      $('ry-trocas').innerHTML = (L || []).length ? L.map(t => { const s = SIT[t.status] || ['', t.status];
+        return '<tr><td class="muted">' + t.id + '</td><td class="muted">' + fmtT(t.criado_em) + '</td><td>' + esc(t.nome || t.roblox_id) + '</td><td>' + esc(t.item_nome) + '</td><td>' + fmtN(t.custo) + '</td>'
+          + '<td><span class="pill ' + s[0] + '">' + s[1] + '</span>' + (t.nota ? '<div class="muted" style="font-size:.72rem">' + esc(t.nota) + '</div>' : '') + '</td></tr>'; }).join('')
+        : '<tr><td colspan="6" class="empty">Nenhuma troca.</td></tr>';
+    }
+    function ryDesenhaConfig() {
+      $('ry-cat').innerHTML = RY.cfg.catalogo.map(i => '<tr><td>' + esc(i.nome) + (i.chave === 'carro_temporada' ? '<div class="muted" style="font-size:.72rem">modelo: ' + esc((i.conteudo || {}).carro || 'não escolhido') + '</div>' : '') + '</td><td>' + esc(i.tipo) + '</td>'
+        + '<td><input type="number" min="1" value="' + i.custo + '" style="width:80px" id="ryc-' + esc(i.chave) + '"></td><td>' + (i.limite === 'temporada' ? '1 por temporada' : i.tipo === 'dinheiro' ? '1 por semana' : '—') + '</td>'
+        + '<td><input type="checkbox" ' + (i.ativo ? 'checked' : '') + ' id="rya-' + esc(i.chave) + '"></td>'
+        + '<td class="muted" style="font-size:.74rem;max-width:280px">' + esc(i.depende_jogo || '') + '</td>'
+        + '<td><button class="btn sec sm" onclick="rySalvarItem(\'' + esc(i.chave) + '\')">Salvar</button>' + (i.chave === 'carro_temporada' ? ' <button class="btn sec sm" onclick="ryCarroTemporada()">Escolher carro</button>' : '') + '</td></tr>').join('');
+      $('ry-mot').innerHTML = RY.cfg.motivos.map(m => '<tr><td>' + esc(m.nome) + (m.so_dono ? ' <span class="muted">(só Dono)</span>' : '') + '</td>'
+        + '<td>' + (m.livre ? '<span class="muted">livre</span>' : '<input type="number" min="0" value="' + m.valor + '" style="width:80px" id="rym-' + esc(m.chave) + '">') + '</td>'
+        + '<td><input type="checkbox" ' + (m.ativo ? 'checked' : '') + ' id="ryma-' + esc(m.chave) + '"></td>'
+        + '<td><button class="btn sec sm" onclick="rySalvarMotivo(\'' + esc(m.chave) + '\',' + (m.livre ? 1 : 0) + ')">Salvar</button></td></tr>').join('');
+    }
+    async function rySalvarItem(chave) {
+      const ativo = $('rya-' + chave).checked;
+      const it = RY.cfg.catalogo.find(i => i.chave === chave);
+      if (ativo && it && !it.ativo && it.depende_jogo && !confirm('Atenção: ' + it.depende_jogo + '\n\nLigar mesmo assim?')) return;
+      try { await api('PUT', '/royalties/catalogo/' + chave, { custo: Number($('ryc-' + chave).value), ativo }); showAlert('Prêmio salvo', 'success'); loadRoy(); }
+      catch (e) { showAlert(e.message, 'error'); }
+    }
+    async function ryCarroTemporada() {
+      const c = prompt('Nome do carro da temporada (igual ao nome no jogo):'); if (c == null) return;
+      try { await api('PUT', '/royalties/catalogo/carro_temporada', { carro: c }); showAlert('Carro da Temporada: ' + (c || 'nenhum'), 'success'); loadRoy(); }
+      catch (e) { showAlert(e.message, 'error'); }
+    }
+    async function rySalvarMotivo(chave, livre) {
+      const body = { ativo: $('ryma-' + chave).checked };
+      if (!livre) body.valor = Number($('rym-' + chave).value);
+      try { await api('PUT', '/royalties/motivos/' + chave, body); showAlert('Motivo salvo', 'success'); loadRoy(); }
+      catch (e) { showAlert(e.message, 'error'); }
+    }
 
     // ---------------------------------------------------------------- PDs (16/10)
     // O painel NAO decide se pode reverter: o site manda `pode_reverter` + `motivo_nao`
@@ -1162,6 +1322,11 @@
         + '</td><td><b>' + fR(r.total) + '</b></td><td>' + fP(r.pct) + '</td></tr>').join('') || '<tr><td colspan="5" class="empty">—</td></tr>';
       $('ec-corps').innerHTML = (c.corps || []).map(k => '<tr><td>' + esc(k.nome) + '</td><td>' + esc(k.tipo || '') + '</td><td>' + fR(k.saldo)
         + '</td><td>' + fP(c.total ? Number(k.saldo) / c.total : 0) + '</td></tr>').join('') || '<tr><td colspan="4" class="empty">—</td></tr>';
+      $('ec-roy').innerHTML = (ECON.royalties || []).map(l => '<tr><td class="muted">' + fmtT(l.criado_em) + '</td><td><b>' + esc(l.por_nome || '?') + '</b></td>'
+        + '<td>' + esc(l.alvo || l.roblox_id) + '</td><td>' + (l.tipo === 'estorno' ? '<span class="pill warn">estorno</span>' : 'crédito') + '</td>'
+        + '<td style="font-weight:700">' + (l.valor > 0 ? '+' : '') + fmtN(l.valor) + '</td><td>' + esc(l.motivo) + '</td>'
+        + '<td class="muted" style="font-size:.78rem;max-width:260px;overflow-wrap:anywhere">' + esc(l.comprovacao || '') + '</td></tr>').join('')
+        || '<tr><td colspan="7" class="empty">Nenhum Royalty lançado no período.</td></tr>';
       desenhaMovs();
     }
     function desenhaMovs() {

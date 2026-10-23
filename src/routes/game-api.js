@@ -632,6 +632,9 @@ router.post('/heartbeat', async (req, res) => {
     // manda o kit/mesada devidos. Corre por fora: o heartbeat não espera por isso.
     require('../booster').aoBatimento(pool, { cidadeId: req._cidadeJogo, players: lista, jobId: job_id })
       .catch(e => console.error('[booster] heartbeat:', e.message));
+    // [23/10] Loja de Royalties: mesmo caminho do booster (entrega pra quem está online)
+    require('../royalties').aoBatimento(pool, { cidadeId: req._cidadeJogo, players: lista, jobId: job_id })
+      .catch(e => console.error('[royalties] heartbeat:', e.message));
 
     // config persistida (clima etc.) volta no heartbeat: servidor novo já nasce com o estado certo
     const cfg = await pool.query(`SELECT key, value FROM game_config`);

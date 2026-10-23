@@ -41,6 +41,8 @@
     .tudo .selo { background: var(--alerta); }
     .elei .selo { background: var(--asfalto-2); }
     .regra .selo { background: #10131A; color: var(--pista); }
+    .roy .selo { background: var(--placa); }
+    .saldo-roy { display: inline-block; margin-left: .35rem; padding: .05rem .45rem; border: 1.5px solid #10131A; border-radius: 4px; background: #fff; font-stretch: 75%; font-variation-settings: "wdth" 75; font-weight: 800; font-size: .95rem; color: #10131A; vertical-align: 1px; }
     .item.off { color: var(--tinta-3); }
     .item.off .selo { background: var(--linha-2); }
     .rodape { margin-top: 2.5rem; color: var(--tinta-3); font-size: .82rem; }
@@ -86,6 +88,12 @@
           <span class="selo"><svg class="ic" aria-hidden="true"><use href="/icones.svg#bandeira"/></svg></span>
           <span class="t">Facções</span>
           <span class="d">Cargos, membros e salários das facções.</span>
+        </a>
+        <%# [23/10] Loja de Royalties: saldo da pessoa nesta cidade %>
+        <a class="item roy" href="/royalties">
+          <span class="selo"><svg class="ic" aria-hidden="true"><use href="/icones.svg#moedas"/></svg></span>
+          <span class="t">Royalties<% if (typeof royalties !== 'undefined' && royalties !== null) { %> <span class="saldo-roy"><%= Number(royalties).toLocaleString('pt-BR') %></span><% } %></span>
+          <span class="d">Pontos que a staff credita pelo que você faz na cidade. Troque por prêmios dentro do jogo.</span>
         </a>
         <%# [22/10] regulamento DESTA cidade %>
         <% if (cidade) { %>

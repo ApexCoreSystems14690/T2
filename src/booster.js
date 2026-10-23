@@ -168,12 +168,8 @@ async function statusDe(pool, cidadeId, guildId, discordId, cfg, fetcher) {
 
 // ------------------------------------------------------------ entrega
 
-async function comando(cli, tipo, rid, nome, job, payload) {
-  const r = await cli.query(
-    `INSERT INTO game_commands (tipo, target_roblox_id, target_name, payload, job_id, created_by) VALUES ($1,$2,$3,$4,$5,NULL) RETURNING id`,
-    [tipo, rid, nome, JSON.stringify(payload), job]);
-  return r.rows[0].id;
-}
+// [23/10] o envio e a conferência moram em src/entrega.js (a Loja de Royalties usa o mesmo caminho)
+const ENTREGA = require('./entrega');
 
 // Cria a entrega (a linha única do kit é a trava contra pagar duas vezes) e manda
 // tudo pro jogo numa transação.
@@ -195,17 +191,10 @@ async function entregar(pool, { cidadeId, temporada, tipo, discordId, userId, ri
       if (e.code === '23505') return { ja: true };     // kit já saiu nesta temporada
       throw e;
     }
-    const cmds = [], fila = [];
-    if (conteudo.dinheiro > 0) cmds.push(await comando(cli, 'dinheiro_add', rid, nome, job, { valor: conteudo.dinheiro, motivo: 'booster' }));
-    if (conteudo.carro) cmds.push(await comando(cli, 'carro_add', rid, nome, job, { carro: conteudo.carro }));
-    for (const it of (conteudo.itens || [])) {
-      const f = await cli.query(`INSERT INTO game_item_fila (roblox_id, item, qtd, criado_por) VALUES ($1,$2,$3,NULL) RETURNING id`, [rid, it.item, it.qtd]);
-      fila.push(f.rows[0].id);
-    }
     const texto = tipo === 'kit'
       ? 'Obrigado por apoiar o Santa Fé no Discord! Seu kit de patrocinador chegou.'
       : 'Obrigado por continuar apoiando o Santa Fé! Sua mesada de patrocinador caiu na carteira.';
-    await comando(cli, 'mensagem', rid, nome, job, { texto });
+    const { cmds, fila } = await ENTREGA.enviar(cli, { rid, nome, job, conteudo, motivo: 'booster', texto });
     await cli.query(`UPDATE booster_entregas SET cmd_ids = $2, fila_ids = $3 WHERE id = $1`, [ent.id, JSON.stringify(cmds), JSON.stringify(fila)]);
     await cli.query('COMMIT');
     return { id: ent.id, cmds, fila };
@@ -221,35 +210,7 @@ async function entregar(pool, { cidadeId, temporada, tipo, discordId, userId, ri
 //   comando 'pending' (nunca saiu do site)   -> reenvia no servidor atual da pessoa
 //   comando 'sent' sem resposta há 10 min    -> REVISAR (pode ter pago; reenviar pagaria 2x)
 async function conferir(pool, online) {
-  const r = await pool.query(`SELECT * FROM booster_entregas WHERE status = 'enviando' ORDER BY id LIMIT 200`);
-  for (const e of r.rows) {
-    const ids = e.cmd_ids || [];
-    const cmds = ids.length ? (await pool.query(`SELECT id, tipo, status, payload, created_at, sent_at FROM game_commands WHERE id = ANY($1)`, [ids])).rows : [];
-    const fila = (e.fila_ids || []).length ? (await pool.query(`SELECT id, entregue_em FROM game_item_fila WHERE id = ANY($1)`, [e.fila_ids])).rows : [];
-    const filaOk = fila.every(f => f.entregue_em);
-    if (cmds.length === ids.length && cmds.every(c => c.status === 'done') && filaOk) {
-      await pool.query(`UPDATE booster_entregas SET status = 'entregue', entregue_em = NOW() WHERE id = $1`, [e.id]);
-      continue;
-    }
-    const preso = cmds.find(c => c.status === 'sent' && c.sent_at && Date.now() - new Date(c.sent_at).getTime() > 600000);
-    if (preso) {
-      await pool.query(`UPDATE booster_entregas SET status = 'revisar', nota = $2 WHERE id = $1`, [e.id, `comando ${preso.id} (${preso.tipo}) sem resposta do jogo`]);
-      continue;
-    }
-    const on = online.get(Number(e.roblox_id));
-    const refazer = cmds.filter(c => c.status === 'error' || (c.status === 'pending' && on && Date.now() - new Date(c.created_at).getTime() > 60000));
-    if (!refazer.length || !on) continue;
-    if (e.tentativas >= 5) {
-      await pool.query(`UPDATE booster_entregas SET status = 'revisar', nota = 'falhou 5 vezes' WHERE id = $1`, [e.id]);
-      continue;
-    }
-    const novos = ids.filter(id => !refazer.some(c => c.id === id));
-    for (const c of refazer) {
-      if (c.status === 'pending') await pool.query(`DELETE FROM game_commands WHERE id = $1 AND status = 'pending'`, [c.id]);
-      novos.push(await comando(pool, c.tipo, e.roblox_id, e.nome, on.job_id, c.payload));
-    }
-    await pool.query(`UPDATE booster_entregas SET cmd_ids = $2, tentativas = tentativas + 1 WHERE id = $1`, [e.id, JSON.stringify(novos)]);
-  }
+  return ENTREGA.conferir(pool, { tabela: 'booster_entregas', aberto: 'enviando' }, online);
 }
 
 // Chamado pelo heartbeat (sem esperar). Uma rodada por vez por processo.

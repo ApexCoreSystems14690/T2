@@ -962,6 +962,9 @@ router.post('/testers/:id/estender', requirePoder('testers'), async (req, res) =
   } catch (err) { console.error('testers/estender:', err.message); res.status(500).json({ error: 'Erro interno' }); }
 });
 
+// [23/10] Loja de Royalties (staff): Diretor Geral+, a trava mora em routes/royalties.js
+router.use('/royalties', require('./royalties').admin);
+
 // [22/10] liga/desliga noclip + Modo Deus de uma liberação ativa
 router.post('/testers/:id/noclip', requirePoder('testers'), async (req, res) => {
   try {

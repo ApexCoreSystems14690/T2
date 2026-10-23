@@ -1,0 +1,257 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Royalties — <%= cidade.nome %></title>
+  <meta name="theme-color" content="#1C2127">
+  <style>
+    /* [23/10] LOJA DE ROYALTIES. A faixa de cima é a rodovia da tela Cidades (asfalto, faixa
+       amarela andando); o saldo é uma placa Mercosul. Embaixo, papel: loja em lista emendada. */
+    body { margin: 0; }
+    .topbar { display: flex; align-items: center; justify-content: space-between; }
+    .topbar nav { display: flex; gap: 1rem; align-items: center; }
+
+    .estrada { position: relative; background: #16191E; color: #E9EDF1; overflow: hidden; isolation: isolate; }
+    .estrada::before { /* asfalto com a faixa amarela correndo embaixo */
+      content: ""; position: absolute; left: 0; right: 0; bottom: 0; height: 10px; z-index: -1;
+      background: repeating-linear-gradient(90deg, var(--pista) 0 46px, transparent 46px 96px);
+      animation: faixa 2.4s linear infinite; opacity: .9;
+    }
+    .estrada::after { /* luz da cidade no horizonte */
+      content: ""; position: absolute; inset: 0; z-index: -2;
+      background: radial-gradient(70% 120% at 85% 120%, rgba(242,183,5,.12), transparent 60%), linear-gradient(180deg, #0F1217, #1B1F25);
+    }
+    @keyframes faixa { from { background-position: 0 0; } to { background-position: 96px 0; } }
+    .estrada .dentro { max-width: 980px; margin: 0 auto; padding: 1.6rem clamp(16px, 3vw, 28px) 2.2rem; display: grid; grid-template-columns: auto 1fr; gap: 1.2rem 2.4rem; align-items: center; }
+    .placa-saldo { display: inline-flex; flex-direction: column; background: #fff; border: 3px solid #10131A; border-radius: 10px; overflow: hidden; box-shadow: 0 2px 0 #000, 0 18px 40px rgba(0,0,0,.45); min-width: 230px; }
+    .placa-saldo .faixa { background: var(--placa); color: #fff; display: flex; justify-content: space-between; align-items: center; gap: 1rem; padding: 6px 14px; font-size: 12px; font-weight: 700; letter-spacing: .08em; }
+    .placa-saldo .faixa i { width: 18px; height: 12px; border-radius: 2px; background: linear-gradient(#1D7A45 0 50%, #F2B705 50% 100%); display: inline-block; }
+    .placa-saldo .chars { font-stretch: 75%; font-variation-settings: "wdth" 75; font-weight: 800; color: #10131A; font-size: clamp(52px, 12vw, 88px); line-height: 1; padding: 8px 24px 10px; text-align: center; letter-spacing: .04em; font-variant-numeric: tabular-nums; }
+    .estrada h1 { margin: 0 0 .35rem; color: #fff; font-size: clamp(2rem, 6vw, 3.2rem); line-height: .95; }
+    .estrada p { margin: 0; color: #AEB7C1; max-width: 46ch; font-size: .95rem; }
+    .semana { margin-top: 1rem; display: flex; flex-wrap: wrap; gap: .6rem 1.4rem; align-items: center; font-size: .9rem; color: #D5DBE1; }
+    .pips { display: inline-flex; gap: 5px; margin-right: .5rem; vertical-align: -3px; }
+    .pips span { width: 22px; height: 8px; border-radius: 2px; background: rgba(255,255,255,.16); }
+    .pips span.on { background: var(--pista); }
+    .semana b { color: #fff; }
+    .semana .dinheiro.usado b { color: var(--pista); }
+
+    .casa { max-width: 980px; margin: 0 auto; padding: 1rem clamp(16px, 3vw, 28px) 4rem; }
+    .abas { display: flex; gap: .2rem; border-bottom: 1px solid var(--linha); margin-bottom: 1rem; overflow-x: auto; }
+    .abas button { border: 0; background: transparent; padding: .7rem .9rem; font: inherit; font-weight: 700; color: var(--tinta-3); border-bottom: 3px solid transparent; cursor: pointer; white-space: nowrap; display: inline-flex; align-items: center; gap: .4rem; }
+    .abas button.on { color: var(--tinta); border-bottom-color: var(--pista); }
+    .lista { background: var(--papel); border: 1px solid var(--linha); border-radius: var(--r); overflow: hidden; }
+    .linha { display: grid; grid-template-columns: 44px minmax(0, 1fr) auto; gap: .2rem 1rem; align-items: center; padding: .9rem 1.1rem; border-top: 1px solid var(--linha); }
+    #loja .linha { grid-template-areas: "selo t preco" "selo d preco"; }
+    #loja .selo { grid-area: selo; } #loja .linha > .t { grid-area: t; } #loja .linha > .d { grid-area: d; } #loja .preco { grid-area: preco; }
+    .linha:first-child { border-top: 0; }
+    .selo { width: 44px; height: 44px; border-radius: var(--rs); display: grid; place-items: center; background: var(--placa-claro); color: var(--placa); grid-row: span 2; }
+    .selo.dinheiro { background: var(--ok-bg); color: var(--ok); }
+    .selo.carro { background: #10131A; color: var(--pista); }
+    .selo .ic { width: 22px; height: 22px; }
+    .linha .t { font-weight: 700; font-size: 1rem; }
+    .linha .d { color: var(--tinta-3); font-size: .82rem; display: flex; flex-wrap: wrap; gap: .3rem .6rem; align-items: center; }
+    .tag { font-size: .72rem; font-weight: 700; padding: .08rem .4rem; border-radius: 4px; background: var(--papel-2); color: var(--tinta-2); border: 1px solid var(--linha); }
+    .preco { grid-row: span 2; display: flex; align-items: center; gap: .9rem; }
+    .custo { text-align: right; line-height: 1; }
+    .custo b { display: block; font-stretch: 75%; font-variation-settings: "wdth" 75; font-weight: 800; font-size: 1.6rem; color: var(--asfalto); font-variant-numeric: tabular-nums; }
+    .custo small { color: var(--tinta-3); font-size: .72rem; }
+    .linha.bloq .t, .linha.bloq .custo b { color: var(--tinta-3); }
+    .linha .porque { color: var(--alerta); font-size: .8rem; font-weight: 600; }
+    .btn[disabled] { opacity: .45; cursor: not-allowed; }
+    .vazio { padding: 1.4rem; text-align: center; color: var(--tinta-3); }
+    .ext .linha { grid-template-columns: minmax(0, 1fr) auto; }
+    .ext .v { font-weight: 800; font-variant-numeric: tabular-nums; font-size: 1.05rem; text-align: right; }
+    .ext .v.mais { color: var(--ok); } .ext .v.menos { color: var(--tinta); }
+    .ext .v small { display: block; font-weight: 500; color: var(--tinta-3); font-size: .74rem; }
+    .st { font-size: .72rem; font-weight: 700; padding: .08rem .4rem; border-radius: 4px; }
+    .st.pendente { background: var(--alerta-bg); color: var(--alerta); }
+    .st.entregue { background: var(--ok-bg); color: var(--ok); }
+    .st.cancelada { background: var(--papel-2); color: var(--tinta-3); }
+    .ganhar .linha { grid-template-columns: minmax(0, 1fr) auto; }
+    .ganhar .v { font-stretch: 75%; font-variation-settings: "wdth" 75; font-weight: 800; font-size: 1.35rem; color: var(--ok); }
+    .nota { background: var(--papel); border: 1px solid var(--linha); border-left: 3px solid var(--placa); border-radius: 0 var(--rs) var(--rs) 0; padding: .8rem 1rem; color: var(--tinta-2); font-size: .92rem; margin: 0 0 1rem; }
+    .aviso-vinculo { background: var(--papel); border: 1px solid var(--linha); border-radius: var(--r); padding: 1.4rem; }
+    .aviso-vinculo h2 { margin: 0 0 .4rem; }
+
+    .fundo { position: fixed; inset: 0; background: rgba(16,19,26,.55); display: none; align-items: center; justify-content: center; padding: 16px; z-index: 80; }
+    .fundo.on { display: flex; }
+    .modal { background: var(--papel); border-radius: var(--r); max-width: 420px; width: 100%; overflow: hidden; box-shadow: var(--sombra-modal); }
+    .modal .faixa { height: 6px; background: var(--placa); }
+    .modal .corpo { padding: 1.2rem 1.3rem 1.1rem; }
+    .modal h3 { margin: 0 0 .5rem; font-size: 1.25rem; }
+    .modal p { margin: .3rem 0; color: var(--tinta-2); }
+    .modal .acoes { display: flex; gap: .5rem; justify-content: flex-end; margin-top: 1rem; }
+    .toast { position: fixed; left: 50%; bottom: 18px; transform: translateX(-50%); background: var(--asfalto); color: #fff; padding: .7rem 1rem; border-radius: var(--rs); font-weight: 700; display: none; z-index: 90; max-width: calc(100% - 32px); }
+    .toast.on { display: block; } .toast.err { background: var(--perigo); }
+
+    @media (max-width: 640px) {
+      .estrada .dentro { grid-template-columns: 1fr; }
+      .placa-saldo { min-width: 0; width: 100%; }
+      .linha { padding: .85rem .9rem; }
+      #loja .linha { grid-template-columns: 40px minmax(0, 1fr); grid-template-areas: "selo t" "selo d" "preco preco"; }
+      .selo { width: 40px; height: 40px; }
+      #loja .preco { justify-content: space-between; margin-top: .5rem; padding-top: .55rem; border-top: 1px dashed var(--linha); }
+      .topbar h1 { display: none !important; }
+      .custo { text-align: left; }
+      .topbar nav .txt { display: none; }
+    }
+    @media (prefers-reduced-motion: reduce) { .estrada::before { animation: none; } }
+  </style>
+  <link rel="stylesheet" href="/sf.css">
+</head>
+<body>
+  <div class="topbar">
+    <div style="display:flex;align-items:center;gap:1rem">
+      <%- include('partials/placa') %>
+      <h1>Royalties</h1>
+    </div>
+    <nav>
+      <a href="/painel"><svg class="ic" aria-hidden="true"><use href="/icones.svg#casa"/></svg><span class="txt">Painel</span></a>
+      <a href="/auth/logout"><svg class="ic" aria-hidden="true"><use href="/icones.svg#sair"/></svg><span class="txt">Sair</span></a>
+    </nav>
+  </div>
+
+  <section class="estrada">
+    <div class="dentro">
+      <div class="placa-saldo" aria-label="Seu saldo de Royalties">
+        <div class="faixa"><span>Royalties · <%= cidade.nome %></span><i></i></div>
+        <div class="chars" id="saldo">–</div>
+      </div>
+      <div>
+        <h1>Loja de Royalties</h1>
+        <p>O que você faz pela cidade vira Royalties. Troque por prêmios dentro do jogo: eles chegam sozinhos no seu próximo login.</p>
+        <div class="semana" id="semana" hidden>
+          <span><span class="pips" id="pips"></span>Trocas desta semana: <b id="sem-usadas">0</b> de <b id="sem-max">3</b></span>
+          <span class="dinheiro" id="sem-dinheiro"></span>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <main class="casa">
+    <% if (precisaVincular) { %>
+      <div class="aviso-vinculo">
+        <h2>Falta verificar sua conta Roblox</h2>
+        <p class="muted" style="margin:0 0 1rem"><%= avisoVinculo %>. Os Royalties ficam presos na conta Roblox, então só quem provou que a conta é sua consegue ver e trocar.</p>
+        <a class="btn" href="/dashboard/link-roblox">Vincular e verificar</a>
+      </div>
+    <% } else { %>
+    <div class="abas" role="tablist">
+      <button class="on" data-aba="loja" role="tab"><svg class="ic" aria-hidden="true"><use href="/icones.svg#loja"/></svg>Loja</button>
+      <button data-aba="extrato" role="tab"><svg class="ic" aria-hidden="true"><use href="/icones.svg#pasta"/></svg>Extrato</button>
+      <button data-aba="ganhar" role="tab"><svg class="ic" aria-hidden="true"><use href="/icones.svg#moedas"/></svg>Como ganhar</button>
+    </div>
+    <section data-painel="loja"><div class="lista" id="loja"><div class="vazio">Carregando…</div></div></section>
+    <section data-painel="extrato" hidden><div class="lista ext" id="extrato"></div></section>
+    <section data-painel="ganhar" hidden>
+      <p class="nota">Os Royalties são creditados pela staff, mediante comprovação. Abra um ticket com a prova.</p>
+      <div class="lista ganhar" id="ganhar"></div>
+    </section>
+    <% } %>
+  </main>
+
+  <div class="fundo" id="fundo" role="dialog" aria-modal="true" aria-labelledby="m-titulo">
+    <div class="modal">
+      <div class="faixa"></div>
+      <div class="corpo">
+        <h3 id="m-titulo">Trocar</h3>
+        <p id="m-texto"></p>
+        <p class="muted" style="font-size:.86rem">Chega no seu próximo login. Se você estiver no jogo agora, chega em instantes.</p>
+        <div class="acoes">
+          <button class="btn sec" type="button" id="m-nao">Voltar</button>
+          <button class="btn" type="button" id="m-sim">Trocar</button>
+        </div>
+      </div>
+    </div>
+  </div>
+  <div class="toast" id="toast" role="status"></div>
+
+<% if (!precisaVincular) { %>
+<script>
+(function () {
+  var $ = function (id) { return document.getElementById(id); };
+  var D = null, escolhido = null;
+  function esc(s) { var d = document.createElement('div'); d.textContent = s == null ? '' : String(s); return d.innerHTML; }
+  function n(v) { return Number(v || 0).toLocaleString('pt-BR'); }
+  function data(t) { var d = new Date(t); return d.toLocaleDateString('pt-BR') + ' ' + d.toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit' }); }
+  function toast(t, err) { var x = $('toast'); x.textContent = t; x.className = 'toast on' + (err ? ' err' : ''); clearTimeout(x._t); x._t = setTimeout(function () { x.className = 'toast'; }, 3800); }
+  var ICONE_CLASSE = { dinheiro: 'dinheiro', carro: 'carro' };
+
+  async function carregar() {
+    var r = await fetch('/api/royalties/eu', { headers: { accept: 'application/json' } });
+    var j = await r.json().catch(function () { return {}; });
+    if (!r.ok) { $('loja').innerHTML = '<div class="vazio">' + esc(j.error || 'Erro') + '</div>'; return; }
+    D = j; desenhar();
+  }
+  function desenhar() {
+    $('saldo').textContent = n(D.saldo);
+    var s = D.semana; $('semana').hidden = false;
+    $('sem-usadas').textContent = s.usadas; $('sem-max').textContent = s.max;
+    var p = ''; for (var i = 0; i < s.max; i++) p += '<span class="' + (i < s.usadas ? 'on' : '') + '"></span>'; $('pips').innerHTML = p;
+    var du = s.dinheiro >= s.max_dinheiro;
+    $('sem-dinheiro').className = 'dinheiro' + (du ? ' usado' : '');
+    $('sem-dinheiro').innerHTML = 'Pacote de dinheiro: <b>' + (du ? 'já usado' : 'disponível') + '</b>';
+
+    $('loja').innerHTML = D.catalogo.length ? D.catalogo.map(function (i) {
+      var tags = [];
+      if (i.tipo === 'dinheiro') tags.push('<span class="tag">pacote de dinheiro</span>');
+      if (i.limite === 'temporada') tags.push('<span class="tag">1 por temporada</span>');
+      tags.push('<span>Preso à sua conta</span>');
+      return '<div class="linha' + (i.pode ? '' : ' bloq') + '">'
+        + '<span class="selo ' + (ICONE_CLASSE[i.tipo] || '') + '"><svg class="ic" aria-hidden="true"><use href="/icones.svg#' + esc(i.icone) + '"/></svg></span>'
+        + '<span class="t">' + esc(i.nome) + '</span>'
+        + '<span class="preco"><span class="custo"><b>' + n(i.custo) + '</b><small>Royalties</small></span>'
+        + '<button class="btn" type="button" data-item="' + esc(i.chave) + '"' + (i.pode ? '' : ' disabled') + '>Trocar</button></span>'
+        + '<span class="d">' + (i.pode ? tags.join('') : '<span class="porque">' + esc(i.motivo) + '</span>') + '</span>'
+        + '</div>';
+    }).join('') : '<div class="vazio">Nenhum prêmio disponível agora.</div>';
+    $('loja').querySelectorAll('button[data-item]').forEach(function (b) { b.onclick = function () { abrir(b.dataset.item); }; });
+
+    $('extrato').innerHTML = D.extrato.length ? D.extrato.map(function (x) {
+      var mais = x.valor > 0;
+      var st = x.status ? ' <span class="st ' + x.status + '">' + ({ pendente: 'Pendente', entregue: 'Entregue', cancelada: 'Cancelada' }[x.status] || x.status) + '</span>' : '';
+      return '<div class="linha"><span><span class="t">' + esc(x.motivo) + '</span>' + st + '<br><span class="d">' + data(x.em) + '</span></span>'
+        + '<span class="v ' + (mais ? 'mais' : 'menos') + '">' + (mais ? '+' : '') + n(x.valor) + '<small>saldo ' + n(x.saldo_depois) + '</small></span></div>';
+    }).join('') : '<div class="vazio">Nenhum movimento ainda. Veja em "Como ganhar".</div>';
+
+    $('ganhar').innerHTML = D.motivos.map(function (m) {
+      return '<div class="linha"><span class="t" style="font-weight:600">' + esc(m.nome) + '</span><span class="v">+' + n(m.valor) + '</span></div>';
+    }).join('');
+  }
+  function abrir(chave) {
+    escolhido = D.catalogo.find(function (i) { return i.chave === chave; });
+    if (!escolhido) return;
+    $('m-titulo').textContent = escolhido.nome;
+    $('m-texto').innerHTML = 'Você recebe <b>' + esc(escolhido.nome) + '</b> por <b>' + n(escolhido.custo) + ' Royalties</b>. Fica com ' + n(D.saldo - escolhido.custo) + '.';
+    $('fundo').classList.add('on'); $('m-sim').focus();
+  }
+  function fechar() { $('fundo').classList.remove('on'); escolhido = null; }
+  $('m-nao').onclick = fechar;
+  $('fundo').addEventListener('click', function (e) { if (e.target === $('fundo')) fechar(); });
+  document.addEventListener('keydown', function (e) { if (e.key === 'Escape') fechar(); });
+  $('m-sim').onclick = async function () {
+    if (!escolhido) return;
+    var b = $('m-sim'); b.disabled = true;
+    try {
+      var r = await fetch('/api/royalties/trocar', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ item: escolhido.chave }) });
+      var j = await r.json().catch(function () { return {}; });
+      if (!r.ok) throw new Error(j.error || 'Erro');
+      fechar(); toast('Troca feita: ' + j.item + '. Chega no seu próximo login.');
+      await carregar();
+    } catch (e) { toast(e.message, true); }
+    b.disabled = false;
+  };
+  document.querySelectorAll('.abas button').forEach(function (b) {
+    b.onclick = function () {
+      document.querySelectorAll('.abas button').forEach(function (x) { x.classList.toggle('on', x === b); });
+      document.querySelectorAll('[data-painel]').forEach(function (p) { p.hidden = p.dataset.painel !== b.dataset.aba; });
+    };
+  });
+  carregar();
+})();
+</script>
+<% } %>
+</body>
+</html>
