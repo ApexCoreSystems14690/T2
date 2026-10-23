@@ -42,12 +42,13 @@ const OBRAS_PADRAO = [
   { chave: 'obra_grande', nome: 'Obra grande (bairro, hospital, porto)', valor: 25000000000, ordem: 80 },
 ];
 
-// Cargos do Governo (servidor do Governo, 19-21/10). Salário nasce 0: o Dono define.
+// Cargos do Governo (servidor do Governo, 19-21/10). [nome, nível, salário a cada 3 dias]
+// O Dono pode mudar o salário na aba Cargos da corporação.
 const CARGOS_PADRAO = [
-  ['Presidente da República', 100], ['Vice-Presidente', 95], ['Presidente da Câmara', 90],
-  ['Presidente do STF', 88], ['Secretário de Estado', 80], ['Ministro da Saúde', 75],
-  ['Ministro da Segurança', 74], ['Responsável das Corporações', 70], ['Ministro do STF', 60],
-  ['Parlamentar', 50],
+  ['Presidente da República', 100, 30000], ['Vice-Presidente', 95, 24000], ['Presidente da Câmara', 90, 20000],
+  ['Presidente do STF', 88, 20000], ['Secretário de Estado', 80, 16000], ['Ministro da Saúde', 75, 15000],
+  ['Ministro da Segurança', 74, 15000], ['Responsável das Corporações', 70, 14000], ['Ministro do STF', 60, 12000],
+  ['Parlamentar', 50, 10000],
 ];
 
 // ------------------------------------------------------------ puro
@@ -125,8 +126,20 @@ async function garantir(pool) {
   await pool.query(`INSERT INTO corp_caixa (corporation_id, saldo) VALUES ($1, 0) ON CONFLICT DO NOTHING`, [c.id]);
   const nRanks = (await pool.query(`SELECT COUNT(*)::int n FROM ranks WHERE corporation_id = $1`, [c.id])).rows[0].n;
   if (!nRanks) {
-    for (const [nome, nivel] of CARGOS_PADRAO) {
-      await pool.query(`INSERT INTO ranks (corporation_id, name, level, salary) VALUES ($1,$2,$3,0)`, [c.id, nome, nivel]).catch(() => {});
+    for (const [nome, nivel, sal] of CARGOS_PADRAO) {
+      await pool.query(`INSERT INTO ranks (corporation_id, name, level, salary) VALUES ($1,$2,$3,$4)`, [c.id, nome, nivel, sal]).catch(() => {});
+    }
+  } else {
+    // [23/10] uma vez só: os cargos nasceram com salário 0; põe os padrões se ninguém mexeu ainda
+    const flag = await pool.query(`SELECT 1 FROM game_config WHERE key = 'governo_salarios_v1'`).catch(() => ({ rows: [{}] }));
+    if (!flag.rows[0]) {
+      const pagos = (await pool.query(`SELECT COUNT(*)::int n FROM ranks WHERE corporation_id = $1 AND COALESCE(salary,0) > 0`, [c.id])).rows[0].n;
+      if (!pagos) {
+        for (const [nome, nivel, sal] of CARGOS_PADRAO) {
+          await pool.query(`UPDATE ranks SET salary = $3 WHERE corporation_id = $1 AND (lower(name) = lower($2) OR level = $4)`, [c.id, nome, sal, nivel]);
+        }
+      }
+      await pool.query(`INSERT INTO game_config (key, value) VALUES ('governo_salarios_v1', '{"feito":true}') ON CONFLICT DO NOTHING`);
     }
   }
   await pool.query(
