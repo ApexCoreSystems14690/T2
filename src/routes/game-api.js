@@ -712,6 +712,11 @@ router.post('/logs', async (req, res) => {
     if (values.length) {
       await pool.query(`INSERT INTO game_logs (tipo, jogador, alvo, detalhe, job_id, ocorrido_em) VALUES ${values.join(',')}`, params);
     }
+    // [23/10] GOVERNO: cada 'compra' do jogo entra no caixa do Governo (x multiplicador)
+    if (lote.some(e => e && e.tipo === 'compra')) {
+      try { await require('../governo').arrecadar(pool, req._cidadeJogo, lote); }
+      catch (e) { console.error('[governo] arrecadar:', e.message); }
+    }
     // Cada 'entrou' conta uma visita no registro de jogadores
     for (const e of lote) {
       if (!e || e.tipo !== 'entrou' || !e.detalhe) continue;
@@ -1516,7 +1521,7 @@ async function corpPorSlug(slug) {
   const s = String(slug || '').toLowerCase().trim();
   if (!s) return null;
   const r = await pool.query(
-    `SELECT id, name, slug FROM corporations WHERE LOWER(slug) = $1 AND is_active LIMIT 1`, [s]);
+    `SELECT id, name, slug, tipo FROM corporations WHERE LOWER(slug) = $1 AND is_active LIMIT 1`, [s]);
   // [28/09] O BURACO MAIS SILENCIOSO DO CAIXA: o jogo manda o crédito
   // fire-and-forget. Se o slug não existir aqui, a rota devolve 404, o jogo não
   // olha a resposta e o dinheiro da corp simplesmente SOME -- e o repasse do
@@ -1606,6 +1611,8 @@ router.post('/corp/caixa/debitar', async (req, res) => {
 
     const c = await corpPorSlug(corp);
     if (!c) return res.status(404).json({ error: 'corporação não encontrada' });
+    // [23/10] o caixa do Governo é inflado: o jogo não tira dinheiro dele
+    if (c.tipo === 'governo') return res.json({ ok: false, erro: 'governo_pelo_site' });
 
     const r = await caixa.movDinheiro(c.id, t, v, {
       quem: String(quem || '').slice(0, 64),
@@ -1640,6 +1647,8 @@ router.post('/corp/salario', async (req, res) => {
 
     const c = await corpPorSlug(corp);
     if (!c) return res.status(404).json({ error: 'corporação não encontrada' });
+    // [23/10] o Governo recebe salário pelo site (a cada 3 dias), nunca pelo jogo
+    if (c.tipo === 'governo') return res.json({ ok: false, erro: 'governo_pelo_site' });
 
     const m = await pool.query(
       `SELECT r.name AS cargo, COALESCE(r.salary, 0) AS adicional

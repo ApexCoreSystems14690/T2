@@ -383,6 +383,11 @@ async function pagarOrcamentoSePendente(corpId, slug, agoraMs) {
   const agora = Number.isFinite(Number(agoraMs)) ? Number(agoraMs) : Date.now();
   const periodo = ORC.periodoDe(agora);
   if (await ehEmpresa(corpId)) return { pagou: false, periodo, motivo: 'empresa não recebe do governo' };
+  // [23/10] o GOVERNO é o tesouro: vive da arrecadação (src/governo.js), não recebe repasse de ninguém
+  try {
+    const t = await pool.query(`SELECT tipo FROM corporations WHERE id = $1`, [corpId]);
+    if (t.rows[0] && t.rows[0].tipo === 'governo') return { pagou: false, periodo, motivo: 'o governo vive da arrecadação' };
+  } catch (_) { /* na dúvida segue o fluxo antigo */ }
 
   const ja = await pool.query(
     `SELECT periodo FROM corp_orcamento_pago

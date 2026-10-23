@@ -1259,6 +1259,9 @@ async function start() {
   // [23/10] Loja de Royalties (tabelas + semente do catálogo e dos motivos do Santa Fé)
   try { await require('./royalties').garantir(pool); }
   catch (e) { console.error('[royalties] garantir:', e.message); }
+  // [23/10] Governo: corporação tipo 'governo', tesouro inflado, obras e salário a cada 3 dias
+  try { await require('./governo').garantir(pool); require('./governo').iniciar(pool); }
+  catch (e) { console.error('[governo] garantir:', e.message); }
 
   // Sessão com PostgreSQL
   app.use(session({
@@ -1335,6 +1338,8 @@ async function start() {
   app.use(require('./routes/regras'));
   // [23/10] Loja de Royalties: /royalties + /api/royalties (jogador)
   app.use(require('./routes/royalties').publico);
+  // [23/10] Governo: /governo + /api/governo
+  app.use(require('./routes/governo'));
 
   // [21/10] ENTRADA = tela CIDADES. Mostra as cidades da rede (hoje só o Santa
   // Fé Oficial), quantos estão jogando em cada uma e o cargo de staff que a
@@ -1393,7 +1398,10 @@ async function start() {
     let ehDiretor = false;
     try { ehDiretor = !!require('./permissoes').ehDiretorOuMais(req.user); } catch (_) {}
     // [23/10] saldo de Royalties no item da home (null = sem vínculo verificado)
-    require('./routes/royalties').saldoDaHome(req).then(roy => res.render('home', { user: req.user, ehDiretor, royalties: roy }));
+    Promise.all([
+      require('./routes/royalties').saldoDaHome(req),
+      require('./routes/governo').podeVer(req).catch(() => false),   // [23/10] item Governo
+    ]).then(([roy, gov]) => res.render('home', { user: req.user, ehDiretor, royalties: roy, verGoverno: gov }));
   });
 
   // 404

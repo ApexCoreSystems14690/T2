@@ -1,0 +1,297 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Governo — <%= cidade.nome %></title>
+  <meta name="theme-color" content="#1C2127">
+  <style>
+    /* [23/10] TESOURO DO GOVERNO. Faixa de cima: o caixa em número grande, como um painel de
+       obra pública (asfalto + faixa zebrada). Embaixo, papel: arrecadação, obras, salários, extrato. */
+    body { margin: 0; }
+    .topbar { display: flex; align-items: center; justify-content: space-between; }
+    .topbar nav { display: flex; gap: 1rem; align-items: center; }
+    .tesouro { position: relative; background: linear-gradient(180deg, #0F1217, #1B1F25); color: #E9EDF1; isolation: isolate; overflow: hidden; }
+    .tesouro::after { content: ""; position: absolute; left: 0; right: 0; bottom: 0; height: 10px; z-index: -1;
+      background: repeating-linear-gradient(-45deg, var(--pista) 0 14px, #10131A 14px 28px); }
+    .tesouro .dentro { max-width: 1080px; margin: 0 auto; padding: 1.6rem clamp(16px, 3vw, 28px) 2.2rem; display: grid; grid-template-columns: minmax(0, 1fr) auto; gap: 1rem 2rem; align-items: end; }
+    .kicker { font-size: .78rem; color: #AEB7C1; margin: 0 0 .4rem; letter-spacing: .04em; }
+    .saldo { font-stretch: 75%; font-variation-settings: "wdth" 75; font-weight: 800; color: #fff; font-size: clamp(2.8rem, 9vw, 5.6rem); line-height: .9; font-variant-numeric: tabular-nums; }
+    .saldo small { font-size: .38em; color: var(--pista); margin-right: .25rem; vertical-align: .55em; }
+    .saldo-cheio { color: #8A949E; font-size: .85rem; margin-top: .4rem; font-variant-numeric: tabular-nums; }
+    .resumo { display: grid; grid-template-columns: repeat(3, auto); gap: .3rem 1.4rem; text-align: right; }
+    .resumo div span { display: block; color: #8A949E; font-size: .74rem; }
+    .resumo div b { color: #fff; font-size: 1.15rem; font-variant-numeric: tabular-nums; }
+    .resumo div b.pista { color: var(--pista); }
+
+    .casa { max-width: 1080px; margin: 0 auto; padding: 1rem clamp(16px, 3vw, 28px) 4rem; }
+    .abas { display: flex; gap: .2rem; border-bottom: 1px solid var(--linha); margin-bottom: 1rem; overflow-x: auto; }
+    .abas button { border: 0; background: transparent; padding: .7rem .9rem; font: inherit; font-weight: 700; color: var(--tinta-3); border-bottom: 3px solid transparent; cursor: pointer; white-space: nowrap; display: inline-flex; gap: .4rem; align-items: center; }
+    .abas button.on { color: var(--tinta); border-bottom-color: var(--pista); }
+    .bloco { background: var(--papel); border: 1px solid var(--linha); border-radius: var(--r); padding: 1rem 1.1rem; margin-bottom: 1rem; }
+    .bloco h3 { margin: 0 0 .7rem; font-size: 1.05rem; display: flex; gap: .6rem; align-items: baseline; flex-wrap: wrap; }
+    .bloco h3 small { color: var(--tinta-3); font-weight: 500; font-size: .8rem; }
+    .expl { color: var(--tinta-2); font-size: .88rem; margin: 0 0 .8rem; }
+    .cat { display: grid; grid-template-columns: minmax(120px, 200px) minmax(0, 1fr) auto; gap: .6rem; align-items: center; padding: .4rem 0; border-top: 1px solid var(--linha); font-size: .9rem; }
+    .cat:first-of-type { border-top: 0; }
+    .barra { height: 10px; background: var(--papel-2); border-radius: 5px; overflow: hidden; }
+    .barra i { display: block; height: 100%; background: var(--placa); border-radius: 5px; }
+    .cat b { font-variant-numeric: tabular-nums; text-align: right; white-space: nowrap; }
+    .cat .r { color: var(--tinta-3); font-size: .74rem; display: block; font-weight: 500; }
+    .dias { display: flex; align-items: flex-end; gap: 6px; height: 120px; padding-top: .4rem; }
+    .dias div { flex: 1; min-width: 0; display: flex; flex-direction: column; align-items: center; gap: 4px; height: 100%; justify-content: flex-end; }
+    .dias i { width: 100%; max-width: 34px; background: var(--placa); border-radius: 4px 4px 0 0; min-height: 2px; }
+    .dias span { font-size: .66rem; color: var(--tinta-3); }
+    .lista { border: 1px solid var(--linha); border-radius: var(--r); overflow: hidden; background: var(--papel); }
+    .obra { display: grid; grid-template-columns: 44px minmax(0, 1fr) auto auto; gap: .2rem 1rem; align-items: center; padding: .85rem 1rem; border-top: 1px solid var(--linha); }
+    .obra:first-child { border-top: 0; }
+    .obra .n { width: 44px; height: 44px; border-radius: var(--rs); background: #10131A; color: var(--pista); display: grid; place-items: center; font-weight: 800; font-stretch: 75%; font-variation-settings: "wdth" 75; font-size: 1.2rem; }
+    .obra .t { font-weight: 700; }
+    .obra .v { text-align: right; line-height: 1.1; }
+    .obra .v b { font-stretch: 75%; font-variation-settings: "wdth" 75; font-weight: 800; font-size: 1.4rem; color: var(--asfalto); }
+    .obra .v small { display: block; color: var(--tinta-3); font-size: .72rem; font-variant-numeric: tabular-nums; }
+    .obra .acoes { display: flex; gap: .4rem; }
+    table { width: 100%; }
+    th { text-align: left; }
+    td, th { padding: .5rem .6rem; font-size: .88rem; vertical-align: top; }
+    .num { text-align: right; font-variant-numeric: tabular-nums; white-space: nowrap; }
+    .pill { display: inline-block; font-size: .72rem; font-weight: 700; padding: .08rem .45rem; border-radius: 4px; }
+    .sim { background: var(--ok-bg); color: var(--ok); } .nao { background: var(--papel-2); color: var(--tinta-3); } .alerta { background: var(--alerta-bg); color: var(--alerta); }
+    .mais { color: var(--ok); font-weight: 700; } .menos { color: var(--perigo); font-weight: 700; }
+    .config { display: flex; gap: .6rem; flex-wrap: wrap; align-items: flex-end; }
+    .config label { display: flex; flex-direction: column; gap: .2rem; font-size: .8rem; color: var(--tinta-2); font-weight: 600; }
+    .config input { padding: .45rem .6rem; border: 1px solid var(--linha-2); border-radius: var(--rs); width: 160px; }
+    .fundo { position: fixed; inset: 0; background: rgba(16,19,26,.55); display: none; align-items: center; justify-content: center; padding: 16px; z-index: 80; }
+    .fundo.on { display: flex; }
+    .modal { background: var(--papel); border-radius: var(--r); max-width: 460px; width: 100%; overflow: hidden; box-shadow: var(--sombra-modal); }
+    .modal .faixa { height: 8px; background: repeating-linear-gradient(-45deg, var(--pista) 0 12px, #10131A 12px 24px); }
+    .modal .corpo { padding: 1.1rem 1.2rem; }
+    .modal h3 { margin: 0 0 .4rem; }
+    .modal textarea { width: 100%; min-height: 90px; padding: .6rem; border: 1px solid var(--linha-2); border-radius: var(--rs); font: inherit; }
+    .modal .acoes { display: flex; gap: .5rem; justify-content: flex-end; margin-top: .8rem; }
+    .toast { position: fixed; left: 50%; bottom: 18px; transform: translateX(-50%); background: var(--asfalto); color: #fff; padding: .7rem 1rem; border-radius: var(--rs); font-weight: 700; display: none; z-index: 90; max-width: calc(100% - 32px); }
+    .toast.on { display: block; } .toast.err { background: var(--perigo); }
+    .rolar { overflow-x: auto; }
+    @media (max-width: 700px) {
+      .tesouro .dentro { grid-template-columns: 1fr; }
+      .resumo { text-align: left; grid-template-columns: repeat(3, 1fr); }
+      .cat { grid-template-columns: minmax(0, 1fr) auto; }
+      .cat .barra { grid-column: 1 / -1; grid-row: 2; }
+      .obra { grid-template-columns: 40px minmax(0, 1fr); }
+      .obra .n { width: 40px; height: 40px; }
+      .dias { gap: 3px; }
+      .dias span { font-size: .55rem; }
+      .dias div:nth-child(even) span { visibility: hidden; }
+      .obra .v { grid-column: 1 / -1; text-align: left; display: flex; gap: .6rem; align-items: baseline; }
+      .obra .acoes { grid-column: 1 / -1; }
+      .topbar h1 { display: none !important; }
+      .topbar nav .txt { display: none; }
+    }
+  </style>
+  <link rel="stylesheet" href="/sf.css">
+</head>
+<body>
+  <div class="topbar">
+    <div style="display:flex;align-items:center;gap:1rem">
+      <%- include('partials/placa') %>
+      <h1>Governo</h1>
+    </div>
+    <nav>
+      <a href="/painel"><svg class="ic" aria-hidden="true"><use href="/icones.svg#casa"/></svg><span class="txt">Painel</span></a>
+      <a href="/auth/logout"><svg class="ic" aria-hidden="true"><use href="/icones.svg#sair"/></svg><span class="txt">Sair</span></a>
+    </nav>
+  </div>
+
+  <section class="tesouro">
+    <div class="dentro">
+      <div>
+        <p class="kicker">Tesouro do Governo de <%= cidade.nome %></p>
+        <div class="saldo" id="saldo"><small>R$</small>–</div>
+        <div class="saldo-cheio" id="saldo-cheio"></div>
+      </div>
+      <div class="resumo">
+        <div><span>Arrecadou em 24 h</span><b id="r24">–</b></div>
+        <div><span>Em 7 dias</span><b id="r7">–</b></div>
+        <div><span>Próximo salário</span><b class="pista" id="rsal">–</b></div>
+      </div>
+    </div>
+  </section>
+
+  <main class="casa">
+    <div class="abas" role="tablist">
+      <button class="on" data-aba="arrecadacao"><svg class="ic" aria-hidden="true"><use href="/icones.svg#moedas"/></svg>Arrecadação</button>
+      <button data-aba="obras"><svg class="ic" aria-hidden="true"><use href="/icones.svg#martelo"/></svg>Obras</button>
+      <button data-aba="salarios"><svg class="ic" aria-hidden="true"><use href="/icones.svg#pasta-trabalho"/></svg>Salários</button>
+      <button data-aba="extrato"><svg class="ic" aria-hidden="true"><use href="/icones.svg#pasta"/></svg>Extrato</button>
+    </div>
+
+    <section data-painel="arrecadacao">
+      <div class="bloco">
+        <h3>De onde vem o dinheiro <small>últimos 30 dias</small></h3>
+        <p class="expl" id="mult-nota"></p>
+        <div id="cats"></div>
+      </div>
+      <div class="bloco">
+        <h3>Por dia <small>últimos 14 dias</small></h3>
+        <div class="dias" id="dias"></div>
+      </div>
+      <% if (ehDono) { %>
+      <div class="bloco">
+        <h3>Configuração <small>só o Dono</small></h3>
+        <div class="config">
+          <label>Multiplicador (cada R$ 1 gasto vira)<input type="number" id="cfg-mult" min="1"></label>
+          <button class="btn sec" type="button" id="cfg-salvar">Salvar</button>
+        </div>
+      </div>
+      <% } %>
+    </section>
+
+    <section data-painel="obras" hidden>
+      <p class="expl">O Governo vota a obra; o Dono retira o valor fixo do caixa com a descrição do que foi aprovado. Fica no extrato pra sempre.</p>
+      <div class="lista" id="obras"></div>
+    </section>
+
+    <section data-painel="salarios" hidden>
+      <div class="bloco">
+        <h3>Folha do Governo <small id="sal-sub"></small></h3>
+        <p class="expl">A cada 3 dias, quem tem cargo com salário e entrou no jogo nesses 3 dias recebe. O dinheiro sai do caixa e cai na carteira no próximo login. Ninguém precisa bater ponto no jogo.<% if (ehDono) { %> O salário de cada cargo se define na tela de cargos da corporação.<% } %></p>
+        <div class="rolar"><table><thead><tr><th>Membro</th><th>Cargo</th><th class="num">Salário</th><th>Entrou neste período</th></tr></thead><tbody id="membros"></tbody></table></div>
+        <% if (ehDono) { %><p style="margin:.8rem 0 0"><a class="btn sec" id="link-cargos" href="#">Cargos e salários</a></p><% } %>
+      </div>
+      <div class="bloco">
+        <h3>Últimos pagamentos</h3>
+        <div class="rolar"><table><thead><tr><th>Período</th><th>Membro</th><th>Cargo</th><th class="num">Valor</th><th>Situação</th></tr></thead><tbody id="pagos"></tbody></table></div>
+      </div>
+    </section>
+
+    <section data-painel="extrato" hidden>
+      <div class="bloco rolar">
+        <table><thead><tr><th>Quando</th><th>O quê</th><th>Detalhe</th><th class="num">Valor</th><th class="num">Saldo depois</th></tr></thead><tbody id="extrato"></tbody></table>
+        <p class="expl" style="margin:.6rem 0 0">A arrecadação entra somada por hora na aba Arrecadação; aqui ficam as saídas (obras e salários) e ajustes.</p>
+      </div>
+    </section>
+  </main>
+
+  <div class="fundo" id="fundo" role="dialog" aria-modal="true" aria-labelledby="m-t">
+    <div class="modal"><div class="faixa"></div><div class="corpo">
+      <h3 id="m-t">Retirar</h3>
+      <p class="expl" id="m-v"></p>
+      <textarea id="m-desc" maxlength="300" placeholder="O que foi aprovado: ex. Projeto 12/2026, alargar a Av. Astorga, aprovado na Câmara em 22/10"></textarea>
+      <div class="acoes"><button class="btn sec" type="button" id="m-nao">Voltar</button><button class="btn" type="button" id="m-sim">Retirar do caixa</button></div>
+    </div></div>
+  </div>
+  <div class="toast" id="toast" role="status"></div>
+
+<script>
+(function () {
+  var $ = function (id) { return document.getElementById(id); };
+  var D = null, obraSel = null;
+  var DONO = <%- JSON.stringify(!!ehDono) %>;
+  function esc(s) { var d = document.createElement('div'); d.textContent = s == null ? '' : String(s); return d.innerHTML; }
+  function cheio(v) { return 'R$ ' + Number(v || 0).toLocaleString('pt-BR'); }
+  function curto(v) {
+    var n = Number(v || 0), a = Math.abs(n), s = n < 0 ? '-' : '';
+    var f = function (x, u) { return s + x.toLocaleString('pt-BR', { maximumFractionDigits: x < 10 ? 2 : 1 }) + ' ' + u; };
+    if (a >= 1e12) return f(a / 1e12, 'tri'); if (a >= 1e9) return f(a / 1e9, 'bi'); if (a >= 1e6) return f(a / 1e6, 'mi'); if (a >= 1e4) return f(a / 1e3, 'mil');
+    return s + a.toLocaleString('pt-BR');
+  }
+  function data(t) { var d = new Date(t); return d.toLocaleDateString('pt-BR') + ' ' + d.toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit' }); }
+  function toast(t, err) { var x = $('toast'); x.textContent = t; x.className = 'toast on' + (err ? ' err' : ''); clearTimeout(x._t); x._t = setTimeout(function () { x.className = 'toast'; }, 3800); }
+  function soma(l) { return (l || []).reduce(function (t, c) { return t + c.inflado; }, 0); }
+
+  async function carregar() {
+    var r = await fetch('/api/governo', { headers: { accept: 'application/json' } });
+    var j = await r.json().catch(function () { return {}; });
+    if (!r.ok) { $('cats').innerHTML = '<p class="expl">' + esc(j.error || 'Erro') + '</p>'; return; }
+    D = j; desenhar();
+  }
+  function desenhar() {
+    $('saldo').innerHTML = '<small>R$</small>' + esc(curto(D.saldo));
+    $('saldo-cheio').textContent = cheio(D.saldo);
+    $('r24').textContent = curto(soma(D.arrecadacao.h24));
+    $('r7').textContent = curto(soma(D.arrecadacao.d7));
+    $('rsal').textContent = new Date(D.salarios.proximo_pagamento).toLocaleDateString('pt-BR');
+    $('mult-nota').innerHTML = 'Cada compra feita na cidade (carro, casa, loja, gasolina, documentos…) entra aqui multiplicada por <b>' + Number(D.multiplicador).toLocaleString('pt-BR') + '</b>: é o imposto de uma cidade de verdade, bem maior que os jogadores online.';
+    if ($('cfg-mult')) $('cfg-mult').value = D.multiplicador;
+    var c30 = D.arrecadacao.d30, max = Math.max.apply(null, c30.map(function (c) { return c.inflado; }).concat([1]));
+    $('cats').innerHTML = c30.length ? c30.map(function (c) {
+      return '<div class="cat"><span>' + esc(c.nome) + '</span><span class="barra"><i style="width:' + Math.max(2, Math.round(c.inflado / max * 100)) + '%"></i></span>'
+        + '<b>' + esc(curto(c.inflado)) + '<span class="r">' + c.compras + ' compras · ' + esc(cheio(c.real)) + ' gastos</span></b></div>';
+    }).join('') : '<p class="expl">Nenhuma compra registrada ainda.</p>';
+    var dm = Math.max.apply(null, D.porDia.map(function (d) { return d.inflado; }).concat([1]));
+    $('dias').innerHTML = D.porDia.length ? D.porDia.map(function (d) {
+      return '<div title="' + esc(d.dia + ': ' + cheio(d.inflado) + ' · ' + d.compras + ' compras') + '"><i style="height:' + Math.max(2, Math.round(d.inflado / dm * 100)) + '%"></i><span>' + d.dia.slice(8) + '/' + d.dia.slice(5, 7) + '</span></div>';
+    }).join('') : '<p class="expl">Sem dados ainda.</p>';
+
+    $('obras').innerHTML = D.obras.map(function (o, i) {
+      var falta = D.saldo < o.valor;
+      return '<div class="obra"><span class="n">' + (i + 1) + '</span><span class="t">' + esc(o.nome) + '</span>'
+        + '<span class="v"><b>' + esc(curto(o.valor)) + '</b><small>' + esc(cheio(o.valor)) + '</small></span>'
+        + '<span class="acoes">' + (DONO ? '<button class="btn" type="button" data-obra="' + esc(o.chave) + '"' + (falta ? ' disabled title="Caixa insuficiente"' : '') + '>Retirar</button>'
+          + '<button class="btn sec" type="button" data-editar="' + esc(o.chave) + '">Valor</button>' : (falta ? '<span class="pill nao">caixa insuficiente</span>' : '<span class="pill sim">dá pra pagar</span>')) + '</span></div>';
+    }).join('');
+    $('obras').querySelectorAll('[data-obra]').forEach(function (b) { b.onclick = function () { abrir(b.dataset.obra); }; });
+    $('obras').querySelectorAll('[data-editar]').forEach(function (b) { b.onclick = function () { editarValor(b.dataset.editar); }; });
+
+    var s = D.salarios;
+    $('sal-sub').textContent = 'período atual desde ' + new Date(s.inicio).toLocaleDateString('pt-BR') + ' · próximo pagamento ' + new Date(s.proximo_pagamento).toLocaleDateString('pt-BR') + ' · folha ' + cheio(s.folha);
+    $('membros').innerHTML = s.membros.length ? s.membros.map(function (m) {
+      return '<tr><td><b>' + esc(m.nome || '?') + '</b>' + (m.roblox_id ? '' : ' <span class="pill alerta">sem Roblox vinculado</span>') + '</td><td>' + esc(m.cargo || '—') + '</td>'
+        + '<td class="num">' + (m.salario ? cheio(m.salario) : '<span class="pill nao">sem salário</span>') + '</td>'
+        + '<td>' + (m.entrou_no_periodo ? '<span class="pill sim">entrou</span>' : '<span class="pill nao">ainda não</span>') + '</td></tr>';
+    }).join('') : '<tr><td colspan="4" class="expl">O Governo ainda não tem membros. Adicione pela tela da corporação.</td></tr>';
+    var ST = { pago: ['sim', 'Pago'], nao_entrou: ['nao', 'Não entrou no jogo'], sem_saldo: ['alerta', 'Caixa sem saldo'], sem_roblox: ['alerta', 'Sem Roblox vinculado'] };
+    $('pagos').innerHTML = s.ultimos.length ? s.ultimos.map(function (p) { var t = ST[p.status] || ['nao', p.status];
+      return '<tr><td>' + (p.periodo + 1) + 'º</td><td>' + esc(p.nome || '?') + '</td><td>' + esc(p.cargo || '') + '</td><td class="num">' + cheio(p.valor) + '</td><td><span class="pill ' + t[0] + '">' + t[1] + '</span></td></tr>';
+    }).join('') : '<tr><td colspan="5" class="expl">Nenhum pagamento ainda. O primeiro sai quando o primeiro período de 3 dias fechar.</td></tr>';
+    if ($('link-cargos')) $('link-cargos').href = '/dashboard/corp/' + D.corporation_id;
+
+    var TIPO = { obra: 'Obra', salario: 'Salário' };
+    $('extrato').innerHTML = D.extrato.length ? D.extrato.map(function (l) {
+      var det = l.detalhe || {};
+      var txt = l.tipo === 'obra' ? (det.descricao || '') + ' <span class="expl">(' + esc(l.por || '') + ')</span>' : l.tipo === 'salario' ? esc((l.quem || '') + ' · ' + (det.cargo || '')) : esc(l.quem || '');
+      return '<tr><td>' + data(l.criado_em) + '</td><td>' + esc(TIPO[l.tipo] || l.tipo) + (l.tipo === 'obra' ? ': ' + esc(det.obra || l.quem) : '') + '</td><td>' + (l.tipo === 'obra' ? esc(det.descricao || '') + ' <span style="color:var(--tinta-3)">· ' + esc(l.por || '') + '</span>' : txt) + '</td>'
+        + '<td class="num ' + (l.valor < 0 ? 'menos' : 'mais') + '" title="' + esc(cheio(l.valor)) + '">' + esc(curto(l.valor)) + '</td><td class="num">' + esc(curto(l.saldo_depois)) + '</td></tr>';
+    }).join('') : '<tr><td colspan="5" class="expl">Nenhuma saída ainda.</td></tr>';
+  }
+  function abrir(chave) {
+    obraSel = D.obras.find(function (o) { return o.chave === chave; }); if (!obraSel) return;
+    $('m-t').textContent = obraSel.nome;
+    $('m-v').innerHTML = 'Sai <b>' + esc(cheio(obraSel.valor)) + '</b> do caixa. Fica ' + esc(curto(D.saldo - obraSel.valor)) + '.';
+    $('m-desc').value = ''; $('fundo').classList.add('on'); $('m-desc').focus();
+  }
+  function fechar() { $('fundo').classList.remove('on'); obraSel = null; }
+  $('m-nao').onclick = fechar;
+  $('fundo').addEventListener('click', function (e) { if (e.target === $('fundo')) fechar(); });
+  document.addEventListener('keydown', function (e) { if (e.key === 'Escape') fechar(); });
+  async function enviar(met, url, body) {
+    var r = await fetch(url, { method: met, headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body) });
+    var j = await r.json().catch(function () { return {}; });
+    if (!r.ok) throw new Error(j.error || 'Erro'); return j;
+  }
+  $('m-sim').onclick = async function () {
+    if (!obraSel) return;
+    var b = $('m-sim'); b.disabled = true;
+    try { var j = await enviar('POST', '/api/governo/obra', { obra: obraSel.chave, descricao: $('m-desc').value }); fechar(); toast('Retirado: ' + j.obra); await carregar(); }
+    catch (e) { toast(e.message, true); }
+    b.disabled = false;
+  };
+  async function editarValor(chave) {
+    var o = D.obras.find(function (x) { return x.chave === chave; });
+    var v = prompt('Novo valor de "' + o.nome + '" (só números):', String(o.valor)); if (v == null) return;
+    try { await enviar('PUT', '/api/governo/obras/' + chave, { valor: Number(String(v).replace(/\D/g, '')) }); toast('Valor salvo'); carregar(); } catch (e) { toast(e.message, true); }
+  }
+  if ($('cfg-salvar')) $('cfg-salvar').onclick = async function () {
+    try { await enviar('PUT', '/api/governo/config', { multiplicador: Number($('cfg-mult').value) }); toast('Multiplicador salvo: vale pras próximas compras'); carregar(); } catch (e) { toast(e.message, true); }
+  };
+  document.querySelectorAll('.abas button').forEach(function (b) {
+    b.onclick = function () {
+      document.querySelectorAll('.abas button').forEach(function (x) { x.classList.toggle('on', x === b); });
+      document.querySelectorAll('[data-painel]').forEach(function (p) { p.hidden = p.dataset.painel !== b.dataset.aba; });
+    };
+  });
+  carregar();
+})();
+</script>
+</body>
+</html>

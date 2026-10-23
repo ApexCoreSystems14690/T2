@@ -729,6 +729,17 @@ router.get('/:corpId/caixa', requireCorpOwner, requireCorpPoder('ver_caixa'), as
 // POST /api/corps/:corpId/caixa/comprar { item, qtd } — compra pro vestiário.
 // Dinheiro e estoque na MESMA transação: pagar e não receber a peça (ou receber
 // sem pagar) é o pior bug possível num caixa.
+// [23/10] O caixa do GOVERNO é inflado (arrecadação x multiplicador): sair dele pelo painel de
+// corp (bônus, compra, aporte, baixa) viraria dinheiro de verdade na mão de alguém. Ele só sai
+// por obra (Dono) e salário (a cada 3 dias), na tela /governo.
+router.post('/:corpId/caixa/:acao', async (req, res, next) => {
+  try {
+    const t = await pool.query(`SELECT tipo FROM corporations WHERE id = $1`, [parseInt(req.params.corpId) || 0]);
+    if (t.rows[0] && t.rows[0].tipo === 'governo') return res.status(403).json({ error: 'O caixa do Governo só sai por obra e salário, na tela Governo.' });
+  } catch (e) { /* segue: as rotas abaixo têm as próprias travas */ }
+  next();
+});
+
 router.post('/:corpId/caixa/comprar', requireCorpOwner, requireCorpPoder('gerir_estoque'), async (req, res) => {
   try {
     const { item, qtd } = req.body || {};

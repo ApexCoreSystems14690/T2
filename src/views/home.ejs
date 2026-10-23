@@ -42,6 +42,7 @@
     .elei .selo { background: var(--asfalto-2); }
     .regra .selo { background: #10131A; color: var(--pista); }
     .roy .selo { background: var(--placa); }
+    .gov .selo { background: #10131A; color: #fff; }
     .saldo-roy { display: inline-block; margin-left: .35rem; padding: .05rem .45rem; border: 1.5px solid #10131A; border-radius: 4px; background: #fff; font-stretch: 75%; font-variation-settings: "wdth" 75; font-weight: 800; font-size: .95rem; color: #10131A; vertical-align: 1px; }
     .item.off { color: var(--tinta-3); }
     .item.off .selo { background: var(--linha-2); }
@@ -95,6 +96,14 @@
           <span class="t">Royalties<% if (typeof royalties !== 'undefined' && royalties !== null) { %> <span class="saldo-roy"><%= Number(royalties).toLocaleString('pt-BR') %></span><% } %></span>
           <span class="d">Pontos que a staff credita pelo que você faz na cidade. Troque por prêmios dentro do jogo.</span>
         </a>
+        <%# [23/10] Governo: tesouro, obras e salários (membros do Governo, staff e Dono) %>
+        <% if (typeof verGoverno !== 'undefined' && verGoverno) { %>
+        <a class="item gov" href="/governo">
+          <span class="selo"><svg class="ic" aria-hidden="true"><use href="/icones.svg#banco"/></svg></span>
+          <span class="t">Governo</span>
+          <span class="d">Tesouro da cidade: arrecadação, obras aprovadas e salário do Governo.</span>
+        </a>
+        <% } %>
         <%# [22/10] regulamento DESTA cidade %>
         <% if (cidade) { %>
         <a class="item regra" href="/cidade/<%= cidade.slug %>/regras">
