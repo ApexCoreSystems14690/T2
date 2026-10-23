@@ -35,7 +35,7 @@ const PADRAO = {
       { item: 'Galao de gasolina', qtd: 2 },
       { item: 'Kit de reparo', qtd: 2 },
     ],
-    carro: 'Gol',
+    carro: 'GolMi',   // Gol Mi 1997 (ServerStorage.Assets.Carros.GolMi). 'Gol' sozinho não existe no jogo
   },
   mesada: { valor: 5000, dias: 7 },
   checar_discord_min: 10,     // de quanto em quanto tempo reconfere o boost de quem está online
