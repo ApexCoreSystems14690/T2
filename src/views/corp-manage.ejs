@@ -113,7 +113,8 @@
     </div>
 
     <!-- CARGOS -->
-    <%# [10/10] CARREIRAS: o nivel e unico DENTRO da carreira (PC: Delegados, Investigacao,
+    <% /* [23/10] de quanto em quanto tempo o salário sai: Governo pelo site a cada 3 dias; o resto no ponto de salário do jogo a cada 40 min */ var PERIODO_SAL = corporation.tipo === 'governo' ? '3 dias' : '40 min'; %>
+<%# [10/10] CARREIRAS: o nivel e unico DENTRO da carreira (PC: Delegados, Investigacao,
         Pericia, Agentes...). Corp sem carreira = uma lista so, igual antes. %>
     <% var CARREIRAS = [], porC = {};
        ranks.forEach(function (r) { var c = r.carreira || ''; if (!porC[c]) { porC[c] = []; CARREIRAS.push(c); } porC[c].push(r); });
@@ -155,7 +156,7 @@
           <input type="number" id="rank-level" placeholder="1" min="0">
         </div>
         <div class="form-group" style="max-width:120px">
-          <label>Salário (R$)</label>
+          <label>Salário a cada <%= PERIODO_SAL %> (R$)</label>
           <input type="number" id="rank-salary" placeholder="500" min="0">
         </div>
         <div class="form-group" style="max-width:120px;justify-content:flex-end">
@@ -175,7 +176,7 @@
               <div class="rank-info">
                 <span class="rank-level">Nv.<%= rank.level %></span>
                 <span class="rank-name"><%= rank.name %></span>
-                <span class="rank-salary">R$<%= rank.salary %></span>
+                <span class="rank-salary">R$ <%= Number(rank.salary || 0).toLocaleString('pt-BR') %> <span style="color:#5B6573">a cada <%= PERIODO_SAL %></span></span>
                 <% var gmOn = rank.permissions && rank.permissions.gerir_membros === true; %>
                 <% if (gmOn) { %><span style="color:#1D3F94;font-size:0.75rem" title="Pode adicionar, remover e trocar o cargo de quem está ABAIXO deste cargo"><svg class="ic" aria-hidden="true"><use href="/icones.svg#check"/></svg>gere membros abaixo</span><% } %>
               </div>
@@ -343,6 +344,7 @@
            apreende e não cobra dívida. O bloco some sozinho se a rota não mandar
            o resumo (banco velho, erro na leitura): painel sem bloco é melhor que
            painel quebrado. -->
+      <div id="cx-folha" style="display:none;margin-bottom:1.25rem;padding:0.75rem 1rem;border-left:3px solid #1D7A45;background:rgba(29,122,69,0.06);border-radius:4px;color:#46505C;font-size:0.85rem;line-height:1.6"></div>
       <div id="cx-orcamento" style="display:none;margin-bottom:1.25rem;padding:0.75rem 1rem;border-left:3px solid #1D3F94;background:rgba(0,212,255,0.06);border-radius:4px;color:#46505C;font-size:0.85rem;line-height:1.6"></div>
 
       <% if (P.gerir_estoque) { %>
@@ -587,7 +589,7 @@
       const name = prompt('Nome do cargo:', atual.name); if (name === null) return;
       const carreira = prompt('Carreira (vazio = sem carreira):', atual.carreira || ''); if (carreira === null) return;
       const level = prompt('Nível (pode repetir em carreiras diferentes):', atual.level); if (level === null) return;
-      const salary = prompt('Salário (R$):', atual.salary); if (salary === null) return;
+      const salary = prompt('Salário a cada <%= PERIODO_SAL %> (R$):', atual.salary); if (salary === null) return;
       const data = await api('PUT', '/ranks/' + rankId, { name: name.trim(), carreira: carreira.trim(), level, salary });
       if (data && data.error) return showAlert(data.error, 'error');
       showAlert('Cargo atualizado', 'success');
@@ -840,14 +842,16 @@
       document.getElementById('tg-mult').textContent = '×' + Number(d.multiplicador).toLocaleString('pt-BR');
       var s = d.salarios;
       document.getElementById('tg-folha').innerHTML = '<b style="color:#1D3F94">Salário do Governo</b> · a cada ' + s.periodo_dias +
-        ' dias · próximo pagamento <b>' + quando(s.proximo_pagamento) + '</b><br>folha ' + dinheiro(s.folha) +
-        ' · recebe só quem entrou no jogo no período';
+        ' dias · próximo pagamento <b>' + quando(s.proximo_pagamento) + '</b><br>folha do próximo pagamento <b>' + dinheiro(s.folha) +
+        '</b> (só recebe quem entrar no jogo no período) · saldo ' + dinheiro(d.saldo) + ' · ' +
+        (d.saldo >= s.folha ? '<b style="color:#15803D">o saldo cobre a folha</b>'
+                            : '<b style="color:#B91C1C">faltam ' + dinheiro(s.folha - d.saldo) + ' pra cobrir a folha</b>');
       document.getElementById('tg-obras').innerHTML = (d.obras || []).map(function (o) {
         return '<tr><td>' + escT(o.nome) + '</td><td style="text-align:right">' + dinheiro(o.valor) + '</td></tr>';
       }).join('') || '<tr><td colspan="2" class="empty">Nenhuma obra.</td></tr>';
       document.getElementById('tg-extrato').innerHTML = (d.extrato || []).slice(0, 30).map(function (l) {
         var cor = l.valor < 0 ? '#B91C1C' : '#15803D';
-        return '<tr><td>' + quando(l.criado_em) + '</td><td>' + escT(({ obra: 'Obra', salario: 'Salário' })[l.tipo] || l.tipo) + '</td><td>' + escT(l.quem || '') +
+        return '<tr><td>' + quando(l.criado_em) + '</td><td>' + escT(({ obra: 'Obra', salario: 'Salário', salario_emprego: 'Emprego civil' })[l.tipo] || l.tipo) + '</td><td>' + escT(l.quem || '') +
           '</td><td style="text-align:right;color:' + cor + '">' + dinheiro(l.valor) + '</td><td style="text-align:right">' + dinheiro(l.saldo_depois) + '</td></tr>';
       }).join('') || '<tr><td colspan="5" class="empty">Nada ainda.</td></tr>';
     }
@@ -888,6 +892,19 @@
             'previsto <b>' + dinheiro(orc.previsto.total) + '</b> = base ' + dinheiro(orc.previsto.base) +
             ' + ' + orc.atividade_periodo + ' ocorrência(s) no período · ' + ult;
         }
+      }
+
+      // [23/10] FOLHA: o salario inteiro dos membros sai do caixa (ponto de salario do jogo)
+      var elF = document.getElementById('cx-folha');
+      if (elF && d.folha) {
+        var f = d.folha;
+        elF.style.display = '';
+        var cobre = f.cobre_dias === null ? 'ninguém recebeu salário nos últimos 7 dias'
+          : (f.cobre_dias < 1 ? '<b style="color:#B91C1C">o caixa cobre menos de 1 dia de salário</b>'
+          : 'o caixa cobre <b>' + String(f.cobre_dias).replace('.', ',') + ' dia(s)</b> de salário nesse ritmo');
+        elF.innerHTML = '<b style="color:#1D7A45">Folha de salário</b> · últimos 7 dias <b>' + dinheiro(f.semana) + '</b> · ' +
+          f.pagamentos + ' pagamento(s) para ' + f.pessoas + ' pessoa(s)<br>' + cobre +
+          '. Caixa vazio: o membro recebe só o piso de R$ 500, que não sai do caixa.';
       }
 
       // [29/09] o seletor lista SO arma e algema -- o resto do vestiario e

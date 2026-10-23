@@ -309,6 +309,21 @@ async function painel(corpId, limite = 60) {
   };
 }
 
+// [23/10] FOLHA: o salário inteiro agora sai do caixa. Soma o que saiu de salário nos últimos
+// 7 dias e diz quantos dias o saldo aguenta nesse ritmo (null = não pagou salário na semana).
+async function folhaSemana(corpId) {
+  const r = await pool.query(
+    `SELECT COALESCE(-SUM(valor), 0)::bigint AS total, COUNT(*)::int AS pagamentos,
+            COUNT(DISTINCT detalhe->>'roblox_id')::int AS pessoas
+       FROM corp_lancamentos WHERE corporation_id = $1 AND tipo = 'salario' AND criado_em > NOW() - INTERVAL '7 days'`, [corpId]);
+  const cx = await pool.query(`SELECT saldo FROM corp_caixa WHERE corporation_id = $1`, [corpId]);
+  const saldo = Number(cx.rows[0] ? cx.rows[0].saldo : 0);
+  const total = Number(r.rows[0].total);
+  const porDia = total / 7;
+  return { semana: total, pagamentos: r.rows[0].pagamentos, pessoas: r.rows[0].pessoas, saldo,
+           cobre_dias: porDia > 0 ? Math.floor(saldo / porDia * 10) / 10 : null };
+}
+
 // Preços vêm do JOGO (ToolData), guardados em game_config. O site não tem
 // tabela de preço própria: duas listas divergem no primeiro dia.
 async function precos(slug) {
@@ -477,4 +492,5 @@ async function resumoOrcamento(corpId, slug, agoraMs) {
   };
 }
 
-module.exports = { faxinaFantasmas, FANTASMA_MIN, desfazerBaixa, JANELA_DESFAZER_H, movDinheiro, movEstoque, comprar, painel, precos, catalogo, registrarAtividade, pagarOrcamentoSePendente, resumoOrcamento, ehEmpresa, ORC };
+module.exports = {
+  folhaSemana, faxinaFantasmas, FANTASMA_MIN, desfazerBaixa, JANELA_DESFAZER_H, movDinheiro, movEstoque, comprar, painel, precos, catalogo, registrarAtividade, pagarOrcamentoSePendente, resumoOrcamento, ehEmpresa, ORC };

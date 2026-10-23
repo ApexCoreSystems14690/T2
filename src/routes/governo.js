@@ -68,5 +68,33 @@ router.put('/api/governo/obras/:chave', CID.exigeCidade(), soDono, so(async (req
   res.json({ ok: true });
 }));
 
+// [23/10] teto por tarefa dos empregos civis pagos pelo tesouro (só o Dono)
+router.put('/api/governo/empregos/:emprego', CID.exigeCidade(), soDono, so(async (req, res) => {
+  await GOV.salvarEmprego(pool, req.cidade.id, req.params.emprego, req.body || {});
+  await audit(req, 'governo:teto_emprego', { emprego: req.params.emprego, ...(req.body || {}) });
+  res.json({ ok: true });
+}));
+
+// [23/10] CÂMARA — propostas votadas pelo Parlamento (as regras de quem pode o quê ficam no módulo)
+const CAM = require('../governo-camara');
+router.get('/api/governo/camara', CID.exigeCidade(), so(async (req, res) => {
+  if (!(await podeVer(req))) return res.status(403).json({ error: 'Sem acesso ao Governo' });
+  res.json(await CAM.listar(pool, req.cidade.id, req.user));
+}));
+function logado(req, res, next) { if (!req.user || !req.cidade) return res.status(401).json({ error: 'Faça login' }); next(); }
+router.post('/api/governo/camara', CID.exigeCidade(), logado, so(async (req, res) => {
+  const r = await CAM.abrir(pool, req.cidade.id, req.user, req.body || {});
+  await audit(req, 'governo:proposta', { id: r.id, ...(req.body || {}) });
+  res.json({ ok: true, ...r });
+}));
+router.post('/api/governo/camara/:id/voto', CID.exigeCidade(), logado, so(async (req, res) => {
+  res.json(await CAM.votar(pool, req.cidade.id, req.user, req.params.id, req.body || {}));
+}));
+router.post('/api/governo/camara/:id/sancao', CID.exigeCidade(), logado, so(async (req, res) => {
+  const r = await CAM.sancionar(pool, req.cidade.id, req.user, req.params.id, req.body || {});
+  await audit(req, 'governo:sancao', { id: req.params.id, acao: (req.body || {}).acao });
+  res.json(r);
+}));
+
 module.exports = router;
 module.exports.podeVer = podeVer;

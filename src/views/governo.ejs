@@ -28,6 +28,17 @@
     .abas { display: flex; gap: .2rem; border-bottom: 1px solid var(--linha); margin-bottom: 1rem; overflow-x: auto; }
     .abas button { border: 0; background: transparent; padding: .7rem .9rem; font: inherit; font-weight: 700; color: var(--tinta-3); border-bottom: 3px solid transparent; cursor: pointer; white-space: nowrap; display: inline-flex; gap: .4rem; align-items: center; }
     .abas button.on { color: var(--tinta); border-bottom-color: var(--pista); }
+    .prop { background: var(--papel); border: 1px solid var(--linha); border-radius: var(--r); padding: .9rem 1.1rem; margin-bottom: .8rem; }
+    .prop-top { display: flex; gap: .6rem; align-items: baseline; flex-wrap: wrap; }
+    .prop-top b.n { font-stretch: 75%; font-variation-settings: "wdth" 75; font-weight: 800; font-size: 1.15rem; }
+    .prop .mud { margin: .35rem 0; font-variant-numeric: tabular-nums; }
+    .prop .votos { display: flex; flex-wrap: wrap; gap: .3rem; margin-top: .45rem; }
+    .prop .acoes { display: flex; gap: .4rem; flex-wrap: wrap; margin-top: .6rem; }
+    .camf { display: grid; grid-template-columns: repeat(auto-fit, minmax(170px, 1fr)); gap: .6rem; align-items: end; }
+    .camf label { display: flex; flex-direction: column; gap: .2rem; font-size: .8rem; color: var(--tinta-2); font-weight: 600; }
+    .camf input, .camf select, .camf textarea { padding: .45rem .6rem; border: 1px solid var(--linha-2); border-radius: var(--rs); font: inherit; }
+    .camf .tudo { grid-column: 1 / -1; }
+    .camf [hidden] { display: none; }
     .bloco { background: var(--papel); border: 1px solid var(--linha); border-radius: var(--r); padding: 1rem 1.1rem; margin-bottom: 1rem; }
     .bloco h3 { margin: 0 0 .7rem; font-size: 1.05rem; display: flex; gap: .6rem; align-items: baseline; flex-wrap: wrap; }
     .bloco h3 small { color: var(--tinta-3); font-weight: 500; font-size: .8rem; }
@@ -122,6 +133,7 @@
       <button class="on" data-aba="arrecadacao"><svg class="ic" aria-hidden="true"><use href="/icones.svg#moedas"/></svg>Arrecadação</button>
       <button data-aba="obras"><svg class="ic" aria-hidden="true"><use href="/icones.svg#martelo"/></svg>Obras</button>
       <button data-aba="salarios"><svg class="ic" aria-hidden="true"><use href="/icones.svg#pasta-trabalho"/></svg>Salários</button>
+      <button data-aba="camara"><svg class="ic" aria-hidden="true"><use href="/icones.svg#urna"/></svg>Câmara</button>
       <button data-aba="extrato"><svg class="ic" aria-hidden="true"><use href="/icones.svg#pasta"/></svg>Extrato</button>
     </div>
 
@@ -159,9 +171,23 @@
         <% if (ehDono) { %><p style="margin:.8rem 0 0"><a class="btn sec" id="link-cargos" href="#">Cargos e salários</a></p><% } %>
       </div>
       <div class="bloco">
+        <h3>Empregos civis pagos pelo tesouro</h3>
+        <p class="expl">Gari, repositor, pizzaiolo, carteiro, mecânico e uber de passageiro bot recebem do tesouro do Governo. O jogo diz quanto cada tarefa pagou; pedido acima do teto é recusado inteiro. Tesouro vazio: o emprego não paga.</p>
+        <div class="rolar"><table style="display:table;white-space:normal"><thead><tr><th>Emprego</th><th class="num">Teto por tarefa</th></tr></thead><tbody id="empregos"></tbody></table></div>
+      </div>
+      <div class="bloco">
         <h3>Últimos pagamentos</h3>
         <div class="rolar"><table><thead><tr><th>Período</th><th>Membro</th><th>Cargo</th><th class="num">Valor</th><th>Situação</th></tr></thead><tbody id="pagos"></tbody></table></div>
       </div>
+    </section>
+
+    <section data-painel="camara" hidden>
+      <div class="bloco">
+        <h3>Câmara <small id="cam-sub"></small></h3>
+        <p class="expl">Regulamento, Cap. 10: Parlamentar ou o Presidente da Câmara abre a proposta. Ela fica <b>48 h em debate</b> e depois <b>24 h em votação</b>. Passa com mais SIM que NÃO entre quem votou; no empate, o Presidente da Câmara desempata. Aprovada, o Presidente da República tem <b>24 h</b> pra sancionar ou vetar (sem resposta, é sancionada sozinha). O veto volta pra Câmara e só cai com 2/3 dos votos. Sancionada, a mudança entra sozinha. Aumento do salário de Parlamentar só vale no próximo mandato (Art. 10.12A). Teto: 2x o salário padrão do cargo.</p>
+        <div id="cam-form"></div>
+      </div>
+      <div id="cam-lista"></div>
     </section>
 
     <section data-painel="extrato" hidden>
@@ -234,19 +260,23 @@
     $('obras').querySelectorAll('[data-editar]').forEach(function (b) { b.onclick = function () { editarValor(b.dataset.editar); }; });
 
     var s = D.salarios;
-    $('sal-sub').textContent = 'período atual desde ' + new Date(s.inicio).toLocaleDateString('pt-BR') + ' · próximo pagamento ' + new Date(s.proximo_pagamento).toLocaleDateString('pt-BR') + ' · folha ' + cheio(s.folha);
+    $('sal-sub').textContent = 'período atual desde ' + new Date(s.inicio).toLocaleDateString('pt-BR') + ' · próximo pagamento ' + new Date(s.proximo_pagamento).toLocaleDateString('pt-BR') + ' · folha ' + cheio(s.folha) + ' · ' + (D.saldo >= s.folha ? 'o saldo cobre a folha' : 'faltam ' + cheio(s.folha - D.saldo) + ' pra cobrir a folha');
     $('membros').innerHTML = s.membros.length ? s.membros.map(function (m) {
       return '<tr><td><b>' + esc(m.nome || '?') + '</b>' + (m.roblox_id ? '' : ' <span class="pill alerta">sem Roblox vinculado</span>') + '</td><td>' + esc(m.cargo || '—') + '</td>'
         + '<td class="num">' + (m.salario ? cheio(m.salario) : '<span class="pill nao">sem salário</span>') + '</td>'
         + '<td>' + (m.entrou_no_periodo ? '<span class="pill sim">entrou</span>' : '<span class="pill nao">ainda não</span>') + '</td></tr>';
     }).join('') : '<tr><td colspan="4" class="expl">O Governo ainda não tem membros. Adicione pela tela da corporação.</td></tr>';
+    $('empregos').innerHTML = (D.empregos || []).map(function (e) {
+      return '<tr><td>' + esc(e.nome) + '</td><td class="num">' + cheio(e.teto) + (D.eh_dono ? '<br><button class="btn sec" style="margin-top:.3rem;padding:.2rem .6rem;font-size:.78rem" data-teto="' + esc(e.emprego) + '">Mudar</button>' : '') + '</td></tr>';
+    }).join('') || '<tr><td colspan="3" class="expl">Nenhum emprego configurado.</td></tr>';
+    $('empregos').querySelectorAll('[data-teto]').forEach(function (b) { b.onclick = function () { editarTeto(b.dataset.teto); }; });
     var ST = { pago: ['sim', 'Pago'], nao_entrou: ['nao', 'Não entrou no jogo'], sem_saldo: ['alerta', 'Caixa sem saldo'], sem_roblox: ['alerta', 'Sem Roblox vinculado'] };
     $('pagos').innerHTML = s.ultimos.length ? s.ultimos.map(function (p) { var t = ST[p.status] || ['nao', p.status];
       return '<tr><td>' + (p.periodo + 1) + 'º</td><td>' + esc(p.nome || '?') + '</td><td>' + esc(p.cargo || '') + '</td><td class="num">' + cheio(p.valor) + '</td><td><span class="pill ' + t[0] + '">' + t[1] + '</span></td></tr>';
     }).join('') : '<tr><td colspan="5" class="expl">Nenhum pagamento ainda. O primeiro sai quando o primeiro período de 3 dias fechar.</td></tr>';
     if ($('link-cargos')) $('link-cargos').href = '/dashboard/corp/' + D.corporation_id;
 
-    var TIPO = { obra: 'Obra', salario: 'Salário' };
+    var TIPO = { obra: 'Obra', salario: 'Salário', salario_emprego: 'Emprego civil' };
     $('extrato').innerHTML = D.extrato.length ? D.extrato.map(function (l) {
       var det = l.detalhe || {};
       var txt = l.tipo === 'obra' ? (det.descricao || '') + ' <span class="expl">(' + esc(l.por || '') + ')</span>' : l.tipo === 'salario' ? esc((l.quem || '') + ' · ' + (det.cargo || '')) : esc(l.quem || '');
@@ -281,13 +311,91 @@
     var v = prompt('Novo valor de "' + o.nome + '" (só números):', String(o.valor)); if (v == null) return;
     try { await enviar('PUT', '/api/governo/obras/' + chave, { valor: Number(String(v).replace(/\D/g, '')) }); toast('Valor salvo'); carregar(); } catch (e) { toast(e.message, true); }
   }
+  async function editarTeto(emp) {
+    var e = (D.empregos || []).find(function (x) { return x.emprego === emp; }); if (!e) return;
+    var v = prompt('Teto por tarefa de "' + e.nome + '" (R$):', e.teto); if (v === null) return;
+    try { await enviar('PUT', '/api/governo/empregos/' + encodeURIComponent(emp), { teto: Number(String(v).replace(/\D/g, '')) }); toast('Teto salvo'); carregar(); } catch (er) { toast(er.message, true); }
+  }
   if ($('cfg-salvar')) $('cfg-salvar').onclick = async function () {
     try { await enviar('PUT', '/api/governo/config', { multiplicador: Number($('cfg-mult').value) }); toast('Multiplicador salvo: vale pras próximas compras'); carregar(); } catch (e) { toast(e.message, true); }
   };
+
+  // ---------------------------------------------------------------- CÂMARA [23/10]
+  var CAM = null;
+  var PILL = { debate: 'nao', votacao: 'alerta', aguardando_sancao: 'alerta', sancionada: 'sim', aguarda_mandato: 'sim', vetada: 'alerta', veto_mantido: 'nao', recusada: 'nao', sem_saldo: 'alerta' };
+  async function carregarCamara() {
+    var r = await fetch('/api/governo/camara', { headers: { accept: 'application/json' } });
+    var j = await r.json().catch(function () { return {}; });
+    if (!r.ok) { $('cam-lista').innerHTML = '<p class="expl">' + esc(j.error || 'Erro') + '</p>'; return; }
+    CAM = j; desenharCamara();
+  }
+  function quando(t) { return t ? data(t) : '—'; }
+  function desenharCamara() {
+    var eu = CAM.meu_cargo;
+    $('cam-sub').textContent = CAM.parlamentares + ' parlamentar(es)' + (eu ? ' · você: ' + eu : '');
+    var podeAbrir = eu === 'Parlamentar' || eu === 'Presidente da Câmara';
+    $('cam-form').innerHTML = podeAbrir ? (
+      '<div class="camf">'
+      + '<label>Tipo<select id="cf-tipo"><option value="salario">Mudar salário de cargo</option><option value="obra">Aprovar obra</option></select></label>'
+      + '<label id="cf-l-cargo">Cargo<select id="cf-cargo">' + CAM.cargos.filter(function (c) { return c.teto; }).map(function (c) {
+          return '<option value="' + c.id + '">' + esc(c.nome) + ' (hoje ' + cheio(c.salario) + ', teto ' + cheio(c.teto) + ')</option>'; }).join('') + '</select></label>'
+      + '<label id="cf-l-valor">Novo salário a cada 3 dias (R$)<input id="cf-valor" inputmode="numeric" placeholder="ex: 120000"></label>'
+      + '<label id="cf-l-obra" hidden>Obra<select id="cf-obra">' + (D && D.obras ? D.obras.map(function (o) { return '<option value="' + esc(o.chave) + '">' + esc(o.nome) + ' (' + cheio(o.valor) + ')</option>'; }).join('') : '') + '</select></label>'
+      + '<label class="tudo">Justificativa<textarea id="cf-desc" rows="2" maxlength="500" placeholder="O que a proposta muda e por quê"></textarea></label>'
+      + '<div><button class="btn" id="cf-abrir">Abrir proposta</button></div></div>'
+    ) : '<p class="expl" style="margin:0">Só Parlamentar e o Presidente da Câmara abrem proposta. Votam os Parlamentares.</p>';
+    if (podeAbrir) {
+      $('cf-tipo').onchange = function () { var o = this.value === 'obra'; $('cf-l-cargo').hidden = o; $('cf-l-valor').hidden = o; $('cf-l-obra').hidden = !o; };
+      $('cf-abrir').onclick = async function () {
+        var tipo = $('cf-tipo').value, corpo = { tipo: tipo, descricao: $('cf-desc').value };
+        if (tipo === 'obra') corpo.obra = $('cf-obra').value; else { corpo.rank_id = Number($('cf-cargo').value); corpo.valor = Number(String($('cf-valor').value).replace(/\D/g, '')); }
+        try { var j = await enviar('POST', '/api/governo/camara', corpo); toast('Proposta nº ' + j.id + ' aberta: 48 h de debate'); carregarCamara(); } catch (e) { toast(e.message, true); }
+      };
+    }
+    $('cam-lista').innerHTML = CAM.propostas.length ? CAM.propostas.map(function (p) {
+      var mud = p.tipo === 'salario'
+        ? 'Salário de <b>' + esc(p.cargo) + '</b>: ' + cheio(p.valor_atual) + ' → <b>' + cheio(p.valor) + '</b> a cada 3 dias'
+        : 'Obra <b>' + esc(p.cargo) + '</b>: ' + cheio(p.valor) + ' do tesouro';
+      var prazo = p.status === 'debate' ? 'votação abre ' + quando(p.votacao_em)
+        : p.status === 'votacao' ? 'votação fecha ' + quando(p.fecha_em)
+        : p.status === 'aguardando_sancao' ? 'sanção até ' + quando(p.sancao_ate)
+        : p.status === 'vetada' ? 'Câmara pode derrubar até ' + quando(p.derrubada_ate)
+        : (p.decidida_em ? 'decidida ' + quando(p.decidida_em) : '');
+      var vs = p.votos.filter(function (v) { return v.fase !== 'desempate'; }).map(function (v) {
+        return '<span class="pill ' + (v.voto ? 'sim' : 'nao') + '">' + (v.fase === 'derrubada' ? 'derrubada · ' : '') + esc(v.nome) + ': ' + (v.voto ? 'SIM' : 'NÃO') + '</span>'; }).join('');
+      var dsp = p.votos.find(function (v) { return v.fase === 'desempate'; });
+      var ac = '';
+      if (CAM.meu_cargo === 'Parlamentar' && (p.status === 'votacao' || p.status === 'vetada') && !p.ja_votei)
+        ac += '<button class="btn" data-voto="sim" data-id="' + p.id + '">' + (p.status === 'vetada' ? 'Derrubar o veto' : 'Votar SIM') + '</button><button class="btn sec" data-voto="nao" data-id="' + p.id + '">' + (p.status === 'vetada' ? 'Manter o veto' : 'Votar NÃO') + '</button>';
+      if (CAM.meu_cargo === 'Presidente da Câmara' && p.status === 'votacao' && !p.ja_desempatei)
+        ac += '<button class="btn sec" data-desempate="sim" data-id="' + p.id + '">Desempate: SIM</button><button class="btn sec" data-desempate="nao" data-id="' + p.id + '">Desempate: NÃO</button>';
+      if (CAM.meu_cargo === 'Presidente da República' && p.status === 'aguardando_sancao')
+        ac += '<button class="btn" data-sancao="sancionar" data-id="' + p.id + '">Sancionar</button><button class="btn sec" data-sancao="vetar" data-id="' + p.id + '">Vetar</button>';
+      return '<div class="prop"><div class="prop-top"><b class="n">Nº ' + p.id + '</b><span class="pill ' + (PILL[p.status] || 'nao') + '">' + esc(p.status_nome) + '</span><small class="expl">' + esc(prazo) + '</small></div>'
+        + '<div class="mud">' + mud + '</div>'
+        + '<div class="expl">' + esc(p.descricao) + ' · aberta por ' + esc(p.autor_nome || '?') + ' em ' + quando(p.criada_em) + '</div>'
+        + '<div class="expl" style="margin-top:.35rem">Placar: <b>' + p.placar.sim + ' SIM</b> × <b>' + p.placar.nao + ' NÃO</b>'
+        + (dsp ? ' · desempate do Presidente da Câmara: ' + (dsp.voto ? 'SIM' : 'NÃO') : '')
+        + (p.placar_derrubada.sim + p.placar_derrubada.nao ? ' · derrubada do veto: ' + p.placar_derrubada.sim + ' × ' + p.placar_derrubada.nao : '')
+        + (p.sancao ? ' · sanção: ' + esc({ sancionou: 'sancionada', vetou: 'vetada', automatica: 'automática (24 h)', derrubada: 'veto derrubado' }[p.sancao] || p.sancao) + (p.sancao_por ? ' (' + esc(p.sancao_por) + ')' : '') : '')
+        + (p.nota ? ' · ' + esc(p.nota) : '') + '</div>'
+        + (vs ? '<div class="votos">' + vs + '</div>' : '')
+        + (ac ? '<div class="acoes">' + ac + '</div>' : '') + '</div>';
+    }).join('') : '<div class="bloco"><p class="expl" style="margin:0">Nenhuma proposta ainda.</p></div>';
+    $('cam-lista').querySelectorAll('[data-voto]').forEach(function (b) { b.onclick = function () { acao('/voto', b.dataset.id, { voto: b.dataset.voto }, 'Voto registrado'); }; });
+    $('cam-lista').querySelectorAll('[data-desempate]').forEach(function (b) { b.onclick = function () { acao('/voto', b.dataset.id, { voto: b.dataset.desempate, desempate: true }, 'Desempate registrado'); }; });
+    $('cam-lista').querySelectorAll('[data-sancao]').forEach(function (b) { b.onclick = function () {
+      if (!confirm(b.dataset.sancao === 'vetar' ? 'Vetar a proposta nº ' + b.dataset.id + '?' : 'Sancionar a proposta nº ' + b.dataset.id + '? A mudança entra na hora.')) return;
+      acao('/sancao', b.dataset.id, { acao: b.dataset.sancao }, b.dataset.sancao === 'vetar' ? 'Vetada' : 'Sancionada'); }; });
+  }
+  async function acao(rota, id, corpo, ok) {
+    try { await enviar('POST', '/api/governo/camara/' + id + rota, corpo); toast(ok); carregarCamara(); carregar(); } catch (e) { toast(e.message, true); }
+  }
   document.querySelectorAll('.abas button').forEach(function (b) {
     b.onclick = function () {
       document.querySelectorAll('.abas button').forEach(function (x) { x.classList.toggle('on', x === b); });
       document.querySelectorAll('[data-painel]').forEach(function (p) { p.hidden = p.dataset.painel !== b.dataset.aba; });
+      if (b.dataset.aba === 'camara') carregarCamara();
     };
   });
   carregar();

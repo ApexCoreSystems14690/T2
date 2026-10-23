@@ -1262,6 +1262,9 @@ async function start() {
   // [23/10] Governo: corporação tipo 'governo', tesouro inflado, obras e salário a cada 3 dias
   try { await require('./governo').garantir(pool); require('./governo').iniciar(pool); }
   catch (e) { console.error('[governo] garantir:', e.message); }
+  // [23/10] Câmara: propostas de salário/obra votadas pelo Parlamento (Regulamento Cap. 10)
+  try { const CAM = require('./governo-camara'); await CAM.garantir(pool); CAM.iniciar(pool, [require('./governo').SANTA_FE]); }
+  catch (e) { console.error('[camara] garantir:', e.message); }
 
   // Sessão com PostgreSQL
   app.use(session({

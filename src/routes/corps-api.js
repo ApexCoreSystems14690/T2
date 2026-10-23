@@ -706,10 +706,11 @@ router.get('/:corpId/caixa', requireCorpOwner, requireCorpPoder('ver_caixa'), as
     // infinito" -- SAMU e Pavuna caíram no segundo caso de verdade: o vestiário
     // delas só tem skin e item de cena. Sem essa flag o comandante da SAMU lia
     // "o jogo ainda não publicou os preços" e ia caçar bug que não existe.
-    const [dados, precos, cat] = await Promise.all([
+    const [dados, precos, cat, folha] = await Promise.all([
       caixa.painel(req.params.corpId, req.query.limite),
       caixa.precos(slugCorp),
       caixa.catalogo(slugCorp),
+      caixa.folhaSemana(req.params.corpId).catch(() => null),   // [23/10] salário sai do caixa
     ]);
     res.json({
       ...dados,
@@ -717,6 +718,7 @@ router.get('/:corpId/caixa', requireCorpOwner, requireCorpPoder('ver_caixa'), as
       catalogo_publicado: cat !== null,
       proximo_repasse: caixa.ORC.proximoEm(Date.now()),
       orcamento,
+      folha,
       pode_gastar: CP.pode(req.corpCtx, 'gastar_caixa'),
       pode_estoque: CP.pode(req.corpCtx, 'gerir_estoque'),
     });

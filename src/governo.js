@@ -51,6 +51,21 @@ const CARGOS_PADRAO = [
   ['Parlamentar', 50, 100000],
 ];
 
+// [23/10] EMPREGOS CIVIS pagos pelo tesouro. O valor vem do JOGO (emprego civil não tem cargo
+// no site), então cada emprego tem um TETO POR TAREFA que o Dono edita: pedido acima do teto é
+// recusado inteiro — ninguém forja um pedido pra sacar o tesouro. Valores do jogo em 23/10:
+// gari R$10-16 por saco, repositor R$10-13, pizza R$56-124, carta R$79-249, mecânico R$67-192,
+// uber de bot R$126 + R$0,10 por stud.
+const EMPREGOS_PADRAO = [
+  { emprego: 'Lixeiro',   nome: 'Gari (por saco)',              teto: 25 },
+  { emprego: 'Caixa',     nome: 'Repositor (por prateleira)',   teto: 20 },
+  { emprego: 'Pizzaiolo', nome: 'Pizzaiolo (por pizza)',        teto: 150 },
+  { emprego: 'Carteiro',  nome: 'Carteiro (por carta)',         teto: 300 },
+  { emprego: 'Mecanico',  nome: 'Mecânico (por conserto)',      teto: 250 },
+  { emprego: 'Uber',      nome: 'Uber com passageiro bot (por corrida)', teto: 1500 },
+];
+const TAREFAS_MAX_LOTE = 300;  // o jogo manda de 30 em 30 s; com o site fora ele junta os lotes
+
 // ------------------------------------------------------------ puro
 function periodoDe(ms) { return Math.floor((ms - ANCORA) / (PERIODO_DIAS * DIA)); }
 function inicioDo(p) { return new Date(ANCORA + p * PERIODO_DIAS * DIA); }
@@ -147,6 +162,18 @@ async function garantir(pool) {
   await pool.query(
     `INSERT INTO governo_config (cidade_id, corporation_id) VALUES ($1,$2)
      ON CONFLICT (cidade_id) DO UPDATE SET corporation_id = EXCLUDED.corporation_id`, [SANTA_FE, c.id]);
+  await pool.query(`
+    CREATE TABLE IF NOT EXISTS governo_empregos (
+      cidade_id INTEGER NOT NULL REFERENCES cidades(id),
+      emprego VARCHAR(32) NOT NULL,
+      nome VARCHAR(80) NOT NULL,
+      teto INTEGER NOT NULL CHECK (teto >= 0),
+      PRIMARY KEY (cidade_id, emprego)
+    )`);
+  for (const e of EMPREGOS_PADRAO) {
+    await pool.query(`INSERT INTO governo_empregos (cidade_id, emprego, nome, teto) VALUES ($1,$2,$3,$4) ON CONFLICT DO NOTHING`,
+      [SANTA_FE, e.emprego, e.nome, e.teto]);
+  }
   for (const o of OBRAS_PADRAO) {
     await pool.query(`INSERT INTO governo_obras (cidade_id, chave, nome, valor, ordem) VALUES ($1,$2,$3,$4,$5) ON CONFLICT DO NOTHING`,
       [SANTA_FE, o.chave, o.nome, o.valor, o.ordem]);
@@ -325,7 +352,7 @@ async function painel(pool, cidadeId, agoraMs) {
   return {
     corporation_id: cid, saldo, multiplicador: Number(cfg.multiplicador),
     arrecadacao: { h24: await somar(1), d7: await somar(7), d30: await somar(30) },
-    porDia, obras, extrato,
+    porDia, obras, extrato, empregos: await empregos(pool, cidadeId),
     salarios: { periodo_dias: PERIODO_DIAS, inicio: inicioDo(pAtual), proximo_pagamento: inicioDo(pAtual + 1), folha, membros, ultimos },
     categorias: CATEGORIAS,
   };
@@ -348,8 +375,44 @@ async function salvarObra(pool, cidadeId, chave, b) {
   if (!r.rowCount) throw erro('Obra não existe', 404);
 }
 
+// [23/10] salário de emprego civil saindo do tesouro. { emprego, roblox_id, quem, valor, tarefas }
+// Devolve { ok, pago, saldo } ou { ok:false, erro: emprego_desconhecido|acima_do_teto|sem_saldo|sem_governo }
+async function salarioEmprego(cidadeId, b) {
+  const caixa = require('./corp-caixa-db');
+  const emprego = String(b.emprego || '').trim();
+  const valor = Math.floor(Number(b.valor));
+  const tarefas = Math.floor(Number(b.tarefas == null ? 1 : b.tarefas));
+  const rid = parseInt(b.roblox_id) || null;
+  if (!(valor > 0)) return { ok: false, erro: 'valor_invalido' };
+  if (!(tarefas >= 1 && tarefas <= TAREFAS_MAX_LOTE)) return { ok: false, erro: 'tarefas_invalidas' };
+  const cfg = await config(require('./db/pool'), cidadeId);
+  if (!cfg || !cfg.corporation_id) return { ok: false, erro: 'sem_governo' };
+  const pool = require('./db/pool');
+  const e = (await pool.query(`SELECT teto FROM governo_empregos WHERE cidade_id = $1 AND emprego = $2`, [cidadeId, emprego])).rows[0];
+  if (!e) return { ok: false, erro: 'emprego_desconhecido' };
+  const teto = Number(e.teto) * tarefas;
+  if (valor > teto) return { ok: false, erro: 'acima_do_teto', teto };
+  const quem = String(b.quem || '').slice(0, 64);
+  const r = await caixa.movDinheiro(cfg.corporation_id, 'salario_emprego', valor, {
+    quem, por: emprego.slice(0, 64), detalhe: { emprego, roblox_id: rid, tarefas },
+  });
+  if (!r.ok) return { ok: false, erro: r.erro === 'saldo' ? 'sem_saldo' : r.erro };
+  return { ok: true, pago: valor, saldo: r.saldo };
+}
+
+async function empregos(db, cidadeId) {
+  return (await db.query(`SELECT emprego, nome, teto FROM governo_empregos WHERE cidade_id = $1 ORDER BY teto, emprego`, [cidadeId])).rows;
+}
+async function salvarEmprego(db, cidadeId, emprego, b) {
+  const t = Math.floor(Number(b.teto));
+  if (!(t >= 0 && t <= 1e7)) throw erro('Teto inválido');
+  const r = await db.query(`UPDATE governo_empregos SET teto = $3 WHERE cidade_id = $1 AND emprego = $2`, [cidadeId, emprego, t]);
+  if (!r.rowCount) throw erro('Emprego não existe', 404);
+}
+
 module.exports = {
   PERIODO_DIAS, ANCORA, MULT_PADRAO, CATEGORIAS, OBRAS_PADRAO, VALOR_MAX_COMPRA, SANTA_FE,
   periodoDe, inicioDo, inflar, limparCompras,
   garantir, config, arrecadar, retirarObra, pagarSalarios, iniciar, painel, salvarConfig, salvarObra,
+  EMPREGOS_PADRAO, TAREFAS_MAX_LOTE, salarioEmprego, empregos, salvarEmprego, CARGOS_PADRAO,
 };

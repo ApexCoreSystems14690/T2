@@ -1517,11 +1517,13 @@ router.post('/patrimonio', async (req, res) => {
 const caixa = require('../corp-caixa-db');
 const CC = require('../corp-caixa');
 
-async function corpPorSlug(slug) {
+async function corpPorSlug(slug, cidadeId) {
   const s = String(slug || '').toLowerCase().trim();
   if (!s) return null;
-  const r = await pool.query(
-    `SELECT id, name, slug, tipo FROM corporations WHERE LOWER(slug) = $1 AND is_active LIMIT 1`, [s]);
+  // [23/10] com cidadeId, só acha a corp DAQUELA cidade (rota nova de salário)
+  const r = cidadeId
+    ? await pool.query(`SELECT id, name, slug, tipo FROM corporations WHERE LOWER(slug) = $1 AND is_active AND cidade_id = $2 LIMIT 1`, [s, cidadeId])
+    : await pool.query(`SELECT id, name, slug, tipo FROM corporations WHERE LOWER(slug) = $1 AND is_active LIMIT 1`, [s]);
   // [28/09] O BURACO MAIS SILENCIOSO DO CAIXA: o jogo manda o crédito
   // fire-and-forget. Se o slug não existir aqui, a rota devolve 404, o jogo não
   // olha a resposta e o dinheiro da corp simplesmente SOME -- e o repasse do
@@ -1631,49 +1633,82 @@ router.post('/corp/caixa/debitar', async (req, res) => {
   }
 });
 
-// POST /api/game/corp/salario  { corp, roblox_id, quem }
-// O JOGO NÃO MANDA O VALOR. Quem sabe quanto é o adicional é o site -- é lá que
-// o dono configura, no `ranks.salary` do cargo. Se o jogo mandasse o número,
-// bastaria forjar o pedido pra sacar o caixa inteiro.
-// Resposta: { ok, adicional, pago, saldo, cargo } · { ok:false, erro }
-//   erro 'nao_e_membro'  -> não tem cargo nessa corp: paga só o piso
-//   erro 'sem_adicional' -> cargo com adicional 0: paga só o piso (não é falha)
-//   erro 'sem_saldo'     -> o caixa não cobre: paga só o piso
+// POST /api/game/corp/salario  { corp, roblox_id, quem, minutos }
+// [23/10 Julio] O SALÁRIO INTEIRO SAI DO CAIXA DA CORP. O JOGO NÃO MANDA O VALOR -- quem sabe
+// quanto é o site, no `ranks.salary` do cargo (valor por 40 min). O jogo manda só QUEM e
+// QUANTOS MINUTOS trabalhou dos 40 (SalarioAtivo). Paga ranks.salary × minutos / 40.
+// Se o jogo mandasse o número, bastaria forjar o pedido pra sacar o caixa inteiro.
+//   sem `minutos` = jeito antigo do Mercado Fechado (o ranks.salary é o adicional e sai inteiro)
+// Resposta: { ok, pago, saldo, cargo, salario, minutos }
+//   · { ok:false, erro: 'nao_e_membro' | 'sem_salario' | 'sem_saldo' | 'ja_pago' | 'sem_minutos' }
+//   (o jeito antigo responde 'sem_adicional' no lugar de 'sem_salario', como sempre respondeu)
+// Em qualquer erro o jogo paga só o piso, que não sai de caixa nenhum.
+const JANELA_SALARIO_MIN = 40;
 router.post('/corp/salario', async (req, res) => {
   try {
     const { corp, roblox_id, quem } = req.body || {};
     const rid = parseInt(roblox_id);
     if (!rid) return res.status(400).json({ error: 'roblox_id inválido' });
+    const novo = req.body && req.body.minutos !== undefined && req.body.minutos !== null;
+    const minutos = novo ? Math.max(0, Math.min(JANELA_SALARIO_MIN, Math.floor(Number(req.body.minutos) || 0))) : JANELA_SALARIO_MIN;
 
-    const c = await corpPorSlug(corp);
+    const c = await corpPorSlug(corp, req._cidadeJogo);
     if (!c) return res.status(404).json({ error: 'corporação não encontrada' });
     // [23/10] o Governo recebe salário pelo site (a cada 3 dias), nunca pelo jogo
     if (c.tipo === 'governo') return res.json({ ok: false, erro: 'governo_pelo_site' });
 
     const m = await pool.query(
-      `SELECT r.name AS cargo, COALESCE(r.salary, 0) AS adicional
+      `SELECT r.name AS cargo, COALESCE(r.salary, 0) AS salario
          FROM members mb
          JOIN users u ON u.id = mb.user_id
          LEFT JOIN ranks r ON r.id = mb.rank_id
         WHERE mb.corporation_id = $1 AND u.roblox_id = $2
         LIMIT 1`, [c.id, rid]);
     if (m.rows.length === 0) return res.json({ ok: false, erro: 'nao_e_membro' });
+    const cargo = m.rows[0].cargo;
+    const salario = Math.max(0, Math.floor(Number(m.rows[0].salario) || 0));
+    if (salario <= 0) return res.json({ ok: false, erro: novo ? 'sem_salario' : 'sem_adicional', adicional: 0, salario: 0, cargo });
+    if (minutos <= 0) return res.json({ ok: false, erro: 'sem_minutos', cargo });
+    const valor = Math.floor(salario * minutos / JANELA_SALARIO_MIN);
+    if (valor <= 0) return res.json({ ok: false, erro: 'sem_minutos', cargo });
 
-    const adicional = Math.max(0, Math.floor(Number(m.rows[0].adicional) || 0));
-    if (adicional <= 0) return res.json({ ok: false, erro: 'sem_adicional', adicional: 0, cargo: m.rows[0].cargo });
+    // segunda rede contra pagar duas vezes (dois servidores, pedido repetido): o ponto do
+    // jogo já tem 40 min de espera; aqui, um salário por pessoa por corp a cada 30 min.
+    if (novo) {
+      const ja = await pool.query(
+        `SELECT 1 FROM corp_lancamentos WHERE corporation_id = $1 AND tipo = 'salario'
+            AND detalhe->>'roblox_id' = $2 AND criado_em > NOW() - INTERVAL '30 minutes' LIMIT 1`, [c.id, String(rid)]);
+      if (ja.rows[0]) return res.json({ ok: false, erro: 'ja_pago', cargo });
+    }
 
-    const r = await caixa.movDinheiro(c.id, 'salario', adicional, {
+    const r = await caixa.movDinheiro(c.id, 'salario', valor, {
       quem: String(quem || '').slice(0, 64),
       por: String(quem || '').slice(0, 64),
-      detalhe: { cargo: m.rows[0].cargo, roblox_id: rid },
+      detalhe: { cargo, roblox_id: rid, minutos, salario },
     });
     if (!r.ok) {
       return res.json({ ok: false, erro: r.erro === 'saldo' ? 'sem_saldo' : r.erro,
-                        adicional, falta: r.falta || null, cargo: m.rows[0].cargo });
+                        adicional: valor, salario, falta: r.falta || null, cargo });
     }
-    res.json({ ok: true, corp: c.slug, cargo: m.rows[0].cargo, adicional, pago: adicional, saldo: r.saldo });
+    res.json({ ok: true, corp: c.slug, cargo, salario, minutos, adicional: valor, pago: valor, saldo: r.saldo });
   } catch (err) {
     console.error('corp/salario:', err.message);
+    res.status(500).json({ error: 'Erro interno' });
+  }
+});
+
+// POST /api/game/governo/salario-emprego  { emprego, roblox_id, quem, valor, tarefas }
+// [23/10] Emprego civil (gari, repositor, pizzaiolo, carteiro, mecânico, uber de bot) sai do
+// TESOURO do Governo. Aqui o valor vem do jogo, mas tem TETO POR TAREFA (governo_empregos, o
+// Dono edita em /governo): acima do teto é recusado inteiro. O jogo junta as tarefas de 30 s.
+// Resposta: { ok, pago, saldo } · { ok:false, erro: emprego_desconhecido|acima_do_teto|sem_saldo|... }
+router.post('/governo/salario-emprego', async (req, res) => {
+  try {
+    const GOV = require('../governo');
+    const r = await GOV.salarioEmprego(req._cidadeJogo, req.body || {});
+    res.json(r);
+  } catch (err) {
+    console.error('governo/salario-emprego:', err.message);
     res.status(500).json({ error: 'Erro interno' });
   }
 });

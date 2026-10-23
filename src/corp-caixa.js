@@ -49,7 +49,11 @@ const DINHEIRO = {
   // -- não saem do caixa de ninguém. O `ranks.salary` é o ADICIONAL que o dono
   // configura por cargo, e ESSE sai daqui. Se o caixa não cobre, o débito é
   // recusado e o jogo paga só o piso: empresa não imprime dinheiro.
-  salario:  { sinal: -1, rotulo: 'Adicional de salário pago' },
+  // [23/10 Julio] agora é o SALÁRIO INTEIRO (ranks.salary × minutos trabalhados / 40) que sai
+  // do caixa. Caixa vazio: o jogo paga só o piso, que não sai de caixa nenhum.
+  salario:  { sinal: -1, rotulo: 'Salário pago' },
+  // [23/10] emprego civil (gari, uber, pizzaiolo...) pago pelo tesouro do Governo
+  salario_emprego: { sinal: -1, rotulo: 'Salário de emprego civil' },
   // [21/10 Julio] "é possível o cara sacar dinheiro de contas de CNPJ, como do Mercado
   // Fechado". Saque pelo celular (app Banco > Empresa), quem tem o CNPJ saca pro bolso.
   saque:    { sinal: -1, rotulo: 'Saque pelo CNPJ (celular)' },
