@@ -763,53 +763,8 @@ async function start() {
       `);
     } catch (e) { console.error('migração coluna tipo:', e.message); }
 
-    // Pavuna — a facção inicial. O jogo já a conhece pelo slug 'pavuna'
-    // (CorpService traduz o grupo 35175874 pra esse slug) e paga pelo nome do cargo,
-    // então os 14 cargos abaixo são IGUAIS à tabela SalariosPavuna do RemotesHandler.
-    // Mexer num dos dois lados sem o outro faz o salário sair nil no jogo.
-    // Ícone: textura da MascaraCaveira do vestuário da Pavuna, tirada do próprio jogo.
-    try {
-      await pool.query(`
-        DO $$
-        DECLARE
-          cid INTEGER;
-          cargos TEXT[][] := ARRAY[
-            ['Dono do Morro','21000'], ['Frente','18000'], ['Gerente Geral','15000'],
-            ['Gerente de Boca','12000'], ['Contenção','9500'], ['Fiel','8000'],
-            ['Soldado','6000'], ['Endolador','4500'], ['Vapor','3500'],
-            ['Avião','2500'], ['Olheiro','2000'], ['Fogueteiro','1600'],
-            ['Radinho','1200'], ['Novato','1200']
-          ];
-          i INTEGER; n INTEGER;
-        BEGIN
-          SELECT id INTO cid FROM corporations WHERE slug = 'pavuna';
-          IF cid IS NULL THEN
-            INSERT INTO corporations (name, slug, description, color, max_members, is_active, tipo, icon_url)
-            VALUES ('Pavuna', 'pavuna',
-                    'Facção da Pavuna. Domínio do morro, boca de venda e o que vier junto.',
-                    '#8B1A1A', 100, true, 'faccao',
-                    'https://www.roblox.com/asset-thumbnail/image?assetId=12867403810&width=420&height=420&format=png')
-            RETURNING id INTO cid;
-          END IF;
-          UPDATE corporations SET tipo = 'faccao', is_active = true, updated_at = NOW()
-           WHERE id = cid AND (tipo <> 'faccao' OR is_active = false);
-          -- ícone só se ainda não tiver nenhum (não sobrescreve upload do Julio)
-          UPDATE corporations
-             SET icon_url = 'https://www.roblox.com/asset-thumbnail/image?assetId=12867403810&width=420&height=420&format=png',
-                 updated_at = NOW()
-           WHERE id = cid AND icon_url IS NULL AND icon_data IS NULL;
-          -- cargos: só semeia se a facção não tem nenhum
-          IF NOT EXISTS (SELECT 1 FROM ranks WHERE corporation_id = cid) THEN
-            n := array_length(cargos, 1);
-            FOR i IN 1..n LOOP
-              INSERT INTO ranks (corporation_id, name, level, salary)
-              VALUES (cid, cargos[i][1], n - i + 1, cargos[i][2]::INTEGER)
-              ON CONFLICT (corporation_id, name) DO NOTHING;
-            END LOOP;
-          END IF;
-        END $$;
-      `);
-    } catch (e) { console.error('migração facção Pavuna:', e.message); }
+    // [24/10] a Pavuna saiu: ver o bloco 'PAVUNA SAIU' logo depois do faccoes-org.garantir
+
 
     // Ícone do Jornal: o ícone do Microfone da imprensa, tirado do próprio jogo
     // (ServerStorage.Tools.Microfone). Só entra se o Jornal ainda não tem imagem.
@@ -1265,6 +1220,21 @@ async function start() {
   // [24/10] Facções Vivas: nível, ações, advertências e a organização das facções
   try { await require('./faccoes-org').garantir(pool); }
   catch (e) { console.error('[faccoes-org] garantir:', e.message); }
+  // [24/10] PAVUNA SAIU. [stated] Julio: "remove ja, vou adicionar as facs com o botao da staff".
+  // A facção Pavuna não existe mais (a boca é de quem chegar). Antes, este bloco CRIAVA a Pavuna
+  // e a REATIVAVA a cada boot (is_active = true), então desativar pelo painel não durava.
+  // Agora ele faz o contrário: desativa a Pavuna (nada é apagado: cargos, membros e histórico
+  // ficam no banco) e registra no log das facções. As facções novas entram pelo botão da staff.
+  try {
+    const pv = await pool.query(
+      `UPDATE corporations SET is_active = false, updated_at = NOW()
+        WHERE slug = 'pavuna' AND tipo = 'faccao' AND is_active = true RETURNING id, cidade_id`);
+    for (const r of pv.rows) {
+      await pool.query(`INSERT INTO faccao_log (cidade_id, corporation_id, acao, detalhe, por) VALUES ($1,$2,'desoficializada',$3,'sistema')`,
+        [r.cidade_id, r.id, JSON.stringify({ motivo: 'A Pavuna não existe mais (decisão do Julio, 23-24/10): a boca é de quem chegar' })]).catch(() => {});
+      console.log('[faccoes] Pavuna desativada (corp ' + r.id + ')');
+    }
+  } catch (e) { console.error('desativar Pavuna:', e.message); }
   // [23/10] Câmara: propostas de salário/obra votadas pelo Parlamento (Regulamento Cap. 10)
   try { const CAM = require('./governo-camara'); await CAM.garantir(pool); CAM.iniciar(pool, [require('./governo').SANTA_FE]); }
   catch (e) { console.error('[camara] garantir:', e.message); }
