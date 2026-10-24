@@ -129,7 +129,7 @@ async function garantir(pool) {
   const tem = await pool.query('SELECT 1 FROM cidades WHERE id = $1', [SANTA_FE]);
   if (!tem.rows[0]) return;
   // a corporação Governo do Santa Fé: usa a 'governo' que o jogo já conhece (CorpService) ou cria
-  let c = (await pool.query(`SELECT id, tipo FROM corporations WHERE slug = 'governo'`)).rows[0];
+  let c = (await pool.query(`SELECT id, tipo FROM corporations WHERE slug = 'governo' AND cidade_id = $1`, [SANTA_FE])).rows[0];
   if (!c) {
     c = (await pool.query(
       `INSERT INTO corporations (name, slug, description, color, tipo, cidade_id)
@@ -148,7 +148,7 @@ async function garantir(pool) {
     }
   } else {
     // [23/10] uma vez só: os cargos nasceram com salário 0; põe os padrões se ninguém mexeu ainda
-    const flag = await pool.query(`SELECT 1 FROM game_config WHERE key = 'governo_salarios_v1'`).catch(() => ({ rows: [{}] }));
+    const flag = await pool.query(`SELECT 1 FROM game_config WHERE key = 'governo_salarios_v1' AND cidade_id = $1`, [SANTA_FE]).catch(() => ({ rows: [{}] }));
     if (!flag.rows[0]) {
       const pagos = (await pool.query(`SELECT COUNT(*)::int n FROM ranks WHERE corporation_id = $1 AND COALESCE(salary,0) > 0`, [c.id])).rows[0].n;
       if (!pagos) {
@@ -310,7 +310,9 @@ async function pagarSalarios(pool, cidadeId, agoraMs) {
 let _timer = null;
 function iniciar(pool, ms) {
   if (_timer) return;
-  const rodar = () => pagarSalarios(pool, SANTA_FE).catch(e => console.error('[governo] salários:', e.message));
+  // [24/10] cada cidade paga a folha do SEU Governo, dentro do contexto dela (isolamento)
+  const rodar = () => require('./isolamento').porCidade(pool, (c) => pagarSalarios(pool, c.id))
+    .catch(e => console.error('[governo] salários:', e.message));
   const t0 = setTimeout(rodar, 15000); if (t0.unref) t0.unref();
   _timer = setInterval(rodar, ms || 10 * 60000);
   if (_timer.unref) _timer.unref();

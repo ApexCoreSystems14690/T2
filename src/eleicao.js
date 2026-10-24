@@ -272,7 +272,7 @@ async function migrar(pool) {
       finalistas JSONB,
       atualizado_em TIMESTAMP DEFAULT NOW()
     );
-    INSERT INTO eleicao_estado (id) VALUES (1) ON CONFLICT (id) DO NOTHING;
+    INSERT INTO eleicao_estado (id) VALUES (1) ON CONFLICT DO NOTHING;
     -- rodada: sobe 1 a cada "zerar" da staff. O jogo usa pra esquecer quem já votou.
     ALTER TABLE eleicao_estado ADD COLUMN IF NOT EXISTS rodada INTEGER NOT NULL DEFAULT 0;
     -- QUEM votou. Não tem o voto.

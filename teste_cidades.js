@@ -41,7 +41,7 @@ async function pedir(cookie, metodo, path, body, extra) {
   await pool.query(`DELETE FROM corporations WHERE slug LIKE 'tc-%'`);
   await pool.query(`DELETE FROM cidade_staff WHERE user_id IN (SELECT id FROM users WHERE discord_id LIKE 'tc_%')`);
   await pool.query(`DELETE FROM users WHERE discord_id LIKE 'tc_%'`);
-  await pool.query(`DELETE FROM cidades WHERE slug = 'teste-norte'`);
+  await require('./src/cidades').apagarCidadeDeTeste(pool, 'teste-norte');
   const u = async (did, nome) => (await pool.query(
     `INSERT INTO users (discord_id, discord_username, roblox_id, roblox_username) VALUES ($1,$2,$3,$2) RETURNING id`,
     [did, nome, 8000 + Number(did.replace(/\D/g, ''))])).rows[0].id;
@@ -208,7 +208,7 @@ async function pedir(cookie, metodo, path, body, extra) {
   // limpa a cidade de teste
   await pool.query(`DELETE FROM members WHERE user_id IN (SELECT id FROM users WHERE discord_id LIKE 'tc_%')`);
   await pool.query(`DELETE FROM corporations WHERE slug LIKE 'tc-%'`);
-  await pool.query(`DELETE FROM cidades WHERE slug = 'teste-norte'`);
+  await require('./src/cidades').apagarCidadeDeTeste(pool, 'teste-norte');
   await pool.end();
   console.log(`\n${ok} ok, ${falhou} falharam`);
   process.exit(falhou ? 1 : 0);

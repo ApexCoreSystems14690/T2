@@ -78,7 +78,7 @@ async function backfillDoBoot() {
     WHERE tipo = 'entrou' AND detalhe->>'userId' ~ '^[0-9]+$'
       AND COALESCE(ocorrido_em, created_at) > $1::timestamptz
     GROUP BY (detalhe->>'userId')::bigint
-    ON CONFLICT (roblox_id) DO UPDATE SET
+    ON CONFLICT (cidade_id, roblox_id) DO UPDATE SET
       nome = COALESCE(EXCLUDED.nome, game_players.nome),
       primeira_vez = LEAST(game_players.primeira_vez, EXCLUDED.primeira_vez),
       ultima_vez = GREATEST(game_players.ultima_vez, EXCLUDED.ultima_vez),
@@ -264,7 +264,7 @@ async function semear() {
   ok(ap2.body.online === 1, 'avisou que 1 dos apagados está online e vai voltar');
 
   tit('7. Wipe = TEMPORADA NOVA, em transação');
-  await pool.query(`INSERT INTO game_players (roblox_id, nome) VALUES (111,'Ana'),(222,'Bia') ON CONFLICT (roblox_id) DO NOTHING`);
+  await pool.query(`INSERT INTO game_players (roblox_id, nome) VALUES (111,'Ana'),(222,'Bia') ON CONFLICT (cidade_id, roblox_id) DO NOTHING`);
   await pool.query(`INSERT INTO game_logs (tipo, jogador, detalhe) VALUES ('entrou','Ana','{"userId":"111"}')`);
   await pool.query(`INSERT INTO game_item_fila (roblox_id, item) VALUES (111,'pao')`);
   await pool.query(`INSERT INTO celular_mensagens (de_numero,para_numero,par_key,texto) VALUES ('1','2','1-2','oi')`);
@@ -274,7 +274,7 @@ async function semear() {
   await pool.query(`INSERT INTO corporations (name, slug) VALUES ('Policia Civil','policia-civil')`);
   await pool.query(`INSERT INTO ranks (corporation_id, name, level) SELECT id,'Delegado',18 FROM corporations WHERE slug='policia-civil'`);
   await pool.query(`INSERT INTO members (corporation_id, user_id, rank_id) SELECT c.id, $1, r.id FROM corporations c JOIN ranks r ON r.corporation_id=c.id WHERE c.slug='policia-civil'`, [U['julio14690'].id]);
-  await pool.query(`INSERT INTO game_config (key, value) VALUES ('temporada','{"n":1}') ON CONFLICT (key) DO UPDATE SET value=EXCLUDED.value`);
+  await pool.query(`INSERT INTO game_config (key, value) VALUES ('temporada','{"n":1}') ON CONFLICT (cidade_id, key) DO UPDATE SET value=EXCLUDED.value`);
 
   USUARIO_ATUAL = U['julio14690'];
   ok((await req('POST', '/registro/wipe', { confirm: 'NAO' })).status === 400, 'wipe sem digitar WIPE é recusado');

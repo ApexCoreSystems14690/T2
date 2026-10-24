@@ -36,7 +36,7 @@ async function pedir(cookie, metodo, path, body, tipo) {
   const civil = (await pool.query(`INSERT INTO users (discord_id, discord_username) VALUES ('tr_civil','civil') RETURNING id`)).rows[0].id;
   await pool.query(`DELETE FROM admin_audit WHERE cidade_id IN (SELECT id FROM cidades WHERE slug = 'tr-norte')`);
   await pool.query(`DELETE FROM cidade_regulamentos WHERE cidade_id IN (SELECT id FROM cidades WHERE slug = 'tr-norte')`);
-  await pool.query(`DELETE FROM cidades WHERE slug = 'tr-norte'`);
+  await require('./src/cidades').apagarCidadeDeTeste(pool, 'tr-norte');
   const norte = (await pool.query(`INSERT INTO cidades (slug, nome, sigla, tipo, status, dono_user_id, loja_prefixo) VALUES ('tr-norte','Cidade Norte','NRT','comunidade','ativa',$1,'TRN') RETURNING id`, [donoNorte])).rows[0].id;
   require('./src/cidades').limparCache && require('./src/cidades').limparCache();
 
@@ -134,7 +134,7 @@ async function pedir(cookie, metodo, path, body, tipo) {
 
   await pool.query(`DELETE FROM cidade_regulamentos WHERE cidade_id = $1`, [norte]);
   await pool.query(`DELETE FROM admin_audit WHERE cidade_id = $1`, [norte]);
-  await pool.query(`DELETE FROM cidades WHERE id = $1`, [norte]);
+  await require('./src/cidades').apagarCidadeDeTeste(pool, 'tr-norte');
   await pool.query(`DELETE FROM users WHERE id IN ($1,$2)`, [donoNorte, civil]);
   await pool.end();
   console.log(`\n${ok} ok, ${falhou} falharam`);

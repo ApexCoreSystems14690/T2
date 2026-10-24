@@ -91,7 +91,7 @@ async function garantir(db) {
                   SELECT id, COALESCE(created_at, NOW()) FROM corporations WHERE tipo = 'faccao' ON CONFLICT DO NOTHING`);
   // alto comando (Regulamento Oficial, Art. 1.10): ids do Discord de CEO, CO-CEO e COO em 24/10.
   // O Dono edita em game_config 'alto_comando'.
-  await db.query(`INSERT INTO game_config (key, value) VALUES ('alto_comando', $1::jsonb) ON CONFLICT (key) DO NOTHING`,
+  await db.query(`INSERT INTO game_config (key, value) VALUES ('alto_comando', $1::jsonb) ON CONFLICT DO NOTHING`,
     [JSON.stringify({ discord_ids: ['810270743925489676', '1115068291384352770', '986522825219260446', '1248404426906009651', '1243890990801092659'],
                       nota: 'CEO, CO-CEO e COO do Discord principal em 24/10/2026' })]);
 }

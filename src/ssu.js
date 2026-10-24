@@ -42,6 +42,31 @@ const AVULSA_MAX = 71 * 3600;  // mesmo teto tecnico da extensao
 
 const NOME_DIA = ['domingo', 'segunda', 'terça', 'quarta', 'quinta', 'sexta', 'sábado'];
 
+// [24/10] GRADE PRÓPRIA DE CADA CIDADE. [stated] Julio: "cada cidade deve ter sua grade propria
+// de ssu". A grade da cidade mora em game_config 'ssu_grade' DA CIDADE e chega aqui (e no jogo,
+// Regras.SSU) dentro dos `ajustes`:
+//   ajustes.grade = { "0": {abre, fecha} | null, ..., "6": ... }  (0 = domingo; null = sem SSU)
+//   ajustes.sempre_aberta = true   -> a cidade não fecha nunca (ex.: servidor de testes)
+// Sem `grade` válida vale a GRADE padrão acima (a do Santa Fé desde 11/10).
+function validarGrade(g) {
+  if (!g || typeof g !== 'object' || Array.isArray(g)) return null;
+  const out = {};
+  let algum = false;
+  for (let w = 0; w <= 6; w++) {
+    const d = g[w] !== undefined ? g[w] : g[String(w)];
+    if (d === null || d === undefined || d === false) continue;
+    const abre = Number(d.abre), fecha = Number(d.fecha);
+    if (!Number.isInteger(abre) || !Number.isInteger(fecha)) return null;
+    if (abre < 0 || abre > 23 || fecha <= abre || fecha > 24) return null;
+    out[w] = { abre, fecha };
+    algum = true;
+  }
+  return algum ? out : null;
+}
+function gradeDe(ajustes) {
+  return (ajustes && validarGrade(ajustes.grade)) || GRADE;
+}
+
 function calendario(epoch) {
   const d = new Date((epoch + FUSO) * 1000);
   return {
@@ -61,7 +86,7 @@ function meiaNoiteDe(epoch) {
 
 function sessaoDoDia(epoch, ajustes) {
   const c = calendario(epoch);
-  const g = GRADE[c.wday];
+  const g = gradeDe(ajustes)[c.wday];
   if (!g) return null;
   const base = meiaNoiteDe(epoch);
   const chave = chaveDia(epoch);
@@ -131,6 +156,7 @@ function proximaSessao(epoch, ajustes) {
 }
 function estado(epoch, ajustes) {
   ajustes = (ajustes && typeof ajustes === 'object') ? ajustes : {};
+  if (ajustes.sempre_aberta === true) return { aberto: true, motivo: 'sempre_aberta', sessao: null, fechaEm: null, estendida: false };
   const s = sessaoVigente(epoch, ajustes);
   if (s) {
     // [05/10] `encerrada` e ajuste da SESSAO DA GRADE daquela noite; nao pode apagar
@@ -152,6 +178,7 @@ function acoesPossiveis(epoch, ajustes, ehDono) {
   const s = sessaoVigente(epoch, ajustes);
   const acoes = { encerrar: false, reabrir: false, estender: false, estenderAte: null,
                   iniciarAgora: false, abrirAgora: false, abrirAte: null, estenderAvulsaAte: null };
+  if (ajustes.sempre_aberta === true) return acoes;   // [24/10] cidade sem grade: nada pra abrir/fechar
 
   // ABRIR AGORA: so o DONO, e so quando NAO tem nada acontecendo.
   const e = estado(epoch, ajustes);
@@ -193,14 +220,15 @@ function hhmm(seg) {
   const h = Math.floor(seg / 3600), m = Math.floor((seg % 3600) / 60);
   return h > 0 ? `${h}h${String(m).padStart(2, '0')}min` : `${m} min`;
 }
-function gradeTexto() {
-  // [11/10] segunda -> domingo, pulando quinta (que nao esta na GRADE)
-  return [1, 2, 3, 5, 6, 0].map(w => {
-    const g = GRADE[w];
-    let l = `${NOME_DIA[w]}: ${horaTexto(g.abre)} às ${horaTexto(g.fecha)}`;
-    return l;
+function gradeTexto(ajustes) {
+  // [24/10] a grade DA CIDADE (ou a padrão); dia sem SSU aparece como "sem SSU"
+  if (ajustes && ajustes.sempre_aberta === true) return ['Sempre aberta: esta cidade não tem grade de SSU'];
+  const G = gradeDe(ajustes);
+  return [1, 2, 3, 4, 5, 6, 0].map(w => {
+    const g = G[w];
+    return g ? `${NOME_DIA[w]}: ${horaTexto(g.abre)} às ${horaTexto(g.fecha)}` : `${NOME_DIA[w]}: sem SSU`;
   });
 }
 
-module.exports = { FUSO, GRADE, EXTENSAO_MAX, AVULSA_HORAS, AVULSA_MAX, NOME_DIA, calendario, chaveDia, sessaoDoDia, sessaoAvulsa, sessaoVigente,
+module.exports = { validarGrade, gradeDe, FUSO, GRADE, EXTENSAO_MAX, AVULSA_HORAS, AVULSA_MAX, NOME_DIA, calendario, chaveDia, sessaoDoDia, sessaoAvulsa, sessaoVigente,
   proximaSessao, estado, acoesPossiveis, horaTexto, hhmm, gradeTexto };

@@ -119,10 +119,11 @@ const setSaldo = (cid, v) => pool.query(`INSERT INTO corp_caixa (corporation_id,
     if (!c2) c2 = (await pool.query(`INSERT INTO cidades (slug, nome, sigla, tipo, status, loja_prefixo, dono_user_id) VALUES ('teste-sal2','Sal2','SL2','comunidade','ativa','SL2',$1) RETURNING id, slug`, [dono])).rows[0];
     await setSaldo(CID, 99999);
     const r = await jogo('/corp/salario', { corp: 'teste-salcaixa', roblox_id: 7702, minutos: 40 }, 'teste-sal2');
-    assert.strictEqual(r.s, 404, JSON.stringify(r));
+    // [24/10] a outra cidade tem a SUA cópia da corp (pré-modelo), sem membros: nunca paga do caixa da Santa Fé
+    assert.ok(r.s === 404 || (r.j && r.j.ok === false), JSON.stringify(r));
     assert.strictEqual(await saldo(CID), 99999);
     const g = await jogo('/governo/salario-emprego', { emprego: 'Lixeiro', roblox_id: 7701, valor: 10 }, 'teste-sal2');
-    assert.ok(g.j.erro === 'sem_governo' || g.j.erro === 'emprego_desconhecido', JSON.stringify(g.j));
+    assert.ok(['sem_governo', 'emprego_desconhecido', 'sem_saldo'].includes(g.j.erro), JSON.stringify(g.j));   // o tesouro DELA está zerado
   });
 
   console.log(`\n${ok} ok, ${falhou} falharam`);

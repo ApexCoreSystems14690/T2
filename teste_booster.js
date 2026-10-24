@@ -127,7 +127,7 @@ const ents = async (rid) => (await pool.query(`SELECT * FROM booster_entregas WH
 
   console.log('\nTEMPORADA');
   await caso('temporada nova + boost passou da carência: kit de novo', async () => {
-    await pool.query(`INSERT INTO game_config (key, value) VALUES ('temporada', '{"n":2}') ON CONFLICT (key) DO UPDATE SET value = '{"n":2}'`);
+    await pool.query(`INSERT INTO game_config (key, value) VALUES ('temporada', '{"n":2}') ON CONFLICT (cidade_id, key) DO UPDATE SET value = '{"n":2}'`);
     DISCORD.bt_fiel = Date.now() - 4 * DIA;
     const r = await rodar(todos);
     assert.strictEqual(r.kits, 1);
@@ -144,7 +144,7 @@ const ents = async (rid) => (await pool.query(`SELECT * FROM booster_entregas WH
     assert.strictEqual((await ultimaKit()).status, 'entregue');
   });
   await caso('jogo diz que falhou (saiu antes): reenvia quando ele está online', async () => {
-    await pool.query(`INSERT INTO game_config (key, value) VALUES ('temporada', '{"n":3}') ON CONFLICT (key) DO UPDATE SET value = '{"n":3}'`);
+    await pool.query(`INSERT INTO game_config (key, value) VALUES ('temporada', '{"n":3}') ON CONFLICT (cidade_id, key) DO UPDATE SET value = '{"n":3}'`);
     await rodar(todos);
     const e = await ultimaKit();
     await pool.query(`UPDATE game_commands SET status = 'error' WHERE id = $1`, [e.cmd_ids[0]]);
@@ -168,8 +168,8 @@ const ents = async (rid) => (await pool.query(`SELECT * FROM booster_entregas WH
 
   console.log('\nCONFIG');
   await caso('Dono desliga: ninguém recebe nada', async () => {
-    await pool.query(`INSERT INTO game_config (key, value) VALUES ('booster', '{"ligado":false}') ON CONFLICT (key) DO UPDATE SET value = '{"ligado":false}'`);
-    await pool.query(`INSERT INTO game_config (key, value) VALUES ('temporada', '{"n":9}') ON CONFLICT (key) DO UPDATE SET value = '{"n":9}'`);
+    await pool.query(`INSERT INTO game_config (key, value) VALUES ('booster', '{"ligado":false}') ON CONFLICT (cidade_id, key) DO UPDATE SET value = '{"ligado":false}'`);
+    await pool.query(`INSERT INTO game_config (key, value) VALUES ('temporada', '{"n":9}') ON CONFLICT (cidade_id, key) DO UPDATE SET value = '{"n":9}'`);
     const r = await rodar(todos);
     assert.strictEqual(r.kits, 0);
     await pool.query(`DELETE FROM game_config WHERE key = 'booster'`);

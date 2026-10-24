@@ -34,7 +34,7 @@ const RID = 7700001, RID2 = 7700002;
       await c.query(`DELETE FROM royalties_motivos WHERE cidade_id IN (SELECT id FROM cidades WHERE slug = 'ry-norte')`);
       await c.query(`DELETE FROM admin_audit WHERE cidade_id IN (SELECT id FROM cidades WHERE slug = 'ry-norte')`);
       await c.query(`DELETE FROM cidade_staff WHERE user_id IN (SELECT id FROM users WHERE discord_id LIKE 'ry_%')`);
-      await c.query(`DELETE FROM cidades WHERE slug = 'ry-norte'`);
+      await require('./src/cidades').apagarCidadeDeTeste(pool, 'ry-norte');
       await c.query(`DELETE FROM game_commands WHERE target_roblox_id IN (${RID},${RID2})`);
       await c.query(`DELETE FROM game_item_fila WHERE roblox_id IN (${RID},${RID2})`);
       await c.query(`DELETE FROM game_servers WHERE job_id = 'job-ry'`);
@@ -42,7 +42,7 @@ const RID = 7700001, RID2 = 7700002;
     } finally { await c.query(`RESET royalties.limpeza_de_teste`).catch(() => {}); c.release(); }
   };
   await limpar();
-  await pool.query(`INSERT INTO game_config (key, value) VALUES ('temporada', '{"n":5}') ON CONFLICT (key) DO UPDATE SET value = '{"n":5}'`);
+  await pool.query(`INSERT INTO game_config (key, value) VALUES ('temporada', '{"n":5}') ON CONFLICT (cidade_id, key) DO UPDATE SET value = '{"n":5}'`);
   const u = async (d, rid, verif) => (await pool.query(`INSERT INTO users (discord_id, discord_username, roblox_id, roblox_username, roblox_verificado) VALUES ($1,$1,$2,$1,$3) RETURNING id`, [d, rid, verif])).rows[0].id;
   const jog = await u('ry_jog', RID, true);
   const naoVerif = await u('ry_naoverif', RID2, false);

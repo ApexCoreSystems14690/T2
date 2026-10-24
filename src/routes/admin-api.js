@@ -162,7 +162,7 @@ router.post('/command', async (req, res) => {
       if (spec.persiste) {
         await pool.query(
           `INSERT INTO game_config (key, value, updated_at) VALUES ($1, $2, NOW())
-           ON CONFLICT (key) DO UPDATE SET value = EXCLUDED.value, updated_at = NOW()`,
+           ON CONFLICT (cidade_id, key) DO UPDATE SET value = EXCLUDED.value, updated_at = NOW()`,
           [spec.persiste, JSON.stringify(dados)]);
       }
       // servidor inteiro: um comando por servidor ativo
@@ -217,7 +217,7 @@ router.post('/command', async (req, res) => {
         await pool.query(
           `INSERT INTO game_bans (roblox_id, nome, motivo, ate, banido_por, banido_em, origem, desfeito_em, desfeito_por)
            VALUES ($1,$2,$3,$4,$5, NOW(), 'painel', NULL, NULL)
-           ON CONFLICT (roblox_id) DO UPDATE SET
+           ON CONFLICT (cidade_id, roblox_id) DO UPDATE SET
              nome = COALESCE(EXCLUDED.nome, game_bans.nome), motivo = EXCLUDED.motivo,
              ate = EXCLUDED.ate, banido_por = EXCLUDED.banido_por, banido_em = NOW(),
              origem = 'painel', desfeito_em = NULL, desfeito_por = NULL`,
@@ -403,7 +403,7 @@ router.post('/seguranca/config', requirePoder('banir'), async (req, res) => {
     };
     await pool.query(
       `INSERT INTO game_config (key, value, updated_at) VALUES ('seguranca', $1, NOW())
-       ON CONFLICT (key) DO UPDATE SET value = EXCLUDED.value, updated_at = NOW()`, [JSON.stringify(novo)]);
+       ON CONFLICT (cidade_id, key) DO UPDATE SET value = EXCLUDED.value, updated_at = NOW()`, [JSON.stringify(novo)]);
     await audit(req, 'seguranca:config', { antes: atual, depois: novo });
     res.json({ ok: true, config: novo });
   } catch (err) {
@@ -799,11 +799,11 @@ router.post('/registro/wipe', requirePoder('wipe'), async (req, res) => {
     const agora = new Date().toISOString();
     await cli.query(
       `INSERT INTO game_config (key, value, updated_at) VALUES ('temporada', $1::jsonb, NOW())
-       ON CONFLICT (key) DO UPDATE SET value = EXCLUDED.value, updated_at = NOW()`,
+       ON CONFLICT (cidade_id, key) DO UPDATE SET value = EXCLUDED.value, updated_at = NOW()`,
       [JSON.stringify({ n: nova, em: agora, por: req.user.id })]);
     await cli.query(
       `INSERT INTO game_config (key, value, updated_at) VALUES ('wipe_em', $1::jsonb, NOW())
-       ON CONFLICT (key) DO UPDATE SET value = EXCLUDED.value, updated_at = NOW()`,
+       ON CONFLICT (cidade_id, key) DO UPDATE SET value = EXCLUDED.value, updated_at = NOW()`,
       [JSON.stringify({ em: agora, por: req.user.id, temporada: nova })]);
 
     // --- derruba quem está dentro: um comando por servidor ativo ---
@@ -1002,21 +1002,39 @@ router.post('/testers/:id/encerrar', requirePoder('testers'), async (req, res) =
 //     alem do teto. Quem confere e o `SSU.acoesPossiveis`, o mesmo modulo que
 //     o painel usa pra desenhar o botao: nao aparece botao que o back recusa.
 // ============================================================
+// [24/10] a GRADE da cidade (game_config 'ssu_grade', só o Dono muda) entra junto dos ajustes da
+// noite em tudo que decide aberto/fechado. Guardados separados: encerrar/estender reescrevem
+// 'ssu' inteiro e não podem apagar a grade.
+async function lerGrade() {
+  const r = await pool.query(`SELECT value FROM game_config WHERE key = 'ssu_grade'`);
+  const v = (r.rows[0] && r.rows[0].value) || {};
+  const out = {};
+  if (SSU.validarGrade(v.grade)) out.grade = SSU.validarGrade(v.grade);
+  if (v.sempre_aberta === true) out.sempre_aberta = true;
+  return out;
+}
+function comGrade(ajustes, g) {
+  const a = Object.assign({}, ajustes || {});
+  delete a.grade; delete a.sempre_aberta;
+  return Object.assign(a, g || {});
+}
 async function lerAjustes() {
   const r = await pool.query(`SELECT value FROM game_config WHERE key = 'ssu'`);
-  return (r.rows[0] && r.rows[0].value) || {};
+  return comGrade((r.rows[0] && r.rows[0].value) || {}, await lerGrade());
 }
 
 // [05/10] os dois passos finais viraram funcao porque a acao `abrir` tambem precisa
 // deles — eram codigo solto no fim do POST e seriam copiados e colados.
 async function salvarAjustes(novo) {
+  novo = comGrade(novo, null);   // a grade nunca vai pro 'ssu' (mora no 'ssu_grade')
   await pool.query(
     `INSERT INTO game_config (key, value, updated_at) VALUES ('ssu', $1, NOW())
-     ON CONFLICT (key) DO UPDATE SET value = EXCLUDED.value, updated_at = NOW()`,
+     ON CONFLICT (cidade_id, key) DO UPDATE SET value = EXCLUDED.value, updated_at = NOW()`,
     [JSON.stringify(novo)]);
 }
 // avisa quem esta online AGORA: o jogo nao precisa esperar o heartbeat
 async function empurrarPraServidores(novo, req) {
+  novo = comGrade(novo, await lerGrade());   // o jogo recebe ajustes + a grade da cidade
   const servers = await pool.query(
     `SELECT job_id FROM game_servers WHERE updated_at > NOW() - INTERVAL '90 seconds'`);
   for (const sv of servers.rows) {
@@ -1036,7 +1054,8 @@ router.get('/ssu', requirePoder('ssu'), async (req, res) => {
     const ehDono = perm.ehDonoAqui(req.user);
     res.json({
       ok: true, agora, souDono: ehDono,
-      grade: SSU.gradeTexto(),
+      grade: SSU.gradeTexto(ajustes),
+      grade_cfg: { grade: ajustes.grade || null, sempre_aberta: ajustes.sempre_aberta === true, padrao: SSU.GRADE },
       estado: SSU.estado(agora, ajustes),
       acoes: SSU.acoesPossiveis(agora, ajustes, ehDono),
       ajustes,
@@ -1065,7 +1084,7 @@ router.post('/ssu', requirePoder('ssu'), async (req, res) => {
       await audit(req, 'ssu:abrir', { ajustes: novoAv });
       const n = await empurrarPraServidores(novoAv, req);
       return res.json({ ok: true, acao, servidores: n,
-        estado: SSU.estado(agora, novoAv), acoes: SSU.acoesPossiveis(agora, novoAv, ehDono) });
+        estado: SSU.estado(agora, comGrade(novoAv, await lerGrade())), acoes: SSU.acoesPossiveis(agora, comGrade(novoAv, await lerGrade()), ehDono) });
     }
 
     // [27/09] 'iniciar' e o unico que age ANTES de a sessao comecar, entao ele olha a
@@ -1093,7 +1112,7 @@ router.post('/ssu', requirePoder('ssu'), async (req, res) => {
       await audit(req, 'ssu:' + acao + ':avulsa', { ajustes: novoAv });
       const n = await empurrarPraServidores(novoAv, req);
       return res.json({ ok: true, acao, servidores: n,
-        estado: SSU.estado(agora, novoAv), acoes: SSU.acoesPossiveis(agora, novoAv, ehDono) });
+        estado: SSU.estado(agora, comGrade(novoAv, await lerGrade())), acoes: SSU.acoesPossiveis(agora, comGrade(novoAv, await lerGrade()), ehDono) });
     }
 
     const novo = { sessao: sessao.chave, por: req.user.discord_username || ('user#' + req.user.id), em: agora };
@@ -1122,8 +1141,32 @@ router.post('/ssu', requirePoder('ssu'), async (req, res) => {
     const nServers = await empurrarPraServidores(novo, req);
 
     res.json({ ok: true, acao, servidores: nServers,
-      estado: SSU.estado(agora, novo), acoes: SSU.acoesPossiveis(agora, novo, ehDono) });
+      estado: SSU.estado(agora, comGrade(novo, await lerGrade())), acoes: SSU.acoesPossiveis(agora, comGrade(novo, await lerGrade()), ehDono) });
   } catch (err) { console.error('ssu/post:', err.message); res.status(500).json({ error: 'Erro interno' }); }
+});
+
+// [24/10] GRADE DA CIDADE. [stated] Julio: "cada cidade deve ter sua grade propria de ssu".
+// Só o Dono DESTA cidade muda. { sempre_aberta: bool, grade: { "0".."6": {abre, fecha} | null } | null }
+// grade null = volta pra grade padrão. Vale na hora: os servidores da cidade recebem o ssu_refresh.
+router.put('/ssu/grade', requirePoder('ssu'), async (req, res) => {
+  try {
+    if (!perm.ehDonoAqui(req.user)) return res.status(403).json({ error: 'Só o Dono da cidade muda a grade do SSU' });
+    const b = req.body || {};
+    const valor = { sempre_aberta: b.sempre_aberta === true };
+    if (b.grade !== null && b.grade !== undefined) {
+      const g = SSU.validarGrade(b.grade);
+      if (!g) return res.status(400).json({ error: 'Grade inválida: cada dia é {abre 0-23, fecha até 24, depois de abrir} ou vazio' });
+      valor.grade = g;
+    }
+    await pool.query(
+      `INSERT INTO game_config (key, value, updated_at) VALUES ('ssu_grade', $1, NOW())
+       ON CONFLICT (cidade_id, key) DO UPDATE SET value = EXCLUDED.value, updated_at = NOW()`, [JSON.stringify(valor)]);
+    await audit(req, 'ssu:grade', valor);
+    const r = await pool.query(`SELECT value FROM game_config WHERE key = 'ssu'`);
+    const n = await empurrarPraServidores((r.rows[0] && r.rows[0].value) || {}, req);
+    const aj = await lerAjustes(), agora = Math.floor(Date.now() / 1000);
+    res.json({ ok: true, servidores: n, grade: SSU.gradeTexto(aj), estado: SSU.estado(agora, aj) });
+  } catch (err) { console.error('ssu/grade:', err.message); res.status(500).json({ error: 'Erro interno' }); }
 });
 
 // ------------------------------------------------------------

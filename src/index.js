@@ -9,6 +9,10 @@ const pool = require('./db/pool');
 const { getUserById } = require('./services/discord-auth');
 
 async function start() {
+  // [24/10] isolamento: as chaves únicas viram POR CIDADE antes de qualquer migração (as migrações
+  // já gravam com ON CONFLICT (cidade_id, ...)). Banco novo: não faz nada aqui, faz no fim do boot.
+  try { await require('./isolamento').chaves(pool); }
+  catch (e) { console.error('[isolamento] chaves (início):', e.message); }
   // Migrar banco ANTES de tudo
   try {
     await pool.query(`
@@ -280,8 +284,13 @@ async function start() {
       CREATE INDEX IF NOT EXISTS idx_procurados_estado ON procurados(estado, id DESC);
       CREATE INDEX IF NOT EXISTS idx_procurados_nome ON procurados(LOWER(nome));
       -- um alvo so pode ter UM mandado aberto por vez
-      CREATE UNIQUE INDEX IF NOT EXISTS uq_procurados_aberto
-        ON procurados(roblox_id) WHERE estado <> 'encerrado' AND roblox_id IS NOT NULL;
+      -- [24/10] depois do isolamento a chave é POR CIDADE (uq_procurados_aberto_cidade, src/isolamento.js)
+      DO $u$ BEGIN
+        IF NOT EXISTS (SELECT 1 FROM pg_class WHERE relname = 'uq_procurados_aberto_cidade') THEN
+          CREATE UNIQUE INDEX IF NOT EXISTS uq_procurados_aberto
+            ON procurados(roblox_id) WHERE estado <> 'encerrado' AND roblox_id IS NOT NULL;
+        END IF;
+      END $u$;
 
       -- ===== VEICULOS PROCURADOS (12/10) =====
       -- Julio: "a policia civil pelo pc deve conseguir por esse carro como procurado
@@ -302,8 +311,12 @@ async function start() {
         encerrado_em TIMESTAMP,
         encerrado_por VARCHAR(64)
       );
-      CREATE UNIQUE INDEX IF NOT EXISTS uq_veiculos_procurados_aberto
-        ON veiculos_procurados(LOWER(dono_nome), carro_id) WHERE estado <> 'encerrado';
+      DO $u$ BEGIN
+        IF NOT EXISTS (SELECT 1 FROM pg_class WHERE relname = 'uq_veiculos_procurados_aberto_cidade') THEN
+          CREATE UNIQUE INDEX IF NOT EXISTS uq_veiculos_procurados_aberto
+            ON veiculos_procurados(LOWER(dono_nome), carro_id) WHERE estado <> 'encerrado';
+        END IF;
+      END $u$;
 
       -- ===== ALERTAS DE COMPRA SUSPEITA (30/09) =====
       -- Julio: "se o cara comprar muito papel parafuso etc coisas suspeitas de
@@ -584,7 +597,7 @@ async function start() {
     try {
       await pool.query(
         `INSERT INTO game_config (key, value, updated_at) VALUES ('temporada', '{"n":1}'::jsonb, NOW())
-         ON CONFLICT (key) DO NOTHING`);
+         ON CONFLICT DO NOTHING`);
     } catch (e) { console.error('seed temporada:', e.message); }
 
     // [CONSERTO 19/09] O backfill era o motivo de "apagar jogador nao
@@ -592,28 +605,26 @@ async function start() {
       // Railway reinicia em todo deploy. Apagou o jogador, subiu uma versao,
       // ele voltava. Agora so considera log posterior ao ultimo wipe, e o
       // /registro/apagar leva os logs do jogador junto.
-      let desde = '1970-01-01';
-      try {
-        const w = await pool.query(`SELECT value->>'em' AS em FROM game_config WHERE key = 'wipe_em'`);
-        if (w.rows[0] && w.rows[0].em) desde = w.rows[0].em;
-      } catch (e) {}
+      // [24/10 isolamento] por cidade: o log de cada cidade vira o registro DAQUELA cidade, e o
+      // corte é o último wipe DAQUELA cidade.
       await pool.query(`
-        INSERT INTO game_players (roblox_id, nome, primeira_vez, ultima_vez, visitas)
-        SELECT (detalhe->>'userId')::bigint AS rid,
+        INSERT INTO game_players (cidade_id, roblox_id, nome, primeira_vez, ultima_vez, visitas)
+        SELECT l.cidade_id, (detalhe->>'userId')::bigint AS rid,
                MAX(jogador) AS nome,
                MIN(COALESCE(ocorrido_em, created_at)) AS pv,
                MAX(COALESCE(ocorrido_em, created_at)) AS uv,
                COUNT(*) AS n
-        FROM game_logs
+        FROM game_logs l
         WHERE tipo = 'entrou' AND detalhe->>'userId' ~ '^[0-9]+$'
-          AND COALESCE(ocorrido_em, created_at) > $1::timestamptz
-        GROUP BY (detalhe->>'userId')::bigint
-        ON CONFLICT (roblox_id) DO UPDATE SET
+          AND COALESCE(ocorrido_em, created_at) > COALESCE((SELECT (g.value->>'em')::timestamptz FROM game_config g
+                                                             WHERE g.key = 'wipe_em' AND g.cidade_id = l.cidade_id), '1970-01-01'::timestamptz)
+        GROUP BY l.cidade_id, (detalhe->>'userId')::bigint
+        ON CONFLICT (cidade_id, roblox_id) DO UPDATE SET
           nome = COALESCE(EXCLUDED.nome, game_players.nome),
           primeira_vez = LEAST(game_players.primeira_vez, EXCLUDED.primeira_vez),
           ultima_vez = GREATEST(game_players.ultima_vez, EXCLUDED.ultima_vez),
           visitas = GREATEST(game_players.visitas, EXCLUDED.visitas);
-      `, [desde]);
+      `);
     } catch (e) { console.error('backfill game_players:', e.message); }
     // [limpeza 26/09] O throttle do snapshot estava quebrado (NOT EXISTS no WHERE de
     // um agregado gravava um ZERO a cada heartbeat), então player_snapshots encheu de
@@ -632,7 +643,7 @@ async function start() {
           )`);
         await pool.query(
           `INSERT INTO game_config (key, value, updated_at)
-           VALUES ('analise_limpeza', '{"v":1}'::jsonb, NOW()) ON CONFLICT (key) DO NOTHING`);
+           VALUES ('analise_limpeza', '{"v":1}'::jsonb, NOW()) ON CONFLICT DO NOTHING`);
         console.log('[limpeza analise] snapshots-lixo removidos:', r.rowCount);
       }
     } catch (e) { console.error('limpeza analise:', e.message); }
@@ -643,14 +654,14 @@ async function start() {
     try {
       await pool.query(`
         UPDATE corporations SET slug = 'policia-civil-vazia', is_active = false, updated_at = NOW()
-         WHERE slug = 'policia-civil'
-           AND EXISTS (SELECT 1 FROM corporations c2 WHERE c2.slug = 'policia-federal')
+         WHERE cidade_id = 1 AND slug = 'policia-civil'
+           AND EXISTS (SELECT 1 FROM corporations c2 WHERE c2.cidade_id = 1 AND c2.slug = 'policia-federal')
            AND NOT EXISTS (SELECT 1 FROM members m WHERE m.corporation_id = corporations.id);
         UPDATE corporations SET slug = 'policia-civil',
                name = CASE WHEN name ILIKE '%federal%' THEN 'Polícia Civil' ELSE name END,
                updated_at = NOW()
-         WHERE slug = 'policia-federal'
-           AND NOT EXISTS (SELECT 1 FROM corporations c2 WHERE c2.slug = 'policia-civil');
+         WHERE cidade_id = 1 AND slug = 'policia-federal'
+           AND NOT EXISTS (SELECT 1 FROM corporations c2 WHERE c2.cidade_id = 1 AND c2.slug = 'policia-civil');
       `);
     } catch (e) { console.error('migração PF->PC:', e.message); }
     // Cargos da PC (13/09/2026, pedido do Julio): a corp herdou os cargos da antiga PF (Diretor Geral...).
@@ -684,7 +695,7 @@ async function start() {
           ];
           i INTEGER; n INTEGER; velho_id INTEGER; novo_id INTEGER;
         BEGIN
-          SELECT id INTO cid FROM corporations WHERE slug = 'policia-civil' AND is_active = true;
+          SELECT id INTO cid FROM corporations WHERE cidade_id = 1 AND slug = 'policia-civil' AND is_active = true;
           IF cid IS NULL THEN RETURN; END IF;
           IF EXISTS (SELECT 1 FROM ranks WHERE corporation_id = cid AND name = '[DLG-G] Delegado Geral') THEN RETURN; END IF;
           -- [10/10] BUG DO RESET: esta migracao e a da CARREIRA (abaixo) se desfaziam uma
@@ -730,7 +741,7 @@ async function start() {
           cid INTEGER;
         BEGIN
           -- 1) garante a corp (só cria se não existir; nunca mexe numa que já existe)
-          SELECT id INTO cid FROM corporations WHERE slug = 'jornal';
+          SELECT id INTO cid FROM corporations WHERE cidade_id = 1 AND slug = 'jornal';
           IF cid IS NULL THEN
             INSERT INTO corporations (name, slug, description, color, max_members, is_active)
             VALUES ('Jornal Nacional', 'jornal', 'Jornal Nacional. Cobertura jornalística e reportagens da cidade.', '#F59E0B', 100, true)
@@ -773,7 +784,7 @@ async function start() {
         UPDATE corporations
            SET icon_url = 'https://www.roblox.com/asset-thumbnail/image?assetId=7560648021&width=420&height=420&format=png',
                updated_at = NOW()
-         WHERE slug = 'jornal' AND icon_url IS NULL AND icon_data IS NULL;
+         WHERE cidade_id = 1 AND slug = 'jornal' AND icon_url IS NULL AND icon_data IS NULL;
       `);
     } catch (e) { console.error('migração ícone Jornal:', e.message); }
 
@@ -834,14 +845,14 @@ async function start() {
           ];
           i INTEGER; n INTEGER; velho_id INTEGER; novo_id INTEGER;
         BEGIN
-          SELECT id INTO cid FROM corporations WHERE slug = 'policia-civil' AND is_active = true;
+          SELECT id INTO cid FROM corporations WHERE cidade_id = 1 AND slug = 'policia-civil' AND is_active = true;
           IF cid IS NULL THEN RETURN; END IF;
           -- [10/10] trava definitiva: rodou uma vez (ou a carreira ja existe) -> nunca mais.
           -- Renomear/apagar '[DG] Delegado-Geral' no painel NAO dispara reset de ninguem.
           IF EXISTS (SELECT 1 FROM game_config WHERE key = 'pc_cargos_feito') THEN RETURN; END IF;
           IF EXISTS (SELECT 1 FROM ranks WHERE corporation_id = cid AND name = '[DG] Delegado-Geral') THEN
             INSERT INTO game_config (key, value) VALUES ('pc_cargos_feito', '{"em":"carreira ja existia"}')
-            ON CONFLICT (key) DO NOTHING;
+            ON CONFLICT DO NOTHING;
             RETURN;
           END IF;
           n := array_length(novos, 1);
@@ -868,7 +879,7 @@ async function start() {
           DELETE FROM ranks WHERE corporation_id = cid AND level < 100;
           UPDATE ranks SET level = level - 100 WHERE corporation_id = cid AND level >= 100;
           INSERT INTO game_config (key, value) VALUES ('pc_cargos_feito', '{"em":"carreira aplicada"}')
-          ON CONFLICT (key) DO NOTHING;
+          ON CONFLICT DO NOTHING;
         END $$;
       `);
     } catch (e) { console.error('migração carreira PC:', e.message); }
@@ -927,7 +938,7 @@ async function start() {
           i INTEGER;
         BEGIN
           IF EXISTS (SELECT 1 FROM game_config WHERE key = 'pc_carreiras_v1') THEN RETURN; END IF;
-          SELECT id INTO cid FROM corporations WHERE slug = 'policia-civil' AND is_active = true;
+          SELECT id INTO cid FROM corporations WHERE cidade_id = 1 AND slug = 'policia-civil' AND is_active = true;
           IF cid IS NULL THEN RETURN; END IF;
           -- tira todo mundo do caminho (nivel +500) pra nao colidir no meio da troca
           UPDATE ranks SET level = level + 500 WHERE corporation_id = cid;
@@ -939,7 +950,7 @@ async function start() {
           UPDATE ranks SET level = level - 500, carreira = 'Outros'
            WHERE corporation_id = cid AND level >= 500;
           INSERT INTO game_config (key, value) VALUES ('pc_carreiras_v1', '{"em":"aplicado"}')
-          ON CONFLICT (key) DO NOTHING;
+          ON CONFLICT DO NOTHING;
         END $$;
       `);
     } catch (e) { console.error('migração carreiras PC:', e.message); }
@@ -995,7 +1006,7 @@ async function start() {
           nomes TEXT[] := ARRAY[]::TEXT[];
         BEGIN
           IF EXISTS (SELECT 1 FROM game_config WHERE key = 'pc_carreiras_v2') THEN RETURN; END IF;
-          SELECT id INTO cid FROM corporations WHERE slug = 'policia-civil' AND is_active = true;
+          SELECT id INTO cid FROM corporations WHERE cidade_id = 1 AND slug = 'policia-civil' AND is_active = true;
           IF cid IS NULL THEN RETURN; END IF;
           -- tudo pra fora do caminho (nivel +500) pra nao colidir no meio da troca
           UPDATE ranks SET level = level + 500 WHERE corporation_id = cid AND level < 500;
@@ -1040,7 +1051,7 @@ async function start() {
             UPDATE ranks SET level = lv, carreira = 'Outros' WHERE id = r.id;
           END LOOP;
           INSERT INTO game_config (key, value) VALUES ('pc_carreiras_v2', '{"em":"aplicado"}')
-          ON CONFLICT (key) DO NOTHING;
+          ON CONFLICT DO NOTHING;
         END $$;
       `);
     } catch (e) { console.error('migração carreiras PC v2:', e.message); }
@@ -1228,7 +1239,7 @@ async function start() {
   try {
     const pv = await pool.query(
       `UPDATE corporations SET is_active = false, updated_at = NOW()
-        WHERE slug = 'pavuna' AND tipo = 'faccao' AND is_active = true RETURNING id, cidade_id`);
+        WHERE slug = 'pavuna' AND tipo = 'faccao' AND is_active = true AND cidade_id = 1 RETURNING id, cidade_id`);
     for (const r of pv.rows) {
       await pool.query(`INSERT INTO faccao_log (cidade_id, corporation_id, acao, detalhe, por) VALUES ($1,$2,'desoficializada',$3,'sistema')`,
         [r.cidade_id, r.id, JSON.stringify({ motivo: 'A Pavuna não existe mais (decisão do Julio, 23-24/10): a boca é de quem chegar' })]).catch(() => {});
@@ -1236,8 +1247,15 @@ async function start() {
     }
   } catch (e) { console.error('desativar Pavuna:', e.message); }
   // [23/10] Câmara: propostas de salário/obra votadas pelo Parlamento (Regulamento Cap. 10)
-  try { const CAM = require('./governo-camara'); await CAM.garantir(pool); CAM.iniciar(pool, [require('./governo').SANTA_FE]); }
+  try { const CAM = require('./governo-camara'); await CAM.garantir(pool); CAM.iniciar(pool); }
   catch (e) { console.error('[camara] garantir:', e.message); }
+  // [24/10] ISOLAMENTO TOTAL POR CIDADE (src/isolamento.js): papel sf_app, chaves por cidade e
+  // Row-Level Security em toda tabela de cidade. Depois de TODAS as tabelas existirem.
+  try { await require('./isolamento').garantir(pool); }
+  catch (e) { console.error('[isolamento] garantir:', e.message); throw e; }
+  // [24/10] pré-modelo: toda cidade ativa tem as corporações, cargos, Governo e regulamentos
+  try { await CID.montarTodas(pool); }
+  catch (e) { console.error('[cidades] pré-modelo:', e.message); }
 
   // Sessão com PostgreSQL
   app.use(session({

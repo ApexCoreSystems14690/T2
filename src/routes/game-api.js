@@ -23,29 +23,12 @@ router.use(async (req, res, next) => {
   catch (e) { res.status(e.status || 500).json({ error: e.message }); }
 });
 
-// [24/10] CIDADE NÃO ISOLADA (a de teste). As consultas do jogo ainda não filtram por
-// cidade (fase 2 do plano), então uma cidade que não é o Santa Fé só passa por estas
-// rotas: leitura de cargo/corp/staff/temporada e o heartbeat (que, pra ela, só marca
-// o servidor vivo). O resto dá 423 — o jogo já trata site fora do ar, e assim nada que
-// um tester faça na cidade de teste escreve no banco do Santa Fé (dinheiro, celular,
-// fila de itens, comandos, PD, eleição) nem lê dado pessoal de lá (celular, ficha).
-const LIVRES_SEM_ISOLAMENTO = [
-  /^\/cidades(\/[a-z0-9-]+\/senha)?$/, /^\/temporada$/, /^\/ssu$/, /^\/heartbeat$/,
-  /^\/acesso\/\d+$/, /^\/player\/\d+$/, /^\/player\/\d+\/corp\/[\w-]+$/,
-  /^\/corp\/[\w-]+\/(members|ranks)$/, /^\/corps$/,
-];
-async function cidadeIsolada(req) {
-  if (req._cidadeJogo === CID.SANTA_FE) return true;
-  const c = await CID.porId(pool, req._cidadeJogo);
-  return !!(c && c.isolada);
-}
-router.use(async (req, res, next) => {
-  try {
-    if (await cidadeIsolada(req)) return next();
-    if (LIVRES_SEM_ISOLAMENTO.some(r => r.test(req.path))) return next();
-    return res.status(423).json({ error: 'cidade_sem_isolamento', detalhe: 'Esta cidade ainda não grava no site.' });
-  } catch (e) { res.status(500).json({ error: 'Erro interno' }); }
-});
+// [24/10] ISOLAMENTO: daqui pra frente o pedido do jogo roda NA cidade do header x-cidade
+// (Row-Level Security, src/isolamento.js). Cada cidade é um Santa Fé inteiro e separado: corps,
+// jogadores, celular, ficha, PD, eleição, config, SSU, temporada... nada vê nada da outra.
+// (Substitui a trava "cidade não isolada" da manhã de 24/10.)
+const ISO = require('../isolamento');
+router.use((req, res, next) => ISO.run(req._cidadeJogo, next));
 
 // [21/10 Cidades] Lista pro LOBBY do jogo (place "Cidades"): as cidades abertas,
 // quantos estão jogando e quantos servidores cada uma tem agora.
@@ -149,7 +132,7 @@ router.post('/eleicao/config', async (req, res) => {
     if (!cfg.presidencia.length) return res.status(400).json({ error: 'config sem presidência' });
     await pool.query(
       `INSERT INTO eleicao_config (id, config, recebido_em) VALUES (1, $1, NOW())
-       ON CONFLICT (id) DO UPDATE SET config = EXCLUDED.config, recebido_em = NOW()`, [JSON.stringify(req.body)]);
+       ON CONFLICT (cidade_id, id) DO UPDATE SET config = EXCLUDED.config, recebido_em = NOW()`, [JSON.stringify(req.body)]);
     res.json({ ok: true, presidencia: cfg.presidencia.length, parlamento: cfg.parlamento.length,
       pendentes: cfg.parlamento.filter(c => c.pendente).length });
   } catch (err) { console.error('eleicao/config:', err.message); res.status(500).json({ error: 'Erro interno' }); }
@@ -196,7 +179,7 @@ router.post('/eleicao/voto', async (req, res) => {
       await cli.query('BEGIN');
       const q = await cli.query(
         `INSERT INTO eleicao_votantes (user_id, nome, turno, cargo, conta_dias, revisar) VALUES ($1,$2,$3,$4,$5,$6)
-         ON CONFLICT (user_id, turno, cargo) DO NOTHING RETURNING 1`,
+         ON CONFLICT DO NOTHING RETURNING 1`,
         [uid, b.nome ? String(b.nome).slice(0, 64) : null, est.turno, cargo, dias, revisar]);
       if (!q.rowCount) { await cli.query('ROLLBACK'); return res.status(409).json({ ok: false, error: 'ja_votou' }); }
       // nenhuma coluna aqui aponta pra linha de cima
@@ -260,8 +243,6 @@ router.post('/vincular', async (req, res) => {
 // ---------------------------------------------------------------------------
 router.get('/temporada', async (req, res) => {
   try {
-    // [24/10] game_config ainda é do jogo todo: cidade não isolada não herda o wipe do Santa Fé.
-    if (!(await cidadeIsolada(req))) return res.json({ temporada: 1, wipe_em: null });
     const r = await pool.query(`SELECT value FROM game_config WHERE key = 'temporada'`);
     const n = Math.max(1, parseInt(r.rows[0] && r.rows[0].value && r.rows[0].value.n) || 1);
     const w = await pool.query(`SELECT value FROM game_config WHERE key = 'wipe_em'`);
@@ -298,8 +279,12 @@ router.get('/ssu', async (req, res) => {
         WHERE u.roblox_id IS NOT NULL AND cs.cidade_id = $1 LIMIT 200`, [await cidadeDoJogo(req)]);
     res.json({
       ok: true,
-      // [24/10] ajuste de SSU (encerrar/estender) é do Santa Fé; a cidade de teste não fecha por ele
-      ajustes: (await cidadeIsolada(req)) ? ((r.rows[0] && r.rows[0].value) || {}) : {},
+      // [24/10] game_config é da cidade: ajustes da noite + a GRADE própria dela ('ssu_grade')
+      ajustes: Object.assign({}, (r.rows[0] && r.rows[0].value) || {},
+        await (async () => { const g = (await pool.query(`SELECT value FROM game_config WHERE key = 'ssu_grade'`)).rows[0];
+                             const v = (g && g.value) || {}; const o = {};
+                             const gr = require('../ssu').validarGrade(v.grade); if (gr) o.grade = gr;
+                             if (v.sempre_aberta === true) o.sempre_aberta = true; return o; })()),
       staff: st.rows.map(x => Number(x.roblox_id)),
       agora: Math.floor(Date.now() / 1000),
     });
@@ -449,7 +434,7 @@ router.post('/player/:robloxId/encerrar-personagem', async (req, res) => {
       `INSERT INTO fichas_encerradas
          (chave, roblox_id, nome, estado, motivo, por_nome, corp, prisoes, dividas, resumo)
        VALUES ($1,$2,$3,'preso_permanente',$4,$5,$6,$7,$8,$9)
-       ON CONFLICT (chave) DO NOTHING
+       ON CONFLICT DO NOTHING
        RETURNING id`,
       [chave, rid, txt(b.nome, 64), txt(b.motivo, 300), txt(b.por_nome, 64), txt(b.corp, 64),
        JSON.stringify(lista(b.prisoes)), JSON.stringify(lista(b.dividas)),
@@ -617,9 +602,6 @@ router.post('/heartbeat', async (req, res) => {
     }
     // limpa servidores mortos (sem heartbeat há 2 min)
     await pool.query(`DELETE FROM game_servers WHERE updated_at < NOW() - INTERVAL '2 minutes'`);
-    // [24/10] cidade não isolada: o heartbeat só marca o servidor vivo. Registro de
-    // jogadores, fila de itens, booster, royalties e a config do Santa Fé NÃO valem pra ela.
-    if (!(await cidadeIsolada(req))) return res.json({ ok: true, config: {}, entregas: [], isolada: false });
 
     // [25/09; corrigido 26/09] SNAPSHOT pra aba ANÁLISE: 1 linha a cada ~1min com o
     // total online AGORA (soma dos players de todos os servidores vivos).
@@ -637,7 +619,7 @@ router.post('/heartbeat', async (req, res) => {
         `INSERT INTO player_snapshots (jogadores, servidores)
          SELECT j, s FROM (
            SELECT COALESCE(SUM(jsonb_array_length(players)), 0)::int AS j, COUNT(*)::int AS s
-             FROM game_servers WHERE cidade_id = 1
+             FROM game_servers
          ) x
           WHERE NOT EXISTS (SELECT 1 FROM player_snapshots WHERE criado_em > NOW() - INTERVAL '1 minute')`);
       // retenção: guarda 120 dias de histórico
@@ -660,7 +642,7 @@ router.post('/heartbeat', async (req, res) => {
       if (vals.length) {
         await pool.query(
           `INSERT INTO game_players (roblox_id, nome) VALUES ${vals.join(',')}
-           ON CONFLICT (roblox_id) DO UPDATE SET nome = EXCLUDED.nome, ultima_vez = NOW()`,
+           ON CONFLICT (cidade_id, roblox_id) DO UPDATE SET nome = EXCLUDED.nome, ultima_vez = NOW()`,
           pr);
       }
     }
@@ -696,6 +678,11 @@ router.post('/heartbeat', async (req, res) => {
     const cfg = await pool.query(`SELECT key, value FROM game_config`);
     const config = {};
     for (const r of cfg.rows) config[r.key] = r.value;
+    // [24/10] o jogo lê config.ssu: vai junto a grade própria da cidade
+    if (config.ssu_grade) {
+      const gr = require('../ssu').validarGrade(config.ssu_grade.grade);
+      config.ssu = Object.assign({}, config.ssu || {}, gr ? { grade: gr } : {}, config.ssu_grade.sempre_aberta === true ? { sempre_aberta: true } : {});
+    }
     res.json({ ok: true, config, entregas });
   } catch (err) {
     console.error('heartbeat:', err.message);
@@ -781,7 +768,7 @@ router.post('/logs', async (req, res) => {
       try {
         await pool.query(
           `INSERT INTO game_players (roblox_id, nome) VALUES ($1, $2)
-           ON CONFLICT (roblox_id) DO UPDATE SET
+           ON CONFLICT (cidade_id, roblox_id) DO UPDATE SET
              nome = COALESCE(EXCLUDED.nome, game_players.nome),
              ultima_vez = NOW(),
              visitas = game_players.visitas + 1`,
@@ -1022,7 +1009,7 @@ router.post('/celular/contato', async (req, res) => {
     if (!dono || !numero) return res.status(400).json({ error: 'dono e numero obrigatórios' });
     await pool.query(
       `INSERT INTO celular_contatos (dono_numero, numero, apelido) VALUES ($1,$2,$3)
-       ON CONFLICT (dono_numero, numero) DO UPDATE SET apelido = EXCLUDED.apelido`,
+       ON CONFLICT (cidade_id, dono_numero, numero) DO UPDATE SET apelido = EXCLUDED.apelido`,
       [String(dono).slice(0,24), String(numero).slice(0,24), apelido ? String(apelido).slice(0,64) : null]
     );
     res.json({ ok: true });
@@ -1470,7 +1457,7 @@ router.post('/bans', async (req, res) => {
       await pool.query(
         `INSERT INTO game_bans (roblox_id, nome, motivo, ate, banido_por, banido_em, origem, desfeito_em, desfeito_por)
          VALUES ($1,$2,$3,$4,$5, NOW(), $6, NULL, NULL)
-         ON CONFLICT (roblox_id) DO UPDATE SET
+         ON CONFLICT (cidade_id, roblox_id) DO UPDATE SET
            nome = COALESCE(EXCLUDED.nome, game_bans.nome),
            motivo = COALESCE(EXCLUDED.motivo, game_bans.motivo),
            ate = EXCLUDED.ate,
@@ -1528,7 +1515,7 @@ router.post('/patrimonio', async (req, res) => {
        -- e a ficha (que busca por nome) nunca achava quem nao entrou desde entao.
        VALUES ($1, COALESCE($2, (SELECT nome FROM game_players WHERE roblox_id = $1)),
                $3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15,$16,$17, NOW())
-       ON CONFLICT (roblox_id) DO UPDATE SET
+       ON CONFLICT (cidade_id, roblox_id) DO UPDATE SET
          nome = COALESCE(EXCLUDED.nome, game_patrimonio.nome),
          bolso = EXCLUDED.bolso, banco = EXCLUDED.banco,
          level = EXCLUDED.level, xp = EXCLUDED.xp, emprego = EXCLUDED.emprego,
@@ -2086,7 +2073,7 @@ router.post('/precos', async (req, res) => {
     }
     await pool.query(
       `INSERT INTO game_config (key, value, updated_at) VALUES ('precos_itens', $1::jsonb, NOW())
-       ON CONFLICT (key) DO UPDATE SET value = $1::jsonb, updated_at = NOW()`,
+       ON CONFLICT (cidade_id, key) DO UPDATE SET value = $1::jsonb, updated_at = NOW()`,
       [JSON.stringify({ itens: limpo })]);
 
     // [29/09] CATÁLOGO POR CORP: { slug: [itens] } -- o que o vestiário daquela
@@ -2110,7 +2097,7 @@ router.post('/precos', async (req, res) => {
       if (nCat) {
         await pool.query(
           `INSERT INTO game_config (key, value, updated_at) VALUES ('catalogo_corps', $1::jsonb, NOW())
-           ON CONFLICT (key) DO UPDATE SET value = $1::jsonb, updated_at = NOW()`,
+           ON CONFLICT (cidade_id, key) DO UPDATE SET value = $1::jsonb, updated_at = NOW()`,
           [JSON.stringify({ corps: limpoCat })]);
       }
     }

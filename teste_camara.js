@@ -149,7 +149,7 @@ const lista = (c) => pedir(c, 'GET', '/api/governo/camara');
 
   console.log('\nPARLAMENTAR (Art. 10.12A) E OBRA');
   await caso('aumento do Parlamentar sancionado só vale na próxima temporada; redução vale na hora', async () => {
-    await pool.query(`INSERT INTO game_config (key, value) VALUES ('temporada', '{"n": 3}') ON CONFLICT (key) DO UPDATE SET value = jsonb_set(game_config.value, '{n}', '3')`);
+    await pool.query(`INSERT INTO game_config (key, value) VALUES ('temporada', '{"n": 3}') ON CONFLICT (cidade_id, key) DO UPDATE SET value = jsonb_set(game_config.value, '{n}', '3')`);
     const id = await aprovar({ tipo: 'salario', rank_id: rParl, valor: pad['Parlamentar'] + 20000, descricao: 'aumento do parlamento' });
     await pedir(S.cm_pres, 'POST', `/api/governo/camara/${id}/sancao`, { acao: 'sancionar' });
     assert.strictEqual((await prop(id)).status, 'aguarda_mandato');

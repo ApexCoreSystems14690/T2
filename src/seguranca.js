@@ -65,7 +65,7 @@ async function migrar(pool) {
     ALTER TABLE users ADD COLUMN IF NOT EXISTS vinculo_pendente_rid BIGINT;
     ALTER TABLE users ADD COLUMN IF NOT EXISTS vinculo_pendente_nome VARCHAR(64);
     INSERT INTO game_config (key, value) VALUES ('seguranca', '{"exige_vinculo": false, "bloquear_alt_de_banido": true}')
-      ON CONFLICT (key) DO NOTHING;
+      ON CONFLICT DO NOTHING;
   `);
 }
 

@@ -25,6 +25,11 @@ const cenarios = [
   ['antecipado + encerrado depois',       { sessao: '2026-09-23', iniciadaAs: ini + 2 * 86400 + 10.5 * 3600, encerrada: true }],
   // [11/10] com a grade nova o dia sem SSU e a QUINTA (antes era a segunda)
   ['antecipado num dia sem SSU (quinta)', { sessao: '2026-09-24', iniciadaAs: ini + 3 * 86400 + 10 * 3600 }],
+  // [24/10] grade PRÓPRIA da cidade (painel do Dono) e cidade sempre aberta
+  ['grade da cidade: seg e sex 19-23 (sex estendida ate 01h), sab 20-24',
+    { grade: { 1: { abre: 19, fecha: 23 }, 5: { abre: 19, fecha: 23 }, 6: { abre: 20, fecha: 24 } }, sessao: '2026-09-25', estendidaAte: 25 }],
+  ['grade invalida cai na padrao', { grade: { 1: { abre: 22, fecha: 20 } } }],
+  ['sempre aberta', { sempre_aberta: true, sessao: '2026-09-25', encerrada: true }],
 ];
 // o que o Lua devolveu, colado aqui pra comparar
 // [11/10] REGERADO no Studio depois da grade nova (todo dia menos quinta, 12:00-00:00).
@@ -37,6 +42,10 @@ const doLua = {
   'inicio antecipado quarta 10:30': '0:f 43200:A 86400:f 129600:A 172800:f 210600:A 259200:f 388800:A 432000:f 475200:A 518400:f 561600:A 604800:f',
   'antecipado + encerrado depois': '0:f 43200:A 86400:f 129600:A 172800:f 210600:E 259200:f 388800:A 432000:f 475200:A 518400:f 561600:A 604800:f',
   'antecipado num dia sem SSU (quinta)': '0:f 43200:A 86400:f 129600:A 172800:f 216000:A 259200:f 388800:A 432000:f 475200:A 518400:f 561600:A 604800:f',
+  // [24/10] gerados no Studio (Regras.SSU com gradeDoSite / sempre_aberta)
+  'grade da cidade: seg e sex 19-23 (sex estendida ate 01h), sab 20-24': '0:f 68400:A 82800:f 414000:A 435600:f 504000:A 518400:f',
+  'grade invalida cai na padrao': '0:f 43200:A 86400:f 129600:A 172800:f 216000:A 259200:f 388800:A 432000:f 475200:A 518400:f 561600:A 604800:f',
+  'sempre aberta': '0:A',
 };
 let ok = 0, dif = 0;
 for (const [nome, aj] of cenarios) {

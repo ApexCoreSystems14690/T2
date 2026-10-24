@@ -112,7 +112,11 @@ async function garantir(pool) {
       historico JSONB NOT NULL DEFAULT '[]'
     );
     CREATE INDEX IF NOT EXISTS idx_tester_lib_status ON tester_liberacoes(status);
-    CREATE UNIQUE INDEX IF NOT EXISTS idx_tester_lib_uma_ativa ON tester_liberacoes(user_id) WHERE status = 'ativa';
+    DO $u$ BEGIN
+      IF NOT EXISTS (SELECT 1 FROM pg_class WHERE relname = 'idx_tester_lib_uma_ativa_cidade') THEN
+        CREATE UNIQUE INDEX IF NOT EXISTS idx_tester_lib_uma_ativa ON tester_liberacoes(user_id) WHERE status = 'ativa';
+      END IF;
+    END $u$;
     -- [22/10] noclip + Modo Deus: { ligado, job_id (servidor em que foi mandado), enviado_em }. NULL = não pediu.
     ALTER TABLE tester_liberacoes ADD COLUMN IF NOT EXISTS noclip JSONB;
   `);
@@ -432,7 +436,10 @@ async function noclip(pool, id, ativar, quem, cidadeId) {
 let _timer = null;
 function iniciar(pool, ms) {
   if (_timer) return;
-  _timer = setInterval(() => { tick(pool).catch(e => console.error('[testers] tick:', e.message)); }, ms || 30000);
+  // [24/10] cada cidade no contexto dela (isolamento)
+  _timer = setInterval(() => {
+    require('./isolamento').porCidade(pool, () => tick(pool)).catch(e => console.error('[testers] tick:', e.message));
+  }, ms || 30000);
   if (_timer.unref) _timer.unref();
 }
 

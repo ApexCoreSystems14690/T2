@@ -6,4 +6,8 @@ const pool = new Pool({
   max: 10,
 });
 
+// [24/10] isolamento por cidade: dentro de um contexto de cidade, cada consulta roda como sf_app
+// com sf.cidade = <id> (Row-Level Security). Ver src/isolamento.js.
+require('../isolamento').instalar(pool);
+
 module.exports = pool;

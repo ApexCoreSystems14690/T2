@@ -226,8 +226,14 @@
           <button class="btn sec" id="ssu-estender" onclick="ssuAcao('estender')"><svg class="ic" aria-hidden="true"><use href="/icones.svg#relogio"/></svg>Estender</button>
         </div>
         <div class="muted" style="font-size:.78rem;margin-top:.7rem;line-height:1.5">
-          <b>A grade é fixa e roda sozinha</b> — não dá pra editar por aqui, de propósito.
+          <b>Grade desta cidade</b> — roda sozinha. Cada cidade tem a sua.
           <div id="ssu-grade" style="margin-top:.3rem"></div>
+        </div>
+        <%# [24/10] grade própria por cidade: só o Dono da cidade edita (o back também barra) %>
+        <div id="ssu-editor" style="display:none;margin-top:.7rem;border-top:1px solid var(--linha);padding-top:.6rem">
+          <label style="display:flex;gap:.4rem;align-items:center;font-size:.85rem;font-weight:600"><input type="checkbox" id="ssu-sempre"> Sempre aberta (sem grade, ex.: servidor de testes)</label>
+          <table id="ssu-tab" style="margin-top:.5rem;font-size:.82rem;display:table;white-space:normal"><thead><tr><th>Dia</th><th>Tem SSU</th><th>Abre</th><th>Fecha</th></tr></thead><tbody></tbody></table>
+          <button class="btn sec" style="margin-top:.5rem" onclick="ssuSalvarGrade()">Salvar grade</button>
         </div>
         <div id="ssu-msg" class="muted" style="font-size:.78rem;margin-top:.5rem"></div>
       </div>
@@ -799,7 +805,9 @@
           + (e.aberto ? '<span class="ponto ok"></span>Aberto' : '<span class="ponto"></span>Fechado') + '</span>'
           + (e.estendida ? ' <span class="muted" style="font-size:.8rem">(estendido)</span>' : '');
         let quando = '';
-        if (e.aberto && e.sessao && e.sessao.avulsa) {
+        if (e.motivo === 'sempre_aberta') {
+          quando = 'Esta cidade fica sempre aberta (sem grade).';
+        } else if (e.aberto && e.sessao && e.sessao.avulsa) {
           // [05/10] SSU avulsa: o fim nao e hora de grade, e um instante. Mostro a hora dele.
           quando = 'SSU aberta pelo Dono · fecha às ' + ssuHoraBRT(e.sessao.fim);
         } else if (e.aberto && e.sessao) {
@@ -813,6 +821,7 @@
         }
         $('ssu-quando').textContent = quando;
         $('ssu-grade').innerHTML = (d.grade || []).map(l => '• ' + l).join('<br>');
+        if (d.souDono && d.grade_cfg && !ssuEditando) ssuMontaEditor(d.grade_cfg);
         const a = d.acoes || {};
         // [05/10] 'Abrir SSU agora' so existe pro DONO -- o back tambem barra (403).
         $('ssu-abrir').style.display    = a.abrirAgora ? '' : 'none';
@@ -828,6 +837,37 @@
             + String(a.estenderAte % 24).padStart(2, '0') + ':00';
         }
       } catch (err) {}
+    }
+    // [24/10] editor da grade da cidade (Dono)
+    let ssuEditando = false;
+    const SSU_DIAS = [[1, 'segunda'], [2, 'terça'], [3, 'quarta'], [4, 'quinta'], [5, 'sexta'], [6, 'sábado'], [0, 'domingo']];
+    function ssuOpcoes(de, ate, sel) { let o = ''; for (let h = de; h <= ate; h++) o += '<option value="' + h + '"' + (h === sel ? ' selected' : '') + '>' + String(h % 24).padStart(2, '0') + ':00' + (h === 24 ? ' (meia-noite)' : '') + '</option>'; return o; }
+    function ssuMontaEditor(cfg) {
+      $('ssu-editor').style.display = '';
+      const g = cfg.grade || cfg.padrao || {};
+      $('ssu-sempre').checked = !!cfg.sempre_aberta;
+      $('ssu-tab').querySelector('tbody').innerHTML = SSU_DIAS.map(([w, nome]) => {
+        const d = g[w] || g[String(w)];
+        return '<tr data-w="' + w + '"><td>' + nome + '</td><td><input type="checkbox" class="tem"' + (d ? ' checked' : '') + '></td>'
+          + '<td><select class="abre">' + ssuOpcoes(0, 23, d ? d.abre : 12) + '</select></td>'
+          + '<td><select class="fecha">' + ssuOpcoes(1, 24, d ? d.fecha : 24) + '</select></td></tr>';
+      }).join('');
+      $('ssu-editor').onchange = () => { ssuEditando = true; };
+    }
+    async function ssuSalvarGrade() {
+      const grade = {};
+      $('ssu-tab').querySelectorAll('tr[data-w]').forEach(tr => {
+        if (tr.querySelector('.tem').checked) grade[tr.dataset.w] = { abre: Number(tr.querySelector('.abre').value), fecha: Number(tr.querySelector('.fecha').value) };
+      });
+      const corpo = { sempre_aberta: $('ssu-sempre').checked, grade: Object.keys(grade).length ? grade : null };
+      $('ssu-msg').textContent = 'salvando…';
+      try {
+        const r = await fetch('/api/admin/ssu/grade', { method: 'PUT', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(corpo) });
+        const j = await r.json();
+        $('ssu-msg').textContent = r.ok ? ('Grade salva. ' + (j.servidores || 0) + ' servidor(es) avisado(s) na hora.') : ('Não deu: ' + (j.error || 'erro'));
+        if (r.ok) ssuEditando = false;
+      } catch (e) { $('ssu-msg').textContent = 'Não deu: sem resposta do site.'; }
+      ssuCarrega();
     }
     async function ssuAcao(acao) {
       const nomes = { encerrar: 'ENCERRAR o SSU agora', reabrir: 'REABRIR o SSU', estender: 'ESTENDER o SSU',

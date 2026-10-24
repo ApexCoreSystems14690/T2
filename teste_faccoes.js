@@ -175,7 +175,7 @@ const PROVA = 'https://cdn.exemplo.com/print.png';
 
   console.log('\nFICHA E ISOLAMENTO');
   await caso('a Ficha da Polícia Civil (dossiê) não devolve a facção', async () => {
-    await pool.query(`INSERT INTO game_patrimonio (roblox_id, nome) VALUES (6602, 'fxt_membro') ON CONFLICT (roblox_id) DO NOTHING`);
+    await pool.query(`INSERT INTO game_patrimonio (roblox_id, nome) VALUES (6602, 'fxt_membro') ON CONFLICT (cidade_id, roblox_id) DO NOTHING`);
     const r = await jogo('GET', '/dossie/fxt_membro');
     assert.ok(r.j && r.j.ok, JSON.stringify(r.j));
     const txt = JSON.stringify(r.j);

@@ -388,9 +388,10 @@ async function listar(db, cidadeId, user) {
 }
 
 let _timer = null;
-function iniciar(db, cidades) {
+function iniciar(db) {
   if (_timer) return;
-  const rodar = async () => { for (const c of cidades) await processar(db, c).catch(e => console.error('[camara]', e.message)); };
+  // [24/10] toda cidade, cada uma no contexto dela (isolamento)
+  const rodar = () => require('./isolamento').porCidade(db, (c) => processar(db, c.id)).catch(e => console.error('[camara]', e.message));
   _timer = setInterval(rodar, 60000);
   if (_timer.unref) _timer.unref();
 }

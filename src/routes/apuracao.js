@@ -23,8 +23,16 @@ async function audit(req, acao, detalhe) {
 router.get('/', (req, res) => res.render('apuracao', { user: req.user, ehStaff: ehStaff(req.user) }));
 router.get('/transmissao', (req, res) => res.render('apuracao-tv', { user: req.user }));
 
+// [24/10 isolamento] a transmissão é pública (sem cidade na sessão): a apuração é a da cidade
+// da sessão, ou a de ?cidade=<slug>, ou a do Santa Fé. Nunca a mistura de todas.
 router.get('/dados', async (req, res) => {
-  try { res.json(await E.apuracao(pool, req.query.turno)); }
+  try {
+    const CID = require('../cidades');
+    let c = req.cidade;
+    if (!c && req.query.cidade) c = await CID.porSlug(pool, String(req.query.cidade).toLowerCase().slice(0, 40));
+    const id = c ? c.id : CID.SANTA_FE;
+    res.json(await require('../isolamento').run(id, () => E.apuracao(pool, req.query.turno)));
+  }
   catch (err) { console.error('apuracao/dados:', err.message); res.status(500).json({ error: 'Erro interno' }); }
 });
 

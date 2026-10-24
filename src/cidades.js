@@ -25,6 +25,7 @@
 // ============================================================================
 
 const SANTA_FE = 1;   // id fixo da cidade oficial (tudo que existia antes é dela)
+const ISO = require('./isolamento');
 
 // Tabelas que pertencem a UMA cidade. As que têm corporation_id (ranks,
 // members, corp_*) herdam a cidade da corporação e não precisam da coluna.
@@ -183,7 +184,7 @@ async function garantir(pool) {
 // Cache curto: a lista de cidades quase nunca muda e é lida em TODO pedido.
 let _cache = null, _cacheEm = 0;
 async function todas(pool) {
-  if (_cache && Date.now() - _cacheEm < 5000) return _cache;
+  if (_cache && Date.now() - _cacheEm < 1500) return _cache;   // [24/10] 1,5 s: cidade criada/apagada aparece logo
   const r = await pool.query(`SELECT * FROM cidades ORDER BY ordem, id`);
   _cache = r.rows; _cacheEm = Date.now();
   return _cache;
@@ -192,7 +193,7 @@ function limparCache() { _cache = null; }
 // Não achou no cache? Relê uma vez (cidade recém-criada não pode esperar 30 s).
 async function achar(pool, f) {
   let c = (await todas(pool)).find(f);
-  if (!c && Date.now() - _cacheEm > 500) { limparCache(); c = (await todas(pool)).find(f); }
+  if (!c && Date.now() - _cacheEm > 100) { limparCache(); c = (await todas(pool)).find(f); }
   return c || null;
 }
 async function porId(pool, id) { return achar(pool, c => c.id === Number(id)); }
@@ -202,6 +203,9 @@ async function porSlug(pool, slug) { return achar(pool, c => c.slug === String(s
 // UM servidor; `servidores` > 1 é anomalia (dois servidores dizendo ser a mesma
 // cidade) e aparece só pra quem investiga, nunca na tela.
 async function movimento(pool) {
+  return ISO.global(() => _movimento(pool));
+}
+async function _movimento(pool) {
   const out = {};
   try {
     const r = await pool.query(
@@ -262,7 +266,9 @@ function contexto(pool) {
           dono_da_cidade: !!(cidade && cidade.dono_user_id && cidade.dono_user_id === base.id),
         });
       }
-      next();
+      // [24/10] daqui pra frente TODA consulta deste pedido só enxerga a cidade escolhida
+      // (Row-Level Security, src/isolamento.js). Sem cidade = nenhuma tabela de cidade.
+      ISO.run(cidade ? cidade.id : null, next);
     } catch (e) {
       console.error('[cidades] contexto:', e.message);
       res.status(500).json({ error: 'Erro interno' });
@@ -293,7 +299,132 @@ function voltarSeguro(v) {
   return s.slice(0, 300);
 }
 
+// ------------------------------------------------------------ pré-modelo de cidade
+// [24/10] [stated] Julio: "Deve ter todas as corps, as pessoas quando forem criar (pagando a taxa)
+// ja vao ganhar esse pre model ae completo para cidade ja poder rodar".
+// Toda cidade que não é o Santa Fé nasce (e é conferida a cada boot) com a ESTRUTURA do Santa Fé:
+//   · todas as corporações (tipo corp e o Governo), com cargos, salários e permissões — SEM membros,
+//     sem caixa, sem estoque (o estado é dela, começa do zero). Facção e empresa não: são dos jogadores;
+//   · o Governo da cidade (tesouro zerado, obras e empregos civis com os valores do Santa Fé);
+//   · os regulamentos, a loja de Royalties (motivos e catálogo) e as configs de rede
+//     (alto comando, segurança), além de temporada 1 e eleição em preparo.
+// Só COPIA o que ainda não existe: o que o dono da cidade mudar depois nunca é sobrescrito.
+const MODELO = SANTA_FE;
+const TIPOS_DO_MODELO = ['corp', 'governo'];
+const NAO_COPIA_CORP = ['id', 'cidade_id', 'created_at', 'updated_at', 'cnpj', 'owner_id'];
+const NAO_COPIA_RANK = ['id', 'corporation_id', 'created_at'];
+const CONFIG_DO_MODELO = ['alto_comando', 'seguranca'];
+
+async function _colunas(pool, tabela, fora) {
+  const r = await pool.query(`SELECT column_name FROM information_schema.columns WHERE table_schema = 'public' AND table_name = $1 ORDER BY ordinal_position`, [tabela]);
+  return r.rows.map(x => x.column_name).filter(c => !fora.includes(c));
+}
+async function _existe(pool, tabela) {
+  return !!(await pool.query('SELECT to_regclass($1) AS r', [tabela])).rows[0].r;
+}
+
+async function montarCidade(pool, cidadeId) {
+  cidadeId = Number(cidadeId);
+  if (!cidadeId || cidadeId === MODELO) return { corps: 0 };
+  return ISO.global(async () => {
+    const feito = { corps: 0, cargos: 0 };
+    const colC = await _colunas(pool, 'corporations', NAO_COPIA_CORP);
+    const colR = await _colunas(pool, 'ranks', NAO_COPIA_RANK);
+    const modelo = (await pool.query(
+      `SELECT id, slug FROM corporations WHERE cidade_id = $1 AND is_active = true AND tipo = ANY($2) ORDER BY id`,
+      [MODELO, TIPOS_DO_MODELO])).rows;
+    for (const m of modelo) {
+      const ja = (await pool.query(`SELECT id FROM corporations WHERE cidade_id = $1 AND slug = $2`, [cidadeId, m.slug])).rows[0];
+      if (ja) continue;
+      const nova = (await pool.query(
+        `INSERT INTO corporations (${colC.join(', ')}, cidade_id) SELECT ${colC.join(', ')}, $2 FROM corporations WHERE id = $1 RETURNING id`,
+        [m.id, cidadeId])).rows[0].id;
+      const r = await pool.query(
+        `INSERT INTO ranks (${colR.join(', ')}, corporation_id) SELECT ${colR.join(', ')}, $2 FROM ranks WHERE corporation_id = $1`,
+        [m.id, nova]);
+      feito.corps++; feito.cargos += r.rowCount;
+    }
+    // Governo da cidade
+    if (await _existe(pool, 'governo_config')) {
+      const g = (await pool.query(`SELECT id FROM corporations WHERE cidade_id = $1 AND tipo = 'governo' AND is_active = true ORDER BY id LIMIT 1`, [cidadeId])).rows[0];
+      if (g) {
+        await pool.query(`INSERT INTO governo_config (cidade_id, corporation_id) VALUES ($1,$2) ON CONFLICT (cidade_id) DO NOTHING`, [cidadeId, g.id]);
+        await pool.query(`INSERT INTO corp_caixa (corporation_id, saldo) VALUES ($1, 0) ON CONFLICT DO NOTHING`, [g.id]);
+      }
+      await pool.query(`INSERT INTO governo_obras (cidade_id, chave, nome, valor, ordem)
+                        SELECT $2, chave, nome, valor, ordem FROM governo_obras WHERE cidade_id = $1 ON CONFLICT DO NOTHING`, [MODELO, cidadeId]);
+      await pool.query(`INSERT INTO governo_empregos (cidade_id, emprego, nome, teto)
+                        SELECT $2, emprego, nome, teto FROM governo_empregos WHERE cidade_id = $1 ON CONFLICT DO NOTHING`, [MODELO, cidadeId]);
+    }
+    // regulamentos (só se a cidade ainda não tem nenhum)
+    if (await _existe(pool, 'cidade_regulamentos')) {
+      const tem = (await pool.query(`SELECT 1 FROM cidade_regulamentos WHERE cidade_id = $1 LIMIT 1`, [cidadeId])).rows[0];
+      if (!tem) {
+        const colG = await _colunas(pool, 'cidade_regulamentos', ['id', 'cidade_id']);
+        await pool.query(`INSERT INTO cidade_regulamentos (${colG.join(', ')}, cidade_id) SELECT ${colG.join(', ')}, $2 FROM cidade_regulamentos WHERE cidade_id = $1`, [MODELO, cidadeId]);
+      }
+    }
+    // Royalties: motivos e catálogo
+    for (const t of ['royalties_motivos', 'royalties_catalogo']) {
+      if (!(await _existe(pool, t))) continue;
+      const col = await _colunas(pool, t, ['id', 'cidade_id', 'criado_em', 'atualizado_em']);
+      await pool.query(`INSERT INTO ${t} (${col.join(', ')}, cidade_id) SELECT ${col.join(', ')}, $2 FROM ${t} WHERE cidade_id = $1 ON CONFLICT DO NOTHING`, [MODELO, cidadeId]);
+    }
+    // configs de rede + temporada 1 + eleição
+    await pool.query(`INSERT INTO game_config (cidade_id, key, value) SELECT $2, key, value FROM game_config WHERE cidade_id = $1 AND key = ANY($3) ON CONFLICT DO NOTHING`,
+      [MODELO, cidadeId, CONFIG_DO_MODELO]);
+    await pool.query(`INSERT INTO game_config (cidade_id, key, value) VALUES ($1, 'temporada', '{"n":1}'::jsonb) ON CONFLICT DO NOTHING`, [cidadeId]);
+    if (await _existe(pool, 'eleicao_estado')) {
+      await pool.query(`INSERT INTO eleicao_estado (cidade_id, id) VALUES ($1, 1) ON CONFLICT DO NOTHING`, [cidadeId]);
+    }
+    if (feito.corps) console.log(`[cidades] pré-modelo na cidade ${cidadeId}: ${feito.corps} corporações, ${feito.cargos} cargos`);
+    return feito;
+  });
+}
+
+// [24/10] a cidade de teste: dono = a conta da plataforma (o Julio) e SSU sempre aberta (servidor
+// da equipe). Só preenche se estiver vazio: o que mudarem no painel dela fica.
+async function montarTodas(pool) {
+  return ISO.global(async () => {
+    const cs = (await pool.query(`SELECT id, slug FROM cidades WHERE id <> $1 AND status <> 'fechada' ORDER BY id`, [MODELO])).rows;
+    for (const c of cs) await montarCidade(pool, c.id);
+    const t = cs.find(c => c.slug === 'testes');
+    if (t) {
+      await pool.query(`UPDATE cidades SET dono_user_id = (SELECT id FROM users WHERE discord_id = '810270743925489676')
+                         WHERE id = $1 AND dono_user_id IS NULL`, [t.id]);
+      // grade própria: servidor da equipe, sempre aberto (o Dono muda na aba SSU do painel dela)
+      await pool.query(`DELETE FROM game_config WHERE cidade_id = $1 AND key = 'ssu' AND value = '{"sempre_aberta": true}'::jsonb`, [t.id]);
+      await pool.query(`INSERT INTO game_config (cidade_id, key, value) VALUES ($1, 'ssu_grade', '{"sempre_aberta": true}'::jsonb) ON CONFLICT DO NOTHING`, [t.id]);
+      limparCache();
+    }
+  });
+}
+
+// SÓ PARA OS TESTES: apaga uma cidade de teste e tudo dela (nunca o Santa Fé).
+async function apagarCidadeDeTeste(pool, slug) {
+  return ISO.global(async () => {
+    const c = (await pool.query(`SELECT id FROM cidades WHERE slug = $1`, [slug])).rows[0];
+    if (!c || c.id === SANTA_FE) return false;
+    const tabs = (await pool.query(`SELECT table_name FROM information_schema.columns
+                                     WHERE table_schema = 'public' AND column_name = 'cidade_id' AND table_name NOT IN ('cidades', 'corporations')`)).rows;
+    const cli = await pool.connect();
+    try {
+      await cli.query(`SELECT set_config('royalties.limpeza_de_teste', 'sim', false)`);
+      await cli.query(`DELETE FROM governo_config WHERE cidade_id = $1`, [c.id]).catch(() => {});
+      await cli.query(`DELETE FROM corporations WHERE cidade_id = $1`, [c.id]);
+      for (let volta = 0; volta < 3; volta++) {
+        for (const { table_name: t } of tabs) await cli.query(`DELETE FROM ${t} WHERE cidade_id = $1`, [c.id]).catch(() => {});
+      }
+      await cli.query(`DELETE FROM cidades WHERE id = $1`, [c.id]);
+      await cli.query(`RESET royalties.limpeza_de_teste`);
+    } finally { cli.release(); }
+    limparCache();
+    return true;
+  });
+}
+
 module.exports = {
+  montarCidade, montarTodas, apagarCidadeDeTeste,
   SANTA_FE, TABELAS_DA_CIDADE,
   slugValido, nomeDaLoja, slugDoJogo, abaTrocada, voltarSeguro, senhaConfere,
   garantir, todas, porId, porSlug, limparCache, movimento, meusCargos,

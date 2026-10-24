@@ -35,7 +35,7 @@ function t(nome, cond, extra) {
   }
   await pool.query(
     `INSERT INTO game_config (key, value, updated_at) VALUES ('precos_itens', $1::jsonb, NOW())
-     ON CONFLICT (key) DO UPDATE SET value = $1::jsonb`,
+     ON CONFLICT (cidade_id, key) DO UPDATE SET value = $1::jsonb`,
     [JSON.stringify({ itens: { 'FAL': 8750, 'Colete': 20000, 'Algema': 425 } })]);
 
   // ---- 1. o caixa começa zerado e o dinheiro entra
