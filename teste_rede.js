@@ -86,6 +86,15 @@ async function usuario(nome, did) {
   t('você troca o Dono da cidade de teste', tr.s === 200, JSON.stringify(tr.j));
   t('no banco a cidade passou a ter o novo dono', (await pool.query(`SELECT dono_user_id FROM cidades WHERE id = $1`, [TST.id])).rows[0].dono_user_id === NOVO);
   t('na hora: o novo dono abre a economia (só Dono) da cidade dele', (await site(cNt, 'GET', '/api/admin/economia')).s === 200);
+  // [24/10] bug do print do Julio: Dono sem linha de staff via "Painel admin" trancado e /admin 403
+  const home = await site(cNt, 'GET', '/painel', null, true);
+  t('...a home dele mostra o Painel admin destrancado', home.s === 200 && home.txt.includes('href="/admin"'), home.s);
+  t('...e a página /admin abre (200)', (await site(cNt, 'GET', '/admin', null, true)).s === 200);
+  const dg = await site(cNt, 'POST', `/api/admin/users/${COMUM}/cargo`, { cargo: 'diretor' });
+  t('...e ele dá Diretor Geral pra alguém na staff da cidade dele', dg.s === 200 && (await pool.query(`SELECT cargo FROM cidade_staff WHERE cidade_id = $1 AND user_id = $2`, [TST.id, COMUM])).rows[0]?.cargo === 'diretor', JSON.stringify(dg.j));
+  t('...e esse cargo não vale no Santa Fé', !(await pool.query(`SELECT 1 FROM cidade_staff WHERE cidade_id = 1 AND user_id = $1`, [COMUM])).rows.length);
+  await pool.query(`DELETE FROM cidade_staff WHERE user_id = $1`, [COMUM]);
+  t('...e no Santa Fé o Painel admin continua trancado pra ele', !(await site(cNsf, 'GET', '/painel', null, true)).txt.includes('href="/admin"'));
   t('...e no Santa Fé ele continua sem nada (403)', (await site(cNsf, 'GET', '/api/admin/economia')).s === 403);
   t('...e mesmo sendo dono de cidade, NÃO entra na tela Rede (403)', (await site(cNt, 'PUT', `/api/rede/cidades/${TST.id}/dono`, { user_id: COMUM })).s === 403 && (await site(cNt, 'GET', '/api/rede/cidades')).s === 403);
   t('trocar pra mesma pessoa de novo = 409', (await site(cJ, 'PUT', `/api/rede/cidades/${TST.id}/dono`, { user_id: NOVO })).s === 409);

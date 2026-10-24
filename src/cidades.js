@@ -279,6 +279,10 @@ function contexto(pool) {
           cidade_oficial: !!(cidade && cidade.tipo === 'oficial'),
           dono_da_cidade: !!(cidade && cidade.dono_user_id && cidade.dono_user_id === base.id),
         });
+        // [24/10] Dono da cidade (ou a conta da plataforma na oficial) sem linha em cidade_staff
+        // ficava com is_admin false: home mostrava "Painel admin" trancado e /admin dava 403,
+        // mesmo com o cargoDe dizendo 'dono'. is_admin passa a seguir o cargo efetivo.
+        if (!req.user.is_admin && require('./permissoes').cargoDe(req.user)) req.user.is_admin = true;
       }
       // [24/10] daqui pra frente TODA consulta deste pedido só enxerga a cidade escolhida
       // (Row-Level Security, src/isolamento.js). Sem cidade = nenhuma tabela de cidade.
