@@ -78,6 +78,13 @@ router.put('/api/governo/empregos/:emprego', CID.exigeCidade(), soDono, so(async
   res.json({ ok: true });
 }));
 
+// [24/10] repasse semanal de cada corporação (o Dono muda direto; o Governo, por projeto na Câmara)
+router.put('/api/governo/repasse/:corpId', CID.exigeCidade(), soDono, so(async (req, res) => {
+  const r = await GOV.salvarRepasse(pool, req.cidade.id, req.params.corpId, req.body || {});
+  await audit(req, 'governo:repasse', { corp_id: Number(req.params.corpId), ...r });
+  res.json({ ok: true, ...r });
+}));
+
 // [23/10] CÂMARA — propostas votadas pelo Parlamento (as regras de quem pode o quê ficam no módulo)
 const CAM = require('../governo-camara');
 router.get('/api/governo/camara', CID.exigeCidade(), so(async (req, res) => {

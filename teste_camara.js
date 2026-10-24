@@ -223,10 +223,63 @@ const lista = (c) => pedir(c, 'GET', '/api/governo/camara');
     const rr = (await pool.query(`INSERT INTO ranks (corporation_id, name, level, salary) VALUES ($1,'Soldado',1,1000) RETURNING id`, [cc])).rows[0].id;
     assert.strictEqual((await pedir(S.cm_pres, 'POST', '/api/governo/camara', { tipo: 'salario_corp', rank_id: rr, valor: 1500, descricao: 'cargo de outra cidade' })).s, 400);
   });
+  // [24/10] [stated] Julio: "Governo ainda nao consegue editar o fundo que cai nas corporações"
+  console.log('\nREPASSE SEMANAL DAS CORPORAÇÕES');
+  const pm = (await pool.query(`SELECT id, slug, repasse_semanal FROM corporations WHERE cidade_id = 1 AND slug = 'jornal'`)).rows[0];
+  const ORCt = require('./src/corp-orcamento');
+  const CXt = require('./src/corp-caixa-db');
+  await caso('o painel do Governo mostra o repasse de cada corporação (empresa fica de fora)', async () => {
+    const g = await pedir(S.cm_pres, 'GET', '/api/governo');
+    const c = g.j.corporacoes.find(x => x.id === pm.id);
+    assert.ok(c && c.repasse && c.repasse.atual === ORCt.baseDe('jornal') && c.repasse.padrao === 10000, JSON.stringify(c && c.repasse));
+    assert.ok(!g.j.corporacoes.some(x => x.tipo === 'empresa' && x.repasse));
+  });
+  await caso('Presidente propõe, Câmara aprova, sanciona: o repasse do Jornal muda e é o que cai no caixa', async () => {
+    const teto = ORCt.baseDe('jornal') * 2;
+    assert.strictEqual((await pedir(S.cm_pres, 'POST', '/api/governo/camara', { tipo: 'repasse_corp', corp_id: pm.id, valor: teto + 1, descricao: 'repasse grande demais' })).s, 400);
+    const r = await pedir(S.cm_pres, 'POST', '/api/governo/camara', { tipo: 'repasse_corp', corp_id: pm.id, valor: 15000, descricao: 'jornal precisa de mais câmera' });
+    assert.strictEqual(r.s, 200, JSON.stringify(r.j));
+    await aprovarESancionar(r.j.id);
+    assert.strictEqual((await prop(r.j.id)).status, 'sancionada');
+    assert.strictEqual(Number((await pool.query(`SELECT repasse_semanal FROM corporations WHERE id = $1`, [pm.id])).rows[0].repasse_semanal), 15000);
+    assert.strictEqual(await CXt.repasseDefinido(pm.id), 15000);
+    assert.strictEqual(ORCt.valorDe('jornal', 0, await CXt.repasseDefinido(pm.id)).total, 15000);
+    const res = await CXt.resumoOrcamento(pm.id, 'jornal');
+    assert.strictEqual(res.previsto.base, 15000);
+  });
+  await caso('o repasse cai no caixa com o valor novo (período novo)', async () => {
+    await pool.query(`DELETE FROM corp_orcamento_pago WHERE corporation_id = $1`, [pm.id]);
+    const antes = Number((await pool.query(`SELECT COALESCE((SELECT saldo FROM corp_caixa WHERE corporation_id = $1), 0) s`, [pm.id])).rows[0].s);
+    const pg = await CXt.pagarOrcamentoSePendente(pm.id, 'jornal');
+    assert.ok(pg.pagou && pg.base === 15000, JSON.stringify(pg));
+    const depois = Number((await pool.query(`SELECT saldo FROM corp_caixa WHERE corporation_id = $1`, [pm.id])).rows[0].saldo);
+    assert.strictEqual(depois - antes, pg.valor);
+  });
+  await caso('o Dono muda direto; Parlamentar/Presidente não mudam direto (403)', async () => {
+    assert.strictEqual((await pedir(S.cm_pres, 'PUT', `/api/governo/repasse/${pm.id}`, { valor: 1 })).s, 403);
+    assert.strictEqual((await pedir(S.cm_p1, 'PUT', `/api/governo/repasse/${pm.id}`, { valor: 1 })).s, 403);
+    const r = await pedir(DN, 'PUT', `/api/governo/repasse/${pm.id}`, { valor: 12000 });
+    assert.strictEqual(r.s, 200, JSON.stringify(r.j));
+    assert.strictEqual(await CXt.repasseDefinido(pm.id), 12000);
+  });
+  await caso('empresa e corporação de outra cidade não entram (400/404)', async () => {
+    const emp = (await pool.query(`SELECT id FROM corporations WHERE cidade_id = 1 AND tipo = 'empresa' LIMIT 1`)).rows[0];
+    if (emp) {
+      assert.strictEqual((await pedir(S.cm_pres, 'POST', '/api/governo/camara', { tipo: 'repasse_corp', corp_id: emp.id, valor: 1000, descricao: 'empresa não recebe' })).s, 400);
+      assert.strictEqual((await pedir(DN, 'PUT', `/api/governo/repasse/${emp.id}`, { valor: 1000 })).s, 404);
+    }
+    const outra = (await pool.query(`SELECT id FROM corporations WHERE cidade_id <> 1 AND tipo = 'corp' LIMIT 1`)).rows[0];
+    if (outra) {
+      assert.strictEqual((await pedir(S.cm_pres, 'POST', '/api/governo/camara', { tipo: 'repasse_corp', corp_id: outra.id, valor: 1000, descricao: 'corp de outra cidade' })).s, 400);
+      assert.strictEqual((await pedir(DN, 'PUT', `/api/governo/repasse/${outra.id}`, { valor: 1000 })).s, 404);
+    }
+    await pool.query(`UPDATE corporations SET repasse_semanal = $2 WHERE id = $1`, [pm.id, pm.repasse_semanal]);
+  });
+
   await caso('painel do Governo mostra os salários de todas as corporações e pode_propor', async () => {
     const g = await pedir(S.cm_pres, 'GET', '/api/governo');
     assert.strictEqual(g.s, 200); assert.strictEqual(g.j.pode_propor, true);
-    assert.ok(g.j.corporacoes.length > 0 && g.j.corporacoes[0].cargos.length > 0);
+    assert.ok(g.j.corporacoes.some(c => c.cargos.length > 0));   // [24/10] corp sem cargo também vem (pro repasse)
     assert.ok(!g.j.corporacoes.some(c => c.tipo === 'faccao' || c.tipo === 'governo'));
     assert.strictEqual((await pedir(S.cm_min, 'GET', '/api/governo')).j.pode_propor, false);
   });

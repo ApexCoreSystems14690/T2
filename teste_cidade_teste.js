@@ -144,6 +144,8 @@ async function site(c, m, p, body) {
   await pool.query(`DELETE FROM game_patrimonio WHERE roblox_id = $1`, [RID]);
   await pool.query(`DELETE FROM game_players WHERE roblox_id = $1`, [RID]);
   await pool.query(`DELETE FROM celular_contatos WHERE dono_numero = $1`, [num]);
+  // o teste de wipe sobe a temporada da cidade de teste: volta pra 1 (senão a próxima rodada falha)
+  await pool.query(`UPDATE game_config SET value = '{"n":1}' WHERE cidade_id = $1 AND key = 'temporada'`, [TST]);
   console.log('\n' + ok + ' ok, ' + falhou + ' falharam');
   await pool.end(); process.exit(falhou ? 1 : 0);
 })();

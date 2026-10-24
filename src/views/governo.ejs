@@ -180,6 +180,11 @@
         <div id="corps-sal"></div>
       </div>
       <div class="bloco">
+        <h3>Repasse semanal das corporações <small id="rep-sub"></small></h3>
+        <p class="expl">O dinheiro que cai no caixa de cada corporação a cada 7 dias (mais um extra por ocorrência registrada na semana). Empresa não recebe repasse. Mudar o valor é projeto na Câmara: clique em <b>Propor</b>. Vale a partir do próximo repasse.</p>
+        <div class="rolar"><table style="display:table;white-space:normal"><thead><tr><th>Corporação</th><th class="num">Por semana</th><th class="num">Padrão</th></tr></thead><tbody id="repasses"></tbody></table></div>
+      </div>
+      <div class="bloco">
         <h3>Empregos civis pagos pelo tesouro</h3>
         <p class="expl">Gari, repositor, pizzaiolo, carteiro, mecânico e uber de passageiro bot recebem do tesouro do Governo. O jogo diz quanto cada tarefa pagou; pedido acima do teto é recusado inteiro. Tesouro vazio: o emprego não paga.</p>
         <div class="rolar"><table style="display:table;white-space:normal"><thead><tr><th>Emprego</th><th class="num">Teto por tarefa</th></tr></thead><tbody id="empregos"></tbody></table></div>
@@ -284,7 +289,8 @@
     // [24/10] salários de todas as corporações (só leitura; mudar = projeto na Câmara)
     var CS = D.corporacoes || [];
     $('corp-sub').textContent = CS.length + ' corporaç' + (CS.length === 1 ? 'ão' : 'ões');
-    $('corps-sal').innerHTML = CS.length ? CS.map(function (c) {
+    var CSc = CS.filter(function (c) { return c.cargos.length; });   // corp sem cargo aparece só no repasse
+    $('corps-sal').innerHTML = CSc.length ? CSc.map(function (c) {
       return '<details class="corp-sal"><summary><b>' + esc(c.nome) + '</b> <span class="expl">· ' + c.membros + ' membro(s) · folha ' + cheio(c.folha40) + ' a cada 40 min se todos trabalharem</span></summary>'
         + '<div class="rolar"><table style="display:table;white-space:normal"><thead><tr><th>Cargo</th><th class="num">Por 40 min</th><th class="num">Membros</th>' + (D.pode_propor ? '<th></th>' : '') + '</tr></thead><tbody>'
         + c.cargos.map(function (r) {
@@ -292,6 +298,18 @@
               + (D.pode_propor ? '<td class="num"><button class="btn sec mini" data-propor-rank="' + r.id + '">Propor</button></td>' : '') + '</tr>';
           }).join('') + '</tbody></table></div></details>';
     }).join('') : '<p class="expl">Nenhuma corporação com cargos nesta cidade.</p>';
+    // [24/10] repasse semanal de cada corporação (o "fundo que cai nas corporações")
+    var RP = CS.filter(function (c) { return c.repasse; });
+    $('rep-sub').textContent = RP.length ? 'total ' + cheio(RP.reduce(function (t, c) { return t + c.repasse.atual; }, 0)) + ' por semana' : '';
+    $('repasses').innerHTML = RP.length ? RP.map(function (c) {
+      return '<tr><td><b>' + esc(c.nome) + '</b>' + (c.repasse.definido ? ' <span class="pill sim">definido pelo Governo</span>' : '') + '</td>'
+        + '<td class="num">' + (c.repasse.atual ? cheio(c.repasse.atual) : '<span class="pill nao">sem repasse</span>')
+        + (D.eh_dono ? '<br><button class="btn sec mini" data-repasse="' + c.id + '">Mudar</button>' : '')
+        + (D.pode_propor ? ' <button class="btn sec mini" data-propor-rep="' + c.id + '">Propor</button>' : '') + '</td>'
+        + '<td class="num">' + cheio(c.repasse.padrao) + '</td></tr>';
+    }).join('') : '<tr><td colspan="3" class="expl">Nenhuma corporação recebe repasse nesta cidade.</td></tr>';
+    $('repasses').querySelectorAll('[data-propor-rep]').forEach(function (b) { b.onclick = function () { irPropor({ tipo: 'repasse_corp', corp_id: Number(b.dataset.proporRep) }); }; });
+    $('repasses').querySelectorAll('[data-repasse]').forEach(function (b) { b.onclick = function () { editarRepasse(Number(b.dataset.repasse)); }; });
     $('corps-sal').querySelectorAll('[data-propor-rank]').forEach(function (b) { b.onclick = function () { irPropor({ tipo: 'salario_corp', rank_id: Number(b.dataset.proporRank) }); }; });
     $('empregos').querySelectorAll('[data-teto]').forEach(function (b) { b.onclick = function () { editarTeto(b.dataset.teto); }; });
     var ST = { pago: ['sim', 'Pago'], nao_entrou: ['nao', 'Não entrou no jogo'], sem_saldo: ['alerta', 'Caixa sem saldo'], sem_roblox: ['alerta', 'Sem Roblox vinculado'] };
@@ -335,6 +353,11 @@
     var v = prompt('Novo valor de "' + o.nome + '" (só números):', String(o.valor)); if (v == null) return;
     try { await enviar('PUT', '/api/governo/obras/' + chave, { valor: Number(String(v).replace(/\D/g, '')) }); toast('Valor salvo'); carregar(); } catch (e) { toast(e.message, true); }
   }
+  async function editarRepasse(id) {
+    var c = (D.corporacoes || []).find(function (x) { return x.id === id; }); if (!c || !c.repasse) return;
+    var v = prompt('Repasse semanal de "' + c.nome + '" (R$). Padrão: ' + c.repasse.padrao, c.repasse.atual); if (v === null) return;
+    try { await enviar('PUT', '/api/governo/repasse/' + id, { valor: Number(String(v).replace(/\D/g, '')) }); toast('Repasse salvo: vale a partir do próximo'); carregar(); } catch (er) { toast(er.message, true); }
+  }
   async function editarTeto(emp) {
     var e = (D.empregos || []).find(function (x) { return x.emprego === emp; }); if (!e) return;
     var v = prompt('Teto por tarefa de "' + e.nome + '" (R$):', e.teto); if (v === null) return;
@@ -366,22 +389,25 @@
     var optCorp = (CAM.corporacoes || []).map(function (c) {
       return '<optgroup label="' + esc(c.nome) + '">' + c.cargos.map(function (r) {
         return '<option value="' + r.id + '">' + esc(r.nome) + ' (hoje ' + cheio(r.salario) + ', teto ' + cheio(r.teto) + ')</option>'; }).join('') + '</optgroup>'; }).join('');
+    var optRep = (CAM.repasses || []).map(function (c) {
+      return '<option value="' + c.id + '">' + esc(c.nome) + ' (hoje ' + cheio(c.atual) + ', teto ' + cheio(c.teto) + ')</option>'; }).join('');
     var optEmp = (CAM.empregos || []).map(function (e) {
       return '<option value="' + esc(e.emprego) + '">' + esc(e.nome) + ' (hoje ' + cheio(e.teto) + ', teto ' + cheio(e.teto_max) + ')</option>'; }).join('');
     $('cam-form').innerHTML = podeAbrir ? (
       '<div class="camf">'
-      + '<label>Tipo<select id="cf-tipo"><option value="salario">Salário de cargo do Governo</option><option value="salario_corp">Salário de cargo de corporação</option><option value="emprego">Teto de emprego civil</option><option value="obra">Aprovar obra</option></select></label>'
+      + '<label>Tipo<select id="cf-tipo"><option value="salario">Salário de cargo do Governo</option><option value="salario_corp">Salário de cargo de corporação</option><option value="emprego">Teto de emprego civil</option><option value="repasse_corp">Repasse semanal de corporação</option><option value="obra">Aprovar obra</option></select></label>'
       + '<label data-cf="salario">Cargo do Governo<select id="cf-cargo">' + CAM.cargos.filter(function (c) { return c.teto; }).map(function (c) {
           return '<option value="' + c.id + '">' + esc(c.nome) + ' (hoje ' + cheio(c.salario) + ', teto ' + cheio(c.teto) + ')</option>'; }).join('') + '</select></label>'
       + '<label data-cf="salario_corp" hidden>Cargo da corporação<select id="cf-rank">' + optCorp + '</select></label>'
       + '<label data-cf="emprego" hidden>Emprego civil<select id="cf-emp">' + optEmp + '</select></label>'
-      + '<label data-cf="salario salario_corp emprego" id="cf-l-valor"><span id="cf-l-valor-t">Novo salário a cada 3 dias (R$)</span><input id="cf-valor" inputmode="numeric" placeholder="só números"></label>'
+      + '<label data-cf="repasse_corp" hidden>Corporação<select id="cf-corp">' + optRep + '</select></label>'
+      + '<label data-cf="salario salario_corp emprego repasse_corp" id="cf-l-valor"><span id="cf-l-valor-t">Novo salário a cada 3 dias (R$)</span><input id="cf-valor" inputmode="numeric" placeholder="só números"></label>'
       + '<label data-cf="obra" hidden>Obra<select id="cf-obra">' + (D && D.obras ? D.obras.map(function (o) { return '<option value="' + esc(o.chave) + '">' + esc(o.nome) + ' (' + cheio(o.valor) + ')</option>'; }).join('') : '') + '</select></label>'
       + '<label class="tudo">Justificativa<textarea id="cf-desc" rows="2" maxlength="500" placeholder="O que a proposta muda e por quê"></textarea></label>'
       + '<div><button class="btn" id="cf-abrir">Abrir proposta</button></div></div>'
     ) : '<p class="expl" style="margin:0">Só Parlamentar, o Presidente da Câmara e o Presidente da República abrem proposta. Votam os Parlamentares.</p>';
     if (podeAbrir) {
-      var VALOR_T = { salario: 'Novo salário a cada 3 dias (R$)', salario_corp: 'Novo salário por 40 min (R$)', emprego: 'Novo teto por tarefa (R$)' };
+      var VALOR_T = { salario: 'Novo salário a cada 3 dias (R$)', salario_corp: 'Novo salário por 40 min (R$)', emprego: 'Novo teto por tarefa (R$)', repasse_corp: 'Novo repasse por semana (R$)' };
       $('cf-tipo').onchange = function () {
         var t = this.value;
         document.querySelectorAll('#cam-form [data-cf]').forEach(function (l) { l.hidden = l.dataset.cf.split(' ').indexOf(t) < 0; });
@@ -391,6 +417,7 @@
         $('cf-tipo').value = PROPOR.tipo; $('cf-tipo').onchange.call($('cf-tipo'));
         if (PROPOR.rank_id) $('cf-rank').value = String(PROPOR.rank_id);
         if (PROPOR.emprego) $('cf-emp').value = PROPOR.emprego;
+        if (PROPOR.corp_id) $('cf-corp').value = String(PROPOR.corp_id);
         PROPOR = null; $('cf-valor').focus();
       }
       $('cf-abrir').onclick = async function () {
@@ -400,6 +427,7 @@
         else if (tipo === 'salario') { corpo.rank_id = Number($('cf-cargo').value); corpo.valor = val; }
         else if (tipo === 'salario_corp') { corpo.rank_id = Number($('cf-rank').value); corpo.valor = val; }
         else if (tipo === 'emprego') { corpo.emprego = $('cf-emp').value; corpo.valor = val; }
+        else if (tipo === 'repasse_corp') { corpo.corp_id = Number($('cf-corp').value); corpo.valor = val; }
         try { var j = await enviar('POST', '/api/governo/camara', corpo); toast('Proposta nº ' + j.id + ' aberta: 48 h de debate'); carregarCamara(); } catch (e) { toast(e.message, true); }
       };
     }
@@ -408,6 +436,8 @@
         ? 'Salário de <b>' + esc(p.cargo) + '</b>: ' + cheio(p.valor_atual) + ' → <b>' + cheio(p.valor) + '</b> a cada 3 dias'
         : p.tipo === 'salario_corp'
         ? 'Salário de <b>' + esc(p.cargo) + '</b>: ' + cheio(p.valor_atual) + ' → <b>' + cheio(p.valor) + '</b> por 40 min'
+        : p.tipo === 'repasse_corp'
+        ? 'Repasse semanal de <b>' + esc(p.cargo) + '</b>: ' + cheio(p.valor_atual) + ' → <b>' + cheio(p.valor) + '</b> por semana'
         : p.tipo === 'emprego'
         ? 'Teto de <b>' + esc(p.cargo) + '</b>: ' + cheio(p.valor_atual) + ' → <b>' + cheio(p.valor) + '</b> por tarefa'
         : 'Obra <b>' + esc(p.cargo) + '</b>: ' + cheio(p.valor) + ' do tesouro';

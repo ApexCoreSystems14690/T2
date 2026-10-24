@@ -35,7 +35,7 @@ const CARGO_PARLAMENTAR = 'Parlamentar';
 const CARGO_PRES_CAMARA = 'Presidente da Câmara';
 const CARGO_PRESIDENTE = 'Presidente da República';
 const QUEM_ABRE = [CARGO_PARLAMENTAR, CARGO_PRES_CAMARA, CARGO_PRESIDENTE];
-const TIPOS = ['salario', 'salario_corp', 'emprego', 'obra'];
+const TIPOS = ['salario', 'salario_corp', 'emprego', 'obra', 'repasse_corp'];   // [24/10] repasse semanal de corporação
 const TETO_CORP_SEM_SALARIO = 20000;
 const perm = require('./permissoes');
 
@@ -88,7 +88,9 @@ async function garantir(db) {
     );
     -- [24/10] tipos novos (salário de corporação, teto de emprego civil)
     ALTER TABLE governo_propostas DROP CONSTRAINT IF EXISTS governo_propostas_tipo_check;
-    ALTER TABLE governo_propostas ADD CONSTRAINT governo_propostas_tipo_check CHECK (tipo IN ('salario','salario_corp','emprego','obra'));
+    ALTER TABLE governo_propostas ADD CONSTRAINT governo_propostas_tipo_check CHECK (tipo IN ('salario','salario_corp','emprego','obra','repasse_corp'));
+    -- [24/10] repasse semanal: qual corporação
+    ALTER TABLE governo_propostas ADD COLUMN IF NOT EXISTS corp_id INTEGER REFERENCES corporations(id) ON DELETE SET NULL;
   `);
 }
 
@@ -173,16 +175,25 @@ async function abrir(db, cidadeId, user, b) {
     if (v > teto) throw erro(`Acima do teto: no máximo R$ ${teto.toLocaleString('pt-BR')} por tarefa (2x o de hoje)`);
     if (v === Number(e.teto)) throw erro('O emprego já paga esse teto');
     campos = { tipo: 'emprego', rank_id: null, cargo: e.nome, obra_chave: e.emprego, valor_atual: Number(e.teto), valor: v };
+  } else if (b.tipo === 'repasse_corp') {
+    // [24/10] [stated] Julio: "Governo ainda nao consegue editar o fundo que cai nas corporações"
+    const c = await GOV.corpComRepasse(db, cidadeId, b.corp_id);
+    if (!c) throw erro('Escolha uma corporação desta cidade (empresa e facção não recebem repasse)');
+    const v = Math.floor(Number(b.valor));
+    if (!(v >= 0)) throw erro('Valor inválido (não pode ser negativo)');
+    if (v > c.repasse.teto) throw erro(`Acima do teto: no máximo R$ ${c.repasse.teto.toLocaleString('pt-BR')} por semana (2x o de hoje)`);
+    if (v === c.repasse.atual) throw erro('A corporação já recebe esse valor');
+    campos = { tipo: 'repasse_corp', rank_id: null, corp_id: c.id, cargo: c.name.slice(0, 128), obra_chave: null, valor_atual: c.repasse.atual, valor: v };
   } else if (b.tipo === 'obra') {
     const o = (await db.query(`SELECT chave, nome, valor FROM governo_obras WHERE cidade_id = $1 AND chave = $2`, [cidadeId, String(b.obra || '')])).rows[0];
     if (!o) throw erro('Escolha uma das obras da lista');
     campos = { tipo: 'obra', rank_id: null, cargo: o.nome, obra_chave: o.chave, valor_atual: null, valor: Number(o.valor) };
   } else throw erro('Tipo de proposta inválido');
   const r = await db.query(
-    `INSERT INTO governo_propostas (cidade_id, tipo, rank_id, cargo, obra_chave, valor_atual, valor, descricao, autor_user_id, autor_nome, votacao_em, fecha_em)
-     VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12) RETURNING id`,
+    `INSERT INTO governo_propostas (cidade_id, tipo, rank_id, cargo, obra_chave, valor_atual, valor, descricao, autor_user_id, autor_nome, votacao_em, fecha_em, corp_id)
+     VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13) RETURNING id`,
     [cidadeId, campos.tipo, campos.rank_id, campos.cargo, campos.obra_chave, campos.valor_atual, campos.valor, desc,
-     user.id, (eu && eu.nome) || user.discord_username || ('user#' + user.id), votacao, fecha]);
+     user.id, (eu && eu.nome) || user.discord_username || ('user#' + user.id), votacao, fecha, campos.corp_id || null]);
   return { id: r.rows[0].id };
 }
 
@@ -253,6 +264,12 @@ async function aplicar(db, cidadeId, id) {
       }
       await cli.query(`UPDATE ranks SET salary = $2 WHERE id = $1`, [p.rank_id, p.valor]);
       await cli.query(`UPDATE governo_propostas SET status = 'sancionada', aplicada_em = NOW(), decidida_em = COALESCE(decidida_em, NOW()), temporada_sancao = COALESCE(temporada_sancao, $2) WHERE id = $1`, [p.id, temporada]);
+    } else if (p.tipo === 'repasse_corp') {
+      // [24/10] repasse semanal: vale a partir do próximo repasse (o da semana que fecha)
+      const r = await cli.query(`UPDATE corporations SET repasse_semanal = $2 WHERE id = $1 AND cidade_id = $3 AND tipo NOT IN ('governo','faccao','empresa')`, [p.corp_id, p.valor, cidadeId]);
+      await cli.query(`UPDATE governo_propostas SET status = 'sancionada', aplicada_em = NOW(), decidida_em = COALESCE(decidida_em, NOW()),
+                         temporada_sancao = COALESCE(temporada_sancao, $2), nota = $3 WHERE id = $1`,
+        [p.id, temporada, r.rowCount ? null : 'A corporação não existe mais: nada mudou']);
     } else if (p.tipo === 'salario_corp' || p.tipo === 'emprego') {
       // [24/10] cargo de corporação (só da mesma cidade) ou teto de emprego civil
       const r = p.tipo === 'salario_corp'
@@ -365,11 +382,17 @@ async function listar(db, cidadeId, user) {
     c.cargos.push({ id: r.id, nome: r.name, salario: Number(r.salary), teto: tetoRelativo(r.salary) });
   }
   const empregosL = (await GOV.empregos(db, cidadeId)).map(e => ({ ...e, teto: Number(e.teto), teto_max: tetoRelativo(e.teto) }));
+  // [24/10] corporações que recebem repasse semanal (pra proposta 'repasse_corp')
+  const repasses = (await db.query(
+    `SELECT id, name, slug, tipo, repasse_semanal FROM corporations
+      WHERE cidade_id = $1 AND is_active = true AND tipo NOT IN ('governo','faccao','empresa') ORDER BY name`, [cidadeId])).rows
+    .map(c => ({ id: c.id, nome: c.name, ...GOV.repasseInfo(c) }));
   return {
     meu_cargo: eu ? eu.cargo : null,
     pode_abrir: podeAbrir(user, eu),
     corporacoes,
     empregos: empregosL,
+    repasses,
     parlamentares: await contarParlamentares(db, cidadeId),
     regras,
     cargos,

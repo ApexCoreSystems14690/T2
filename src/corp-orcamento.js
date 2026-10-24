@@ -85,8 +85,11 @@ function proximoEm(agoraMs) {
 
 /* Quanto essa corp recebe neste período.
  * `atividade` = quantas ocorrências ela registrou (multa, apreensão, reanimação…). */
-function valorDe(slug, atividade) {
-  const base = baseDe(slug);
+// [24/10] `baseFixa` = repasse semanal que o GOVERNO da cidade definiu pra essa corp
+// (corporations.repasse_semanal). null/undefined = o padrão daqui de cima.
+function valorDe(slug, atividade, baseFixa) {
+  const bf = (baseFixa === null || baseFixa === undefined) ? NaN : Math.floor(Number(baseFixa));
+  const base = (Number.isFinite(bf) && bf >= 0) ? bf : baseDe(slug);
   let n = Math.floor(Number(atividade) || 0);
   if (!Number.isFinite(n) || n < 0) n = 0;
   if (n > ORC.TETO_ATIVIDADE) n = ORC.TETO_ATIVIDADE;

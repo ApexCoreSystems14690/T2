@@ -87,6 +87,8 @@ function limparCompras(eventos) {
 
 // ------------------------------------------------------------ banco
 async function garantir(pool) {
+  // [24/10] repasse semanal de cada corporação definido pelo Governo da cidade (NULL = padrão do código)
+  await pool.query(`ALTER TABLE corporations ADD COLUMN IF NOT EXISTS repasse_semanal BIGINT CHECK (repasse_semanal IS NULL OR repasse_semanal >= 0)`);
   await pool.query(`
     CREATE TABLE IF NOT EXISTS governo_config (
       cidade_id INTEGER PRIMARY KEY REFERENCES cidades(id),
@@ -354,16 +356,20 @@ async function painel(pool, cidadeId, agoraMs) {
   // [24/10] o Presidente vê o salário de TODAS as corporações da cidade (só leitura; mudar é
   // projeto na Câmara). Corporação paga por 40 min trabalhados, saindo do caixa dela.
   const linhas = (await pool.query(
-    `SELECT c.id AS corp_id, c.name AS corp, c.tipo, r.id AS rank_id, r.name AS cargo, r.level,
+    `SELECT c.id AS corp_id, c.name AS corp, c.tipo, c.slug, c.repasse_semanal, r.id AS rank_id, r.name AS cargo, r.level,
             COALESCE(r.salary,0)::bigint AS salario,
             (SELECT COUNT(*)::int FROM members m WHERE m.rank_id = r.id) AS membros
-       FROM corporations c JOIN ranks r ON r.corporation_id = c.id
+       FROM corporations c LEFT JOIN ranks r ON r.corporation_id = c.id   -- [24/10] corp sem cargo ainda aparece (repasse)
       WHERE c.cidade_id = $1 AND c.is_active = true AND c.tipo NOT IN ('governo','faccao')
       ORDER BY c.name, r.level DESC`, [cidadeId])).rows;
   const corporacoes = [];
   for (const l of linhas) {
     let c = corporacoes[corporacoes.length - 1];
-    if (!c || c.id !== l.corp_id) { c = { id: l.corp_id, nome: l.corp, tipo: l.tipo, membros: 0, folha40: 0, cargos: [] }; corporacoes.push(c); }
+    if (!c || c.id !== l.corp_id) {
+      c = { id: l.corp_id, nome: l.corp, tipo: l.tipo, membros: 0, folha40: 0, cargos: [], repasse: repasseInfo(l) };
+      corporacoes.push(c);
+    }
+    if (l.rank_id === null) continue;
     const sal = Number(l.salario);
     c.cargos.push({ id: l.rank_id, nome: l.cargo, salario: sal, membros: l.membros });
     c.membros += l.membros; c.folha40 += sal * l.membros;
@@ -423,6 +429,32 @@ async function salarioEmprego(cidadeId, b) {
 async function empregos(db, cidadeId) {
   return (await db.query(`SELECT emprego, nome, teto FROM governo_empregos WHERE cidade_id = $1 ORDER BY teto, emprego`, [cidadeId])).rows;
 }
+// [24/10] REPASSE SEMANAL (o "fundo que cai nas corporações"). Empresa não recebe repasse.
+const ORCm = require('./corp-orcamento');
+const TETO_REPASSE_SEM_VALOR = 50000;   // corp sem repasse hoje: proposta vai até isto
+function repasseInfo(c) {
+  if (c.tipo === 'empresa') return null;
+  const definido = c.repasse_semanal === null || c.repasse_semanal === undefined ? null : Number(c.repasse_semanal);
+  const padrao = ORCm.baseDe(c.slug);
+  const atual = definido === null ? padrao : definido;
+  return { atual, padrao, definido: definido !== null, teto: atual > 0 ? atual * 2 : TETO_REPASSE_SEM_VALOR, dias: ORCm.ORC.DIAS };
+}
+async function corpComRepasse(db, cidadeId, corpId) {
+  const c = (await db.query(
+    `SELECT id, name, slug, tipo, repasse_semanal FROM corporations
+      WHERE id = $1 AND cidade_id = $2 AND is_active = true AND tipo NOT IN ('governo','faccao','empresa')`,
+    [parseInt(corpId) || 0, cidadeId])).rows[0];
+  return c ? { ...c, repasse: repasseInfo(c) } : null;
+}
+async function salvarRepasse(db, cidadeId, corpId, b) {
+  const c = await corpComRepasse(db, cidadeId, corpId);
+  if (!c) throw erro('Corporação não existe nesta cidade (empresa e facção não recebem repasse)', 404);
+  const v = Math.floor(Number(b.valor));
+  if (!(v >= 0 && v <= 1e9)) throw erro('Valor inválido');
+  await db.query(`UPDATE corporations SET repasse_semanal = $2 WHERE id = $1`, [c.id, v]);
+  return { corp: c.name, de: c.repasse.atual, para: v };
+}
+
 async function salvarEmprego(db, cidadeId, emprego, b) {
   const t = Math.floor(Number(b.teto));
   if (!(t >= 0 && t <= 1e7)) throw erro('Teto inválido');
@@ -435,4 +467,5 @@ module.exports = {
   periodoDe, inicioDo, inflar, limparCompras,
   garantir, config, arrecadar, retirarObra, pagarSalarios, iniciar, painel, salvarConfig, salvarObra,
   EMPREGOS_PADRAO, TAREFAS_MAX_LOTE, salarioEmprego, empregos, salvarEmprego, CARGOS_PADRAO,
+  repasseInfo, corpComRepasse, salvarRepasse, TETO_REPASSE_SEM_VALOR,
 };

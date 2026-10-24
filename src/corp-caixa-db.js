@@ -394,6 +394,17 @@ async function ehEmpresa(corpId) {
   } catch (_) { return false; }   // na dúvida não barra: erro de leitura não pode travar o repasse de uma corp de verdade
 }
 
+// [24/10] [stated] Julio: "Governo ainda nao consegue editar o fundo que cai nas corporações".
+// O repasse semanal de cada corp agora mora em corporations.repasse_semanal (Câmara ou Dono
+// mudam pela tela do Governo); NULL = o padrão de corp-orcamento.js.
+async function repasseDefinido(corpId) {
+  try {
+    const r = await pool.query(`SELECT repasse_semanal FROM corporations WHERE id = $1`, [corpId]);
+    const v = r.rows[0] ? r.rows[0].repasse_semanal : null;
+    return v === null || v === undefined ? null : Number(v);
+  } catch (_) { return null; }   // coluna ainda não criada (boot antigo): usa o padrão
+}
+
 async function pagarOrcamentoSePendente(corpId, slug, agoraMs) {
   const agora = Number.isFinite(Number(agoraMs)) ? Number(agoraMs) : Date.now();
   const periodo = ORC.periodoDe(agora);
@@ -416,7 +427,7 @@ async function pagarOrcamentoSePendente(corpId, slug, agoraMs) {
   const at = await pool.query(
     `SELECT COUNT(*)::int AS n FROM corp_atividade
       WHERE corporation_id = $1 AND em >= $2`, [corpId, desde]);
-  const conta = ORC.valorDe(slug, at.rows[0] ? at.rows[0].n : 0);
+  const conta = ORC.valorDe(slug, at.rows[0] ? at.rows[0].n : 0, await repasseDefinido(corpId));
   // [29/09] corp sem repasse (pavuna, loja) não gera linha nenhuma. Sem isto o
   // INSERT abaixo gravaria um pagamento de R$ 0 e o movDinheiro recusaria depois
   // -- ficaria um registro de repasse que nunca creditou nada.
@@ -477,7 +488,7 @@ async function resumoOrcamento(corpId, slug, agoraMs) {
         WHERE corporation_id = $1 AND em >= $2`, [corpId, inicio]),
   ]);
   const n = at.rows[0] ? at.rows[0].n : 0;
-  const previsto = ORC.valorDe(slug, n);
+  const previsto = ORC.valorDe(slug, n, await repasseDefinido(corpId));
   const u = ult.rows[0];
   return {
     dias: ORC.ORC.DIAS,
@@ -493,4 +504,4 @@ async function resumoOrcamento(corpId, slug, agoraMs) {
 }
 
 module.exports = {
-  folhaSemana, faxinaFantasmas, FANTASMA_MIN, desfazerBaixa, JANELA_DESFAZER_H, movDinheiro, movEstoque, comprar, painel, precos, catalogo, registrarAtividade, pagarOrcamentoSePendente, resumoOrcamento, ehEmpresa, ORC };
+  folhaSemana, faxinaFantasmas, FANTASMA_MIN, desfazerBaixa, JANELA_DESFAZER_H, movDinheiro, movEstoque, comprar, painel, precos, catalogo, registrarAtividade, pagarOrcamentoSePendente, resumoOrcamento, repasseDefinido, ehEmpresa, ORC };
