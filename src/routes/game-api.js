@@ -107,6 +107,17 @@ router.get('/acesso/:robloxId', async (req, res) => {
       } else if (cfg.exige_vinculo && !alt.verificado) {
         bloquear = true;
         msg = 'Pra jogar, vincule e verifique sua conta Roblox no site do Santa Fé\n(Dashboard → Vincular Roblox → código na bio do Roblox).';
+      } else {
+        // [24/10] conta Roblox nova: só com vínculo verificado e Discord que não seja recém-criado
+        let idadeDiscord = null;
+        if (alt.verificado) {
+          try {
+            const d = await pool.query(`SELECT discord_id FROM users WHERE roblox_id = $1 AND roblox_verificado = true LIMIT 1`, [rid]);
+            if (d.rows[0]) idadeDiscord = SEG.idadeDiscordDias(d.rows[0].discord_id);
+          } catch (e) { /* sem idade do Discord: decide só pela Roblox */ }
+        }
+        const m = SEG.decidirContaNova(cfg, req.query.idade, alt, idadeDiscord);
+        if (m) { bloquear = true; msg = m; }
       }
     }
     res.json({ ok: true, ban, alt: { ...alt, suspeito: alt.contas.length > 0 }, bloquear, msg, config: cfg });

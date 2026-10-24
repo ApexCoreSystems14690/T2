@@ -99,8 +99,42 @@ async function config(pool) {
   try {
     const r = await pool.query(`SELECT value FROM game_config WHERE key = 'seguranca'`);
     const v = (r.rows[0] && r.rows[0].value) || {};
-    return { exige_vinculo: v.exige_vinculo === true, bloquear_alt_de_banido: v.bloquear_alt_de_banido !== false };
-  } catch (e) { return { exige_vinculo: false, bloquear_alt_de_banido: true }; }
+    return {
+      exige_vinculo: v.exige_vinculo === true, bloquear_alt_de_banido: v.bloquear_alt_de_banido !== false,
+      // [24/10] [stated] Julio: "fortaleça absurdamente o anti alt". Conta Roblox NOVA (menos de
+      // N dias) só entra com vínculo VERIFICADO; e o Discord desse vínculo também não pode ser
+      // recém-criado. 0 desliga.
+      conta_nova_dias: Number.isFinite(Number(v.conta_nova_dias)) ? Math.max(0, Math.floor(Number(v.conta_nova_dias))) : 30,
+      discord_min_dias: Number.isFinite(Number(v.discord_min_dias)) ? Math.max(0, Math.floor(Number(v.discord_min_dias))) : 14,
+    };
+  } catch (e) { return { exige_vinculo: false, bloquear_alt_de_banido: true, conta_nova_dias: 30, discord_min_dias: 14 }; }
+}
+
+// Idade (dias) de uma conta do Discord pelo próprio ID (snowflake: ms desde 2015 nos bits altos).
+function idadeDiscordDias(discordId, agoraMs) {
+  try {
+    const s = String(discordId || '');
+    if (!/^\d{15,22}$/.test(s)) return null;
+    const ms = Number((BigInt(s) >> 22n) + 1420070400000n);
+    return Math.floor(((agoraMs || Date.now()) - ms) / 86400000);
+  } catch (e) { return null; }
+}
+
+// Decisão do anti-alt de conta nova (puro, testável). idadeRoblox = Player.AccountAge (dias).
+function decidirContaNova(cfg, idadeRoblox, alt, idadeDiscord) {
+  const dias = Number(cfg && cfg.conta_nova_dias) || 0;
+  const idade = Number(idadeRoblox);
+  if (!dias || !Number.isFinite(idade) || idade < 0 || idade >= dias) return null;
+  if (!alt || !alt.verificado) {
+    return `Conta Roblox nova (menos de ${dias} dias). Pra jogar no Santa Fé, vincule e verifique ` +
+      'sua conta no site (Dashboard → Vincular Roblox → código na BIO do Roblox).';
+  }
+  const minD = Number(cfg.discord_min_dias) || 0;
+  if (minD && idadeDiscord !== null && idadeDiscord !== undefined && idadeDiscord < minD) {
+    return `Conta Roblox nova vinculada a um Discord criado há menos de ${minD} dias. ` +
+      'Se não for uma conta reserva, abra um ticket no Discord do Santa Fé.';
+  }
+  return null;
 }
 
 // Contas Roblox ligadas por rede a esta. So conta vinculo VERIFICADO dos dois lados.
@@ -197,5 +231,5 @@ function novoCodigo() {
   return s;
 }
 
-module.exports = { MAX_CONTAS_POR_IP, JANELA_DIAS, CODIGO_VALIDADE_MIN,
+module.exports = { idadeDiscordDias, decidirContaNova, MAX_CONTAS_POR_IP, JANELA_DIAS, CODIGO_VALIDADE_MIN,
   normalizarIp, hashIp, migrar, registrarIp, middlewareIp, config, altsDe, novoCodigo, confirmarVinculo };

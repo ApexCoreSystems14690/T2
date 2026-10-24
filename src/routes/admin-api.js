@@ -400,6 +400,8 @@ router.post('/seguranca/config', requirePoder('banir'), async (req, res) => {
     const novo = {
       exige_vinculo: typeof b.exige_vinculo === 'boolean' ? b.exige_vinculo : atual.exige_vinculo,
       bloquear_alt_de_banido: typeof b.bloquear_alt_de_banido === 'boolean' ? b.bloquear_alt_de_banido : atual.bloquear_alt_de_banido,
+      conta_nova_dias: Number.isFinite(Number(b.conta_nova_dias)) ? Math.min(365, Math.max(0, Math.floor(Number(b.conta_nova_dias)))) : atual.conta_nova_dias,
+      discord_min_dias: Number.isFinite(Number(b.discord_min_dias)) ? Math.min(365, Math.max(0, Math.floor(Number(b.discord_min_dias)))) : atual.discord_min_dias,
     };
     await pool.query(
       `INSERT INTO game_config (key, value, updated_at) VALUES ('seguranca', $1, NOW())

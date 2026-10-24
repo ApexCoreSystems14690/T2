@@ -369,6 +369,8 @@
       <div class="row" style="gap:1rem;flex-wrap:wrap;background:#F4F5F7;padding:.6rem;border-radius:8px;margin-bottom:.8rem">
         <label style="font-size:.85rem"><input type="checkbox" id="sg-altban" onchange="salvaSegCfg()" data-poder="banir"> Bloquear conta ligada por IP a uma conta <b>banida</b></label>
         <label style="font-size:.85rem"><input type="checkbox" id="sg-exige" onchange="salvaSegCfg()" data-poder="banir"> Exigir vínculo <b>verificado</b> pra entrar no jogo</label>
+        <label style="font-size:.85rem">Conta Roblox com menos de <input type="number" id="sg-novadias" min="0" max="365" style="width:4.5rem" onchange="salvaSegCfg()" data-poder="banir"> dias só entra vinculada (0 = desliga)</label>
+        <label style="font-size:.85rem">…e o Discord do vínculo precisa ter pelo menos <input type="number" id="sg-discdias" min="0" max="365" style="width:4.5rem" onchange="salvaSegCfg()" data-poder="banir"> dias</label>
         <span id="sg-vinc" class="muted" style="font-size:.8rem"></span>
       </div>
       <h4 style="margin:.4rem 0">Alertas de cheat/exploit (por jogador)</h4>
@@ -1064,7 +1066,9 @@
         const d = await api('GET', '/seguranca?horas=' + ($('sg-horas').value || 24));
         $('sg-altban').checked = !!d.config.bloquear_alt_de_banido;
         $('sg-exige').checked = !!d.config.exige_vinculo;
-        $('sg-altban').disabled = $('sg-exige').disabled = !podeP('banir');
+        $('sg-novadias').value = d.config.conta_nova_dias != null ? d.config.conta_nova_dias : 30;
+        $('sg-discdias').value = d.config.discord_min_dias != null ? d.config.discord_min_dias : 14;
+        $('sg-altban').disabled = $('sg-exige').disabled = $('sg-novadias').disabled = $('sg-discdias').disabled = !podeP('banir');
         $('sg-vinc').textContent = (d.vinculos.verificados || 0) + ' verificadas de ' + (d.vinculos.vinculados || 0) + ' contas vinculadas';
         $('sg-alertas').innerHTML = d.alertas.map(a => '<tr><td>' + esc(a.jogador || '—') + '</td><td>' + a.n + '</td><td>' + (a.pico == null ? '—' : a.pico) + '</td><td>' + esc((a.regras || []).filter(Boolean).join(', ')) + '</td><td class="muted">' + fmtT(a.ultimo) + '</td></tr>').join('') || '<tr><td colspan="5" class="empty">Nada no período.</td></tr>';
         $('sg-origens').textContent = d.origens.map(o => o.origem + ': ' + o.n).join(' · ');
@@ -1076,7 +1080,8 @@
     }
     async function salvaSegCfg() {
       try {
-        await api('POST', '/seguranca/config', { bloquear_alt_de_banido: $('sg-altban').checked, exige_vinculo: $('sg-exige').checked });
+        await api('POST', '/seguranca/config', { bloquear_alt_de_banido: $('sg-altban').checked, exige_vinculo: $('sg-exige').checked,
+          conta_nova_dias: Number($('sg-novadias').value), discord_min_dias: Number($('sg-discdias').value) });
         showAlert('Configuração de segurança salva — vale na próxima entrada de cada jogador', 'success');
       } catch (e) { showAlert(e.message, 'error'); loadSeg(); }
     }
