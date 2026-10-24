@@ -39,6 +39,10 @@
     .camf input, .camf select, .camf textarea { padding: .45rem .6rem; border: 1px solid var(--linha-2); border-radius: var(--rs); font: inherit; }
     .camf .tudo { grid-column: 1 / -1; }
     .camf [hidden] { display: none; }
+    .btn.mini { margin-top: .3rem; padding: .2rem .6rem; font-size: .78rem; }
+    details.corp-sal { border-top: 1px solid var(--linha); padding: .5rem 0; }
+    details.corp-sal summary { cursor: pointer; }
+    details.corp-sal table { margin-top: .4rem; }
     .bloco { background: var(--papel); border: 1px solid var(--linha); border-radius: var(--r); padding: 1rem 1.1rem; margin-bottom: 1rem; }
     .bloco h3 { margin: 0 0 .7rem; font-size: 1.05rem; display: flex; gap: .6rem; align-items: baseline; flex-wrap: wrap; }
     .bloco h3 small { color: var(--tinta-3); font-weight: 500; font-size: .8rem; }
@@ -171,6 +175,11 @@
         <% if (ehDono) { %><p style="margin:.8rem 0 0"><a class="btn sec" id="link-cargos" href="#">Cargos e salários</a></p><% } %>
       </div>
       <div class="bloco">
+        <h3>Salários das corporações <small id="corp-sub"></small></h3>
+        <p class="expl">O que cada cargo de cada corporação da cidade ganha por 40 minutos trabalhados (sai do caixa da própria corporação). Mudar um valor é projeto na Câmara: clique em <b>Propor</b> no cargo.</p>
+        <div id="corps-sal"></div>
+      </div>
+      <div class="bloco">
         <h3>Empregos civis pagos pelo tesouro</h3>
         <p class="expl">Gari, repositor, pizzaiolo, carteiro, mecânico e uber de passageiro bot recebem do tesouro do Governo. O jogo diz quanto cada tarefa pagou; pedido acima do teto é recusado inteiro. Tesouro vazio: o emprego não paga.</p>
         <div class="rolar"><table style="display:table;white-space:normal"><thead><tr><th>Emprego</th><th class="num">Teto por tarefa</th></tr></thead><tbody id="empregos"></tbody></table></div>
@@ -184,7 +193,7 @@
     <section data-painel="camara" hidden>
       <div class="bloco">
         <h3>Câmara <small id="cam-sub"></small></h3>
-        <p class="expl">Regulamento, Cap. 10: Parlamentar ou o Presidente da Câmara abre a proposta. Ela fica <b>48 h em debate</b> e depois <b>24 h em votação</b>. Passa com mais SIM que NÃO entre quem votou; no empate, o Presidente da Câmara desempata. Aprovada, o Presidente da República tem <b>24 h</b> pra sancionar ou vetar (sem resposta, é sancionada sozinha). O veto volta pra Câmara e só cai com 2/3 dos votos. Sancionada, a mudança entra sozinha. Aumento do salário de Parlamentar só vale no próximo mandato (Art. 10.12A). Teto: 2x o salário padrão do cargo.</p>
+        <p class="expl">Regulamento, Cap. 10: Parlamentar, o Presidente da Câmara ou o Presidente da República abre a proposta: salário de cargo do Governo, salário de cargo de corporação, teto de emprego civil ou obra do tesouro. Ela fica <b>48 h em debate</b> e depois <b>24 h em votação</b>. Passa com mais SIM que NÃO entre quem votou; no empate, o Presidente da Câmara desempata. Aprovada, o Presidente da República tem <b>24 h</b> pra sancionar ou vetar (sem resposta, é sancionada sozinha). O veto volta pra Câmara e só cai com 2/3 dos votos. Sancionada, a mudança entra sozinha. Aumento do salário de Parlamentar só vale no próximo mandato (Art. 10.12A). Teto: cargo do Governo, 2x o salário padrão; corporação e emprego civil, 2x o valor de hoje.</p>
         <div id="cam-form"></div>
       </div>
       <div id="cam-lista"></div>
@@ -267,8 +276,23 @@
         + '<td>' + (m.entrou_no_periodo ? '<span class="pill sim">entrou</span>' : '<span class="pill nao">ainda não</span>') + '</td></tr>';
     }).join('') : '<tr><td colspan="4" class="expl">O Governo ainda não tem membros. Adicione pela tela da corporação.</td></tr>';
     $('empregos').innerHTML = (D.empregos || []).map(function (e) {
-      return '<tr><td>' + esc(e.nome) + '</td><td class="num">' + cheio(e.teto) + (D.eh_dono ? '<br><button class="btn sec" style="margin-top:.3rem;padding:.2rem .6rem;font-size:.78rem" data-teto="' + esc(e.emprego) + '">Mudar</button>' : '') + '</td></tr>';
+      return '<tr><td>' + esc(e.nome) + '</td><td class="num">' + cheio(e.teto)
+        + (D.eh_dono ? '<br><button class="btn sec mini" data-teto="' + esc(e.emprego) + '">Mudar</button>' : '')
+        + (D.pode_propor ? ' <button class="btn sec mini" data-propor-emp="' + esc(e.emprego) + '">Propor</button>' : '') + '</td></tr>';
     }).join('') || '<tr><td colspan="3" class="expl">Nenhum emprego configurado.</td></tr>';
+    $('empregos').querySelectorAll('[data-propor-emp]').forEach(function (b) { b.onclick = function () { irPropor({ tipo: 'emprego', emprego: b.dataset.proporEmp }); }; });
+    // [24/10] salários de todas as corporações (só leitura; mudar = projeto na Câmara)
+    var CS = D.corporacoes || [];
+    $('corp-sub').textContent = CS.length + ' corporaç' + (CS.length === 1 ? 'ão' : 'ões');
+    $('corps-sal').innerHTML = CS.length ? CS.map(function (c) {
+      return '<details class="corp-sal"><summary><b>' + esc(c.nome) + '</b> <span class="expl">· ' + c.membros + ' membro(s) · folha ' + cheio(c.folha40) + ' a cada 40 min se todos trabalharem</span></summary>'
+        + '<div class="rolar"><table style="display:table;white-space:normal"><thead><tr><th>Cargo</th><th class="num">Por 40 min</th><th class="num">Membros</th>' + (D.pode_propor ? '<th></th>' : '') + '</tr></thead><tbody>'
+        + c.cargos.map(function (r) {
+            return '<tr><td>' + esc(r.nome) + '</td><td class="num">' + (r.salario ? cheio(r.salario) : '<span class="pill nao">sem salário</span>') + '</td><td class="num">' + r.membros + '</td>'
+              + (D.pode_propor ? '<td class="num"><button class="btn sec mini" data-propor-rank="' + r.id + '">Propor</button></td>' : '') + '</tr>';
+          }).join('') + '</tbody></table></div></details>';
+    }).join('') : '<p class="expl">Nenhuma corporação com cargos nesta cidade.</p>';
+    $('corps-sal').querySelectorAll('[data-propor-rank]').forEach(function (b) { b.onclick = function () { irPropor({ tipo: 'salario_corp', rank_id: Number(b.dataset.proporRank) }); }; });
     $('empregos').querySelectorAll('[data-teto]').forEach(function (b) { b.onclick = function () { editarTeto(b.dataset.teto); }; });
     var ST = { pago: ['sim', 'Pago'], nao_entrou: ['nao', 'Não entrou no jogo'], sem_saldo: ['alerta', 'Caixa sem saldo'], sem_roblox: ['alerta', 'Sem Roblox vinculado'] };
     $('pagos').innerHTML = s.ultimos.length ? s.ultimos.map(function (p) { var t = ST[p.status] || ['nao', p.status];
@@ -322,6 +346,11 @@
 
   // ---------------------------------------------------------------- CÂMARA [23/10]
   var CAM = null;
+  var PROPOR = null;   // [24/10] o "Propor" da aba Salários abre a Câmara já com o cargo escolhido
+  function irPropor(o) {
+    PROPOR = o;
+    var b = document.querySelector('.abas button[data-aba="camara"]'); if (b) b.click();
+  }
   var PILL = { debate: 'nao', votacao: 'alerta', aguardando_sancao: 'alerta', sancionada: 'sim', aguarda_mandato: 'sim', vetada: 'alerta', veto_mantido: 'nao', recusada: 'nao', sem_saldo: 'alerta' };
   async function carregarCamara() {
     var r = await fetch('/api/governo/camara', { headers: { accept: 'application/json' } });
@@ -333,28 +362,54 @@
   function desenharCamara() {
     var eu = CAM.meu_cargo;
     $('cam-sub').textContent = CAM.parlamentares + ' parlamentar(es)' + (eu ? ' · você: ' + eu : '');
-    var podeAbrir = eu === 'Parlamentar' || eu === 'Presidente da Câmara';
+    var podeAbrir = !!CAM.pode_abrir;
+    var optCorp = (CAM.corporacoes || []).map(function (c) {
+      return '<optgroup label="' + esc(c.nome) + '">' + c.cargos.map(function (r) {
+        return '<option value="' + r.id + '">' + esc(r.nome) + ' (hoje ' + cheio(r.salario) + ', teto ' + cheio(r.teto) + ')</option>'; }).join('') + '</optgroup>'; }).join('');
+    var optEmp = (CAM.empregos || []).map(function (e) {
+      return '<option value="' + esc(e.emprego) + '">' + esc(e.nome) + ' (hoje ' + cheio(e.teto) + ', teto ' + cheio(e.teto_max) + ')</option>'; }).join('');
     $('cam-form').innerHTML = podeAbrir ? (
       '<div class="camf">'
-      + '<label>Tipo<select id="cf-tipo"><option value="salario">Mudar salário de cargo</option><option value="obra">Aprovar obra</option></select></label>'
-      + '<label id="cf-l-cargo">Cargo<select id="cf-cargo">' + CAM.cargos.filter(function (c) { return c.teto; }).map(function (c) {
+      + '<label>Tipo<select id="cf-tipo"><option value="salario">Salário de cargo do Governo</option><option value="salario_corp">Salário de cargo de corporação</option><option value="emprego">Teto de emprego civil</option><option value="obra">Aprovar obra</option></select></label>'
+      + '<label data-cf="salario">Cargo do Governo<select id="cf-cargo">' + CAM.cargos.filter(function (c) { return c.teto; }).map(function (c) {
           return '<option value="' + c.id + '">' + esc(c.nome) + ' (hoje ' + cheio(c.salario) + ', teto ' + cheio(c.teto) + ')</option>'; }).join('') + '</select></label>'
-      + '<label id="cf-l-valor">Novo salário a cada 3 dias (R$)<input id="cf-valor" inputmode="numeric" placeholder="ex: 120000"></label>'
-      + '<label id="cf-l-obra" hidden>Obra<select id="cf-obra">' + (D && D.obras ? D.obras.map(function (o) { return '<option value="' + esc(o.chave) + '">' + esc(o.nome) + ' (' + cheio(o.valor) + ')</option>'; }).join('') : '') + '</select></label>'
+      + '<label data-cf="salario_corp" hidden>Cargo da corporação<select id="cf-rank">' + optCorp + '</select></label>'
+      + '<label data-cf="emprego" hidden>Emprego civil<select id="cf-emp">' + optEmp + '</select></label>'
+      + '<label data-cf="salario salario_corp emprego" id="cf-l-valor"><span id="cf-l-valor-t">Novo salário a cada 3 dias (R$)</span><input id="cf-valor" inputmode="numeric" placeholder="só números"></label>'
+      + '<label data-cf="obra" hidden>Obra<select id="cf-obra">' + (D && D.obras ? D.obras.map(function (o) { return '<option value="' + esc(o.chave) + '">' + esc(o.nome) + ' (' + cheio(o.valor) + ')</option>'; }).join('') : '') + '</select></label>'
       + '<label class="tudo">Justificativa<textarea id="cf-desc" rows="2" maxlength="500" placeholder="O que a proposta muda e por quê"></textarea></label>'
       + '<div><button class="btn" id="cf-abrir">Abrir proposta</button></div></div>'
-    ) : '<p class="expl" style="margin:0">Só Parlamentar e o Presidente da Câmara abrem proposta. Votam os Parlamentares.</p>';
+    ) : '<p class="expl" style="margin:0">Só Parlamentar, o Presidente da Câmara e o Presidente da República abrem proposta. Votam os Parlamentares.</p>';
     if (podeAbrir) {
-      $('cf-tipo').onchange = function () { var o = this.value === 'obra'; $('cf-l-cargo').hidden = o; $('cf-l-valor').hidden = o; $('cf-l-obra').hidden = !o; };
+      var VALOR_T = { salario: 'Novo salário a cada 3 dias (R$)', salario_corp: 'Novo salário por 40 min (R$)', emprego: 'Novo teto por tarefa (R$)' };
+      $('cf-tipo').onchange = function () {
+        var t = this.value;
+        document.querySelectorAll('#cam-form [data-cf]').forEach(function (l) { l.hidden = l.dataset.cf.split(' ').indexOf(t) < 0; });
+        if (VALOR_T[t]) $('cf-l-valor-t').textContent = VALOR_T[t];
+      };
+      if (PROPOR) {
+        $('cf-tipo').value = PROPOR.tipo; $('cf-tipo').onchange.call($('cf-tipo'));
+        if (PROPOR.rank_id) $('cf-rank').value = String(PROPOR.rank_id);
+        if (PROPOR.emprego) $('cf-emp').value = PROPOR.emprego;
+        PROPOR = null; $('cf-valor').focus();
+      }
       $('cf-abrir').onclick = async function () {
         var tipo = $('cf-tipo').value, corpo = { tipo: tipo, descricao: $('cf-desc').value };
-        if (tipo === 'obra') corpo.obra = $('cf-obra').value; else { corpo.rank_id = Number($('cf-cargo').value); corpo.valor = Number(String($('cf-valor').value).replace(/\D/g, '')); }
+        var val = Number(String($('cf-valor').value).replace(/\D/g, ''));
+        if (tipo === 'obra') corpo.obra = $('cf-obra').value;
+        else if (tipo === 'salario') { corpo.rank_id = Number($('cf-cargo').value); corpo.valor = val; }
+        else if (tipo === 'salario_corp') { corpo.rank_id = Number($('cf-rank').value); corpo.valor = val; }
+        else if (tipo === 'emprego') { corpo.emprego = $('cf-emp').value; corpo.valor = val; }
         try { var j = await enviar('POST', '/api/governo/camara', corpo); toast('Proposta nº ' + j.id + ' aberta: 48 h de debate'); carregarCamara(); } catch (e) { toast(e.message, true); }
       };
     }
     $('cam-lista').innerHTML = CAM.propostas.length ? CAM.propostas.map(function (p) {
       var mud = p.tipo === 'salario'
         ? 'Salário de <b>' + esc(p.cargo) + '</b>: ' + cheio(p.valor_atual) + ' → <b>' + cheio(p.valor) + '</b> a cada 3 dias'
+        : p.tipo === 'salario_corp'
+        ? 'Salário de <b>' + esc(p.cargo) + '</b>: ' + cheio(p.valor_atual) + ' → <b>' + cheio(p.valor) + '</b> por 40 min'
+        : p.tipo === 'emprego'
+        ? 'Teto de <b>' + esc(p.cargo) + '</b>: ' + cheio(p.valor_atual) + ' → <b>' + cheio(p.valor) + '</b> por tarefa'
         : 'Obra <b>' + esc(p.cargo) + '</b>: ' + cheio(p.valor) + ' do tesouro';
       var prazo = p.status === 'debate' ? 'votação abre ' + quando(p.votacao_em)
         : p.status === 'votacao' ? 'votação fecha ' + quando(p.fecha_em)

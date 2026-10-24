@@ -143,6 +143,7 @@
 
     .ps-topo { display: flex; align-items: center; gap: .55rem; margin-bottom: .55rem; }
     .ps-oficial { background: var(--pista); color: #10131A; font-weight: 800; font-size: .72rem; padding: .22rem .45rem; border-radius: 3px; letter-spacing: .02em; }
+    .ps-teste { background: #F2C230; }
     .ps-cargo { border: 1.5px solid rgba(255,255,255,.75); font-weight: 700; font-size: .72rem; padding: .16rem .42rem; border-radius: 3px; }
     .ps-seta { margin-left: auto; width: 44px; height: 44px; flex-shrink: 0; }
     .ps-nome {
@@ -276,6 +277,7 @@
         <span class="borda">
           <span class="ps-topo">
             <% if (c.tipo === 'oficial') { %><span class="ps-oficial">Oficial</span><% } %>
+            <% if (c.tipo === 'teste') { %><span class="ps-oficial ps-teste">Teste · entra com senha</span><% } %>
             <% if (c.meu_cargo_nome) { %><span class="ps-cargo">Você: <%= c.meu_cargo_nome %></span><% } %>
             <svg class="ps-seta" viewBox="0 0 44 44" aria-hidden="true"><path d="M12 32 L30 14 M17 13 H31 V27" fill="none" stroke="#F4F6F3" stroke-width="4.5" stroke-linecap="square"/></svg>
           </span>

@@ -62,6 +62,20 @@ function slugDoJogo(header) {
   return s ? s : null;
 }
 
+// [24/10] Senha de entrada da cidade (cidade de teste). Formato 'scrypt$sal$hash'.
+// Cidade sem senha_hash = aberta (devolve true). Comparação em tempo constante.
+const crypto = require('crypto');
+function senhaConfere(cidade, senha) {
+  if (!cidade || !cidade.senha_hash) return true;
+  const p = String(cidade.senha_hash).split('$');
+  if (p.length !== 3 || p[0] !== 'scrypt') return false;
+  const s = String(senha == null ? '' : senha);
+  if (!s || s.length > 64) return false;
+  const h = crypto.scryptSync(s, p[1], 32);
+  const alvo = Buffer.from(p[2], 'hex');
+  return alvo.length === h.length && crypto.timingSafeEqual(h, alvo);
+}
+
 // Trava de aba: a página foi desenhada pra cidade X e a sessão está em Y.
 function abaTrocada(headerCidade, cidadeDaSessao) {
   if (headerCidade === undefined || headerCidade === null || headerCidade === '') return false;
@@ -99,6 +113,22 @@ async function garantir(pool) {
             'A cidade oficial. Polícia, SAMU, facções, empresas e eleição.', 0)
     ON CONFLICT (id) DO NOTHING;
     SELECT setval(pg_get_serial_sequence('cidades', 'id'), GREATEST((SELECT MAX(id) FROM cidades), 1));
+
+    -- [24/10] CIDADE DE TESTE. [stated] Julio: "uma segunda cidade, porem essa segunda vai ter
+    -- uma senha que abre ali na lateral ... a senha vai ser 146901, ela e uma place de teste,
+    -- onde os testers podem testar". A senha mora aqui só como hash (scrypt), nunca em texto.
+    -- isolada: a cidade já tem TODAS as consultas do jogo filtradas por cidade (fase 2 do
+    -- plano). Só o Santa Fé é. Cidade não isolada fala com o site por uma lista curta de
+    -- rotas de leitura (ver LIVRES_SEM_ISOLAMENTO em routes/game-api.js): nada que ela faça
+    -- no jogo escreve no banco do Santa Fé.
+    ALTER TABLE cidades ADD COLUMN IF NOT EXISTS senha_hash VARCHAR(200);
+    ALTER TABLE cidades ADD COLUMN IF NOT EXISTS isolada BOOLEAN NOT NULL DEFAULT false;
+    UPDATE cidades SET isolada = true WHERE id = 1 AND isolada = false;
+    INSERT INTO cidades (slug, nome, sigla, tipo, status, loja_prefixo, cor, descricao, ordem, vagas, senha_hash)
+    VALUES ('testes', 'Santa Fé Testes', 'TST', 'teste', 'ativa', 'TST', '#8A6A1C',
+            'Servidor de testes da equipe. Entrada com senha.', 50, 50,
+            'scrypt$8c41726922ab84004dd6e95fa0ebaa99$4142538eb2056825d83dc9f3e8e93f78e3ffca2a98f16b1eab26910543fb8334')
+    ON CONFLICT (slug) DO NOTHING;
 
     CREATE TABLE IF NOT EXISTS cidade_staff (
       cidade_id INTEGER NOT NULL REFERENCES cidades(id) ON DELETE CASCADE,
@@ -265,7 +295,7 @@ function voltarSeguro(v) {
 
 module.exports = {
   SANTA_FE, TABELAS_DA_CIDADE,
-  slugValido, nomeDaLoja, slugDoJogo, abaTrocada, voltarSeguro,
+  slugValido, nomeDaLoja, slugDoJogo, abaTrocada, voltarSeguro, senhaConfere,
   garantir, todas, porId, porSlug, limparCache, movimento, meusCargos,
   contexto, exigeCidade,
 };

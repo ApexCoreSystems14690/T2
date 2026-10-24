@@ -56,14 +56,14 @@ async function garantir(pool) {
   const ler = (f, bin) => { try { return fs.readFileSync(path.join(pasta, f), bin ? undefined : 'utf8'); } catch (e) { return null; } };
   const sementes = [
     { slug: 'oficial', titulo: 'Regulamento Oficial', subtitulo: 'Termos de Uso, Regras de Roleplay e Leis da Cidade',
-      versao: '2.4', status: 'vigente', vigente_desde: '2026-10-24', aviso: null, atualiza_de: ['2.3'],
+      versao: '2.5', status: 'vigente', vigente_desde: '2026-10-24', aviso: null, atualiza_de: ['2.3', '2.4'],
       meta: [{ k: 'Publicado por', v: 'Equipe Santa Fé Roleplay' }, { k: 'Alterações', v: 'anunciadas em #avisos' }],
-      md: 'oficial.md', pdf: 'oficial.pdf', pdf_nome: 'Regulamento-Santa-Fe-RP-v2.4.pdf', ordem: 10 },
+      md: 'oficial.md', pdf: 'oficial.pdf', pdf_nome: 'Regulamento-Santa-Fe-RP-v2.5.pdf', ordem: 10 },
     { slug: 'faccoes', titulo: 'Regulamento das Facções', subtitulo: 'Facções Oficiais de Santa Fé · Reestruturação',
       versao: '3.1', status: 'vigente', vigente_desde: '2026-10-22', aviso: null, atualiza_de: ['3'],
       meta: [{ k: 'Responsável', v: 'Israel' }, { k: 'Aprovado', v: 'Votação de 22/10/2026' },
              { k: 'Substitui', v: 'Todas as regras anteriores do servidor das facções' },
-             { k: 'Liga com', v: 'Regulamento Oficial v2.4 (Cap. 4 a 7 e 11)' }],
+             { k: 'Liga com', v: 'Regulamento Oficial v2.5 (Cap. 4 a 7 e 11)' }],
       md: 'faccoes.md', pdf: 'faccoes.pdf', pdf_nome: 'Regulamento-Faccoes-v3.1.pdf', ordem: 20 },
   ];
   const tem = await pool.query('SELECT 1 FROM cidades WHERE id = $1', [SANTA_FE]);

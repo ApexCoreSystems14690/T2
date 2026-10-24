@@ -349,7 +349,25 @@ async function painel(pool, cidadeId, agoraMs) {
     `SELECT periodo, nome, cargo, valor, status, criado_em FROM governo_salarios WHERE cidade_id = $1 ORDER BY periodo DESC, valor DESC LIMIT 60`, [cidadeId])).rows
     .map(s => ({ ...s, valor: Number(s.valor) }));
   const folha = membros.reduce((t, m) => t + m.salario, 0);
+  // [24/10] o Presidente vê o salário de TODAS as corporações da cidade (só leitura; mudar é
+  // projeto na Câmara). Corporação paga por 40 min trabalhados, saindo do caixa dela.
+  const linhas = (await pool.query(
+    `SELECT c.id AS corp_id, c.name AS corp, c.tipo, r.id AS rank_id, r.name AS cargo, r.level,
+            COALESCE(r.salary,0)::bigint AS salario,
+            (SELECT COUNT(*)::int FROM members m WHERE m.rank_id = r.id) AS membros
+       FROM corporations c JOIN ranks r ON r.corporation_id = c.id
+      WHERE c.cidade_id = $1 AND c.is_active = true AND c.tipo NOT IN ('governo','faccao')
+      ORDER BY c.name, r.level DESC`, [cidadeId])).rows;
+  const corporacoes = [];
+  for (const l of linhas) {
+    let c = corporacoes[corporacoes.length - 1];
+    if (!c || c.id !== l.corp_id) { c = { id: l.corp_id, nome: l.corp, tipo: l.tipo, membros: 0, folha40: 0, cargos: [] }; corporacoes.push(c); }
+    const sal = Number(l.salario);
+    c.cargos.push({ id: l.rank_id, nome: l.cargo, salario: sal, membros: l.membros });
+    c.membros += l.membros; c.folha40 += sal * l.membros;
+  }
   return {
+    corporacoes,
     corporation_id: cid, saldo, multiplicador: Number(cfg.multiplicador),
     arrecadacao: { h24: await somar(1), d7: await somar(7), d30: await somar(30) },
     porDia, obras, extrato, empregos: await empregos(pool, cidadeId),

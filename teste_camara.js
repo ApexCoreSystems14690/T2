@@ -176,6 +176,61 @@ const lista = (c) => pedir(c, 'GET', '/api/governo/camara');
     assert.ok(l.por.includes('nº ' + id)); assert.ok(l.detalhe.descricao.includes('Proposta nº ' + id));
   });
 
+  console.log('\n[24/10] PRESIDENTE ABRE, CORPORAÇÃO E EMPREGO CIVIL');
+  const corpPM = (await pool.query(`SELECT c.id, r.id AS rank_id, COALESCE(r.salary,0)::bigint AS sal FROM corporations c JOIN ranks r ON r.corporation_id = c.id
+     WHERE c.cidade_id = 1 AND c.is_active AND c.tipo NOT IN ('governo','faccao') ORDER BY r.salary DESC NULLS LAST LIMIT 1`)).rows[0];
+  const aprovarESancionar = async (id) => {
+    await pularDebate(id); await lista(S.cm_p1);
+    assert.strictEqual((await pedir(S.cm_p1, 'POST', `/api/governo/camara/${id}/voto`, { voto: 'sim' })).s, 200);
+    await fecharVotacao(id); await lista(S.cm_p1);
+    assert.strictEqual((await prop(id)).status, 'aguardando_sancao');
+    assert.strictEqual((await pedir(S.cm_pres, 'POST', `/api/governo/camara/${id}/sancao`, { acao: 'sancionar' })).s, 200);
+  };
+  await caso('Presidente da República abre projeto (antes era 403); Ministro continua sem abrir', async () => {
+    const r = await pedir(S.cm_pres, 'POST', '/api/governo/camara', { tipo: 'obra', obra: 'sinalizacao', descricao: 'Placas novas na avenida' });
+    assert.strictEqual(r.s, 200, JSON.stringify(r.j));
+    assert.strictEqual((await pedir(S.cm_min, 'POST', '/api/governo/camara', { tipo: 'obra', obra: 'sinalizacao', descricao: 'Placas novas na avenida' })).s, 403);
+  });
+  await caso('o Dono da cidade também abre (staff) e a lista diz pode_abrir', async () => {
+    const l = await lista(DN); assert.strictEqual(l.j.pode_abrir, true);
+    assert.ok(Array.isArray(l.j.corporacoes) && l.j.corporacoes.length > 0, 'sem corporações na lista');
+    assert.strictEqual((await lista(S.cm_min)).j.pode_abrir, false);
+  });
+  await caso('salário de cargo de corporação: teto 2x, sancionado muda o ranks.salary', async () => {
+    const teto = CAM.tetoRelativo(corpPM.sal);
+    const alto = await pedir(S.cm_pres, 'POST', '/api/governo/camara', { tipo: 'salario_corp', rank_id: corpPM.rank_id, valor: teto + 1, descricao: 'aumento muito grande' });
+    assert.strictEqual(alto.s, 400);
+    const novo = Math.max(1, Math.floor(teto * 0.75));
+    const r = await pedir(S.cm_pres, 'POST', '/api/governo/camara', { tipo: 'salario_corp', rank_id: corpPM.rank_id, valor: novo, descricao: 'corrige o salário da corporação' });
+    assert.strictEqual(r.s, 200, JSON.stringify(r.j));
+    await aprovarESancionar(r.j.id);
+    assert.strictEqual(await salario(corpPM.rank_id), novo);
+    assert.strictEqual((await prop(r.j.id)).status, 'sancionada');
+    await pool.query(`UPDATE ranks SET salary = $2 WHERE id = $1`, [corpPM.rank_id, corpPM.sal]);
+  });
+  await caso('teto de emprego civil: sancionado muda o governo_empregos', async () => {
+    const e = (await pool.query(`SELECT emprego, teto FROM governo_empregos WHERE cidade_id = 1 AND emprego = 'Lixeiro'`)).rows[0];
+    const r = await pedir(S.cm_p3, 'POST', '/api/governo/camara', { tipo: 'emprego', emprego: 'Lixeiro', valor: Number(e.teto) + 5, descricao: 'gari ganha pouco por saco' });
+    assert.strictEqual(r.s, 200, JSON.stringify(r.j));
+    await aprovarESancionar(r.j.id);
+    assert.strictEqual(Number((await pool.query(`SELECT teto FROM governo_empregos WHERE cidade_id = 1 AND emprego = 'Lixeiro'`)).rows[0].teto), Number(e.teto) + 5);
+    await pool.query(`UPDATE governo_empregos SET teto = $1 WHERE cidade_id = 1 AND emprego = 'Lixeiro'`, [e.teto]);
+  });
+  await caso('cargo de corporação de OUTRA cidade é recusado', async () => {
+    let c2 = (await pool.query(`SELECT id FROM cidades WHERE slug = 'teste-sal2'`)).rows[0];
+    if (!c2) c2 = (await pool.query(`INSERT INTO cidades (slug, nome, sigla, tipo, status, loja_prefixo, dono_user_id) VALUES ('teste-sal2','Sal2','SL2','comunidade','ativa','SL2',$1) RETURNING id`, [dono])).rows[0];
+    const cc = (await pool.query(`INSERT INTO corporations (name, slug, tipo, cidade_id) VALUES ('Corp Fora','corp-fora-' || floor(random()*1e9)::text,'corp',$1) RETURNING id`, [c2.id])).rows[0].id;
+    const rr = (await pool.query(`INSERT INTO ranks (corporation_id, name, level, salary) VALUES ($1,'Soldado',1,1000) RETURNING id`, [cc])).rows[0].id;
+    assert.strictEqual((await pedir(S.cm_pres, 'POST', '/api/governo/camara', { tipo: 'salario_corp', rank_id: rr, valor: 1500, descricao: 'cargo de outra cidade' })).s, 400);
+  });
+  await caso('painel do Governo mostra os salários de todas as corporações e pode_propor', async () => {
+    const g = await pedir(S.cm_pres, 'GET', '/api/governo');
+    assert.strictEqual(g.s, 200); assert.strictEqual(g.j.pode_propor, true);
+    assert.ok(g.j.corporacoes.length > 0 && g.j.corporacoes[0].cargos.length > 0);
+    assert.ok(!g.j.corporacoes.some(c => c.tipo === 'faccao' || c.tipo === 'governo'));
+    assert.strictEqual((await pedir(S.cm_min, 'GET', '/api/governo')).j.pode_propor, false);
+  });
+
   console.log('\nISOLAMENTO');
   await caso('outra cidade não vê as propostas da Santa Fé', async () => {
     let c2 = (await pool.query(`SELECT id FROM cidades WHERE slug = 'teste-sal2'`)).rows[0];

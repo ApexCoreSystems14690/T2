@@ -41,7 +41,10 @@ router.get('/api/governo', CID.exigeCidade(), so(async (req, res) => {
   if (!(await podeVer(req))) return res.status(403).json({ error: 'Sem acesso ao Governo' });
   const p = await GOV.painel(pool, req.cidade.id);
   if (!p) return res.status(404).json({ error: 'Esta cidade não tem Governo' });
-  res.json({ ...p, eh_dono: perm.ehDonoAqui(req.user) });
+  // [24/10] quem pode abrir projeto vê o botão "Propor" nos salários (corps e empregos)
+  const CAMm = require('../governo-camara');
+  const eu = await CAMm.cargoNoGoverno(pool, req.cidade.id, req.user.id);
+  res.json({ ...p, eh_dono: perm.ehDonoAqui(req.user), pode_propor: CAMm.podeAbrir(req.user, eu), meu_cargo: eu ? eu.cargo : null });
 }));
 
 function soDono(req, res, next) {

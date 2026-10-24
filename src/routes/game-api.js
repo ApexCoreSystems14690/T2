@@ -23,6 +23,30 @@ router.use(async (req, res, next) => {
   catch (e) { res.status(e.status || 500).json({ error: e.message }); }
 });
 
+// [24/10] CIDADE NÃO ISOLADA (a de teste). As consultas do jogo ainda não filtram por
+// cidade (fase 2 do plano), então uma cidade que não é o Santa Fé só passa por estas
+// rotas: leitura de cargo/corp/staff/temporada e o heartbeat (que, pra ela, só marca
+// o servidor vivo). O resto dá 423 — o jogo já trata site fora do ar, e assim nada que
+// um tester faça na cidade de teste escreve no banco do Santa Fé (dinheiro, celular,
+// fila de itens, comandos, PD, eleição) nem lê dado pessoal de lá (celular, ficha).
+const LIVRES_SEM_ISOLAMENTO = [
+  /^\/cidades(\/[a-z0-9-]+\/senha)?$/, /^\/temporada$/, /^\/ssu$/, /^\/heartbeat$/,
+  /^\/acesso\/\d+$/, /^\/player\/\d+$/, /^\/player\/\d+\/corp\/[\w-]+$/,
+  /^\/corp\/[\w-]+\/(members|ranks)$/, /^\/corps$/,
+];
+async function cidadeIsolada(req) {
+  if (req._cidadeJogo === CID.SANTA_FE) return true;
+  const c = await CID.porId(pool, req._cidadeJogo);
+  return !!(c && c.isolada);
+}
+router.use(async (req, res, next) => {
+  try {
+    if (await cidadeIsolada(req)) return next();
+    if (LIVRES_SEM_ISOLAMENTO.some(r => r.test(req.path))) return next();
+    return res.status(423).json({ error: 'cidade_sem_isolamento', detalhe: 'Esta cidade ainda não grava no site.' });
+  } catch (e) { res.status(500).json({ error: 'Erro interno' }); }
+});
+
 // [21/10 Cidades] Lista pro LOBBY do jogo (place "Cidades"): as cidades abertas,
 // quantos estão jogando e quantos servidores cada uma tem agora.
 router.get('/cidades', async (req, res) => {
@@ -34,9 +58,31 @@ router.get('/cidades', async (req, res) => {
         slug: c.slug, nome: c.nome, sigla: c.sigla, tipo: c.tipo, cor: c.cor, descricao: c.descricao,
         vagas: c.vagas, online: (mov[c.id] || {}).online || 0, aberta: !!(mov[c.id] || {}).servidores,
         lotada: ((mov[c.id] || {}).online || 0) >= c.vagas,
+        restrita: !!c.senha_hash, teste: c.tipo === 'teste',
       })),
     });
   } catch (err) { console.error('game/cidades:', err.message); res.status(500).json({ error: 'Erro interno' }); }
+});
+
+// [24/10] O LOBBY confere a senha da cidade restrita (a de teste). O lobby é servidor
+// (passa a x-api-key); a senha nunca vai pro cliente nem fica no jogo. Limite por
+// jogador: 6 tentativas a cada 10 min (6 dígitos = 1 milhão de combinações).
+const tentativasSenha = new Map();
+router.post('/cidades/:slug/senha', async (req, res) => {
+  try {
+    const c = await CID.porSlug(pool, String(req.params.slug || '').toLowerCase());
+    if (!c || c.status !== 'ativa') return res.status(404).json({ ok: false, error: 'cidade' });
+    const rid = Number((req.body || {}).roblox_id);
+    if (!Number.isFinite(rid) || rid <= 0) return res.status(400).json({ ok: false, error: 'roblox_id' });
+    const k = c.id + ':' + rid, agora = Date.now();
+    const t = (tentativasSenha.get(k) || []).filter(x => agora - x < 600000);
+    if (t.length >= 6) return res.status(429).json({ ok: false, error: 'tentativas' });
+    const ok = CID.senhaConfere(c, (req.body || {}).senha);
+    if (!ok) { t.push(agora); tentativasSenha.set(k, t); }
+    else tentativasSenha.delete(k);
+    if (tentativasSenha.size > 5000) tentativasSenha.clear();
+    res.status(ok ? 200 : 403).json({ ok, restam: ok ? null : Math.max(0, 6 - t.length) });
+  } catch (err) { console.error('game/cidades/senha:', err.message); res.status(500).json({ ok: false, error: 'Erro interno' }); }
 });
 
 // ===========================================================================
@@ -214,6 +260,8 @@ router.post('/vincular', async (req, res) => {
 // ---------------------------------------------------------------------------
 router.get('/temporada', async (req, res) => {
   try {
+    // [24/10] game_config ainda é do jogo todo: cidade não isolada não herda o wipe do Santa Fé.
+    if (!(await cidadeIsolada(req))) return res.json({ temporada: 1, wipe_em: null });
     const r = await pool.query(`SELECT value FROM game_config WHERE key = 'temporada'`);
     const n = Math.max(1, parseInt(r.rows[0] && r.rows[0].value && r.rows[0].value.n) || 1);
     const w = await pool.query(`SELECT value FROM game_config WHERE key = 'wipe_em'`);
@@ -250,7 +298,8 @@ router.get('/ssu', async (req, res) => {
         WHERE u.roblox_id IS NOT NULL AND cs.cidade_id = $1 LIMIT 200`, [await cidadeDoJogo(req)]);
     res.json({
       ok: true,
-      ajustes: (r.rows[0] && r.rows[0].value) || {},
+      // [24/10] ajuste de SSU (encerrar/estender) é do Santa Fé; a cidade de teste não fecha por ele
+      ajustes: (await cidadeIsolada(req)) ? ((r.rows[0] && r.rows[0].value) || {}) : {},
       staff: st.rows.map(x => Number(x.roblox_id)),
       agora: Math.floor(Date.now() / 1000),
     });
@@ -568,6 +617,9 @@ router.post('/heartbeat', async (req, res) => {
     }
     // limpa servidores mortos (sem heartbeat há 2 min)
     await pool.query(`DELETE FROM game_servers WHERE updated_at < NOW() - INTERVAL '2 minutes'`);
+    // [24/10] cidade não isolada: o heartbeat só marca o servidor vivo. Registro de
+    // jogadores, fila de itens, booster, royalties e a config do Santa Fé NÃO valem pra ela.
+    if (!(await cidadeIsolada(req))) return res.json({ ok: true, config: {}, entregas: [], isolada: false });
 
     // [25/09; corrigido 26/09] SNAPSHOT pra aba ANÁLISE: 1 linha a cada ~1min com o
     // total online AGORA (soma dos players de todos os servidores vivos).
@@ -585,7 +637,7 @@ router.post('/heartbeat', async (req, res) => {
         `INSERT INTO player_snapshots (jogadores, servidores)
          SELECT j, s FROM (
            SELECT COALESCE(SUM(jsonb_array_length(players)), 0)::int AS j, COUNT(*)::int AS s
-             FROM game_servers
+             FROM game_servers WHERE cidade_id = 1
          ) x
           WHERE NOT EXISTS (SELECT 1 FROM player_snapshots WHERE criado_em > NOW() - INTERVAL '1 minute')`);
       // retenção: guarda 120 dias de histórico

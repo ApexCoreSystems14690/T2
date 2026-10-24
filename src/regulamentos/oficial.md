@@ -1,5 +1,7 @@
 > **Como ler este documento.** Cada regra é um artigo numerado. Quando houver quadro VALE / NÃO VALE, a lista é completa: o que não estiver em "vale" não é permitido. Em caso de dúvida, vale o texto do artigo, e a staff decide pela prova.
 
+> **O que mudou na versão 2.5.** O **Presidente da República** também abre projeto na Câmara, e o projeto agora pode mudar o salário de qualquer **cargo de corporação** e o **teto dos empregos civis** pagos pelo tesouro (Art. 10.11).
+
 > **O que mudou na versão 2.4.** Entram as **disposições gerais** sobre o alto comando, a staff e a decisão final dos donos (Art. 1.10 a 1.13); o **número de série** das armas, a **Adulteração de arma** e a evidência ensacada (Art. 4.4A a 4.4D, 4.13 e 9.5); **banco e sequestro** pelos números aprovados na votação das Facções (Art. 4.8A, 4.9 e 4.10); a facção sem salário da organização e com contrabandista (Art. 7.2 e 7.3); o **salário político a cada 3 dias** pago pelo tesouro e a **Câmara no site**, com sanção, veto e derrubada do veto (Art. 10.8, 10.11, 10.11A, 10.11B e 10.12); e o novo poder do **Responsável das Corporações** (Art. 10.13).
 
 > **Marcações.** [NOVO] é regra que não existia. [ALTERADO] é regra que mudou nesta versão.
@@ -475,12 +477,12 @@ Numa abordagem válida, arma Sem registro, RASPADA ou registrada no nome de outr
 
 ### Salários
 
-**Art. 10.11** [ALTERADO] — **Projeto de salário.** Qualquer Parlamentar, ou o Presidente da Câmara, abre o projeto na aba **Câmara** do site para aumentar ou baixar o salário de um cargo da tabela do Art. 10.8. O rito é:
+**Art. 10.11** [ALTERADO] — **Projeto de salário.** Qualquer Parlamentar, o Presidente da Câmara ou o Presidente da República abre o projeto na aba **Câmara** do site para aumentar ou baixar o salário de um cargo da tabela do Art. 10.8, o salário de um cargo de **corporação** da cidade ou o **teto por tarefa** de um emprego civil pago pelo tesouro. O rito é:
 - 48 horas de debate e depois 24 horas de votação, no site;
 - votam os Parlamentares, um voto cada, com o nome à mostra; aprova pela regra do Art. 10.14;
 - aprovado, o Presidente da República tem 24 horas para **sancionar ou vetar**; sem resposta no prazo, o projeto é sancionado sozinho;
 - sancionado, o valor novo entra **sozinho** no site, sem esperar a staff.
-Nenhum salário pode passar de 2 vezes o valor da tabela do Art. 10.8 nem ficar abaixo de zero. Salário das corporações continua seguindo o Art. 10.2, e a equipe de desenvolvimento tem a palavra final sobre a aplicação.
+Nenhum salário do Governo pode passar de 2 vezes o valor da tabela do Art. 10.8; salário de corporação e teto de emprego civil não passam de 2 vezes o valor de hoje. Nada fica abaixo de zero. A equipe de desenvolvimento tem a palavra final sobre a aplicação.
 
 **Art. 10.11A** [NOVO] — **Veto.** O projeto vetado volta para a Câmara, que tem 24 horas para derrubar o veto. O veto só cai com **2/3 dos votos** dos Parlamentares que votaram; derrubado, o projeto entra em vigor. Se não cair, o projeto é arquivado.
 

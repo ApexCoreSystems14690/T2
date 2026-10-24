@@ -17,6 +17,14 @@
 //     próximo wipe = próxima temporada). Redução vale na hora.
 //   · Teto: nenhum salário passa de 2x o valor padrão do cargo, nem fica abaixo de 0.
 //   · O Dono continua mudando salário e retirando obra direto, como staff.
+//
+// [24/10] [stated] Julio: "o presidente não consegue publicar projetos, nem ver o salario de todas
+// as corporações pelo painel governo, nem editar os salarios da cidade pelo painel". Escolheu
+// "Abre projeto na Câmara" (Regulamento 2.5, Art. 10.11):
+//   · o PRESIDENTE DA REPÚBLICA também abre projeto (e o Dono da cidade, como staff);
+//   · tipos novos: 'salario_corp' (cargo de qualquer corporação da cidade) e 'emprego' (teto por
+//     tarefa de emprego civil pago pelo tesouro). Teto: 2x o valor de hoje (cargo de corp sem
+//     salário: até R$ 20.000). Sancionado, entra sozinho como os outros.
 // ============================================================================
 const pool = require('./db/pool');
 const GOV = require('./governo');
@@ -26,6 +34,10 @@ const DEBATE_H = 48, VOTACAO_H = 24, SANCAO_H = 24, DERRUBADA_H = 24;
 const CARGO_PARLAMENTAR = 'Parlamentar';
 const CARGO_PRES_CAMARA = 'Presidente da Câmara';
 const CARGO_PRESIDENTE = 'Presidente da República';
+const QUEM_ABRE = [CARGO_PARLAMENTAR, CARGO_PRES_CAMARA, CARGO_PRESIDENTE];
+const TIPOS = ['salario', 'salario_corp', 'emprego', 'obra'];
+const TETO_CORP_SEM_SALARIO = 20000;
+const perm = require('./permissoes');
 
 const STATUS = {
   debate: 'Em debate', votacao: 'Em votação', aguardando_sancao: 'Aguardando sanção',
@@ -41,7 +53,7 @@ async function garantir(db) {
     CREATE TABLE IF NOT EXISTS governo_propostas (
       id SERIAL PRIMARY KEY,
       cidade_id INTEGER NOT NULL REFERENCES cidades(id),
-      tipo VARCHAR(12) NOT NULL CHECK (tipo IN ('salario','obra')),
+      tipo VARCHAR(12) NOT NULL,
       rank_id INTEGER,
       cargo VARCHAR(128),
       obra_chave VARCHAR(32),
@@ -74,7 +86,19 @@ async function garantir(db) {
       em TIMESTAMPTZ NOT NULL DEFAULT NOW(),
       PRIMARY KEY (proposta_id, fase, user_id)
     );
+    -- [24/10] tipos novos (salário de corporação, teto de emprego civil)
+    ALTER TABLE governo_propostas DROP CONSTRAINT IF EXISTS governo_propostas_tipo_check;
+    ALTER TABLE governo_propostas ADD CONSTRAINT governo_propostas_tipo_check CHECK (tipo IN ('salario','salario_corp','emprego','obra'));
   `);
+}
+
+// teto de cargo de corporação / emprego civil: 2x o valor de hoje
+function tetoRelativo(atual) {
+  const a = Math.max(0, Math.floor(Number(atual) || 0));
+  return a > 0 ? a * 2 : TETO_CORP_SEM_SALARIO;
+}
+function podeAbrir(user, eu) {
+  return !!((eu && QUEM_ABRE.includes(eu.cargo)) || (user && perm.ehDonoAqui(user)));
 }
 
 // ---------------------------------------------------------------- quem é quem
@@ -108,7 +132,7 @@ function tetoDoCargo(nome, atual) {
 // ---------------------------------------------------------------- abrir
 async function abrir(db, cidadeId, user, b) {
   const eu = await cargoNoGoverno(db, cidadeId, user.id);
-  if (!eu || ![CARGO_PARLAMENTAR, CARGO_PRES_CAMARA].includes(eu.cargo)) throw erro('Só Parlamentar ou o Presidente da Câmara abre proposta', 403);
+  if (!podeAbrir(user, eu)) throw erro('Só Parlamentar, o Presidente da Câmara ou o Presidente da República abre proposta', 403);
   const desc = String(b.descricao || '').trim();
   if (desc.length < 8) throw erro('Explique a proposta (pelo menos 8 letras)');
   if (desc.length > 500) throw erro('Descrição longa demais (máx. 500)');
@@ -127,6 +151,28 @@ async function abrir(db, cidadeId, user, b) {
     if (v > teto) throw erro(`Acima do teto: no máximo R$ ${teto.toLocaleString('pt-BR')} (2x o padrão do cargo)`);
     if (v === Number(rk.salary)) throw erro('O cargo já ganha esse valor');
     campos = { tipo: 'salario', rank_id: rk.id, cargo: rk.name, obra_chave: null, valor_atual: Number(rk.salary), valor: v };
+  } else if (b.tipo === 'salario_corp') {
+    const rk = (await db.query(
+      `SELECT r.id, r.name, COALESCE(r.salary,0)::bigint AS salary, c.name AS corp
+         FROM ranks r JOIN corporations c ON c.id = r.corporation_id
+        WHERE r.id = $1 AND c.cidade_id = $2 AND c.is_active = true AND c.tipo NOT IN ('governo','faccao')`,
+      [parseInt(b.rank_id) || 0, cidadeId])).rows[0];
+    if (!rk) throw erro('Escolha um cargo de corporação desta cidade');
+    const v = Math.floor(Number(b.valor));
+    if (!(v >= 0)) throw erro('Salário inválido (não pode ser negativo)');
+    const teto = tetoRelativo(rk.salary);
+    if (v > teto) throw erro(`Acima do teto: no máximo R$ ${teto.toLocaleString('pt-BR')} (2x o salário de hoje)`);
+    if (v === Number(rk.salary)) throw erro('O cargo já ganha esse valor');
+    campos = { tipo: 'salario_corp', rank_id: rk.id, cargo: (rk.corp + ' · ' + rk.name).slice(0, 128), obra_chave: null, valor_atual: Number(rk.salary), valor: v };
+  } else if (b.tipo === 'emprego') {
+    const e = (await db.query(`SELECT emprego, nome, teto FROM governo_empregos WHERE cidade_id = $1 AND emprego = $2`, [cidadeId, String(b.emprego || '')])).rows[0];
+    if (!e) throw erro('Escolha um emprego civil da lista');
+    const v = Math.floor(Number(b.valor));
+    if (!(v >= 0)) throw erro('Valor inválido (não pode ser negativo)');
+    const teto = tetoRelativo(e.teto);
+    if (v > teto) throw erro(`Acima do teto: no máximo R$ ${teto.toLocaleString('pt-BR')} por tarefa (2x o de hoje)`);
+    if (v === Number(e.teto)) throw erro('O emprego já paga esse teto');
+    campos = { tipo: 'emprego', rank_id: null, cargo: e.nome, obra_chave: e.emprego, valor_atual: Number(e.teto), valor: v };
   } else if (b.tipo === 'obra') {
     const o = (await db.query(`SELECT chave, nome, valor FROM governo_obras WHERE cidade_id = $1 AND chave = $2`, [cidadeId, String(b.obra || '')])).rows[0];
     if (!o) throw erro('Escolha uma das obras da lista');
@@ -136,7 +182,7 @@ async function abrir(db, cidadeId, user, b) {
     `INSERT INTO governo_propostas (cidade_id, tipo, rank_id, cargo, obra_chave, valor_atual, valor, descricao, autor_user_id, autor_nome, votacao_em, fecha_em)
      VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12) RETURNING id`,
     [cidadeId, campos.tipo, campos.rank_id, campos.cargo, campos.obra_chave, campos.valor_atual, campos.valor, desc,
-     user.id, eu.nome || user.discord_username, votacao, fecha]);
+     user.id, (eu && eu.nome) || user.discord_username || ('user#' + user.id), votacao, fecha]);
   return { id: r.rows[0].id };
 }
 
@@ -207,6 +253,14 @@ async function aplicar(db, cidadeId, id) {
       }
       await cli.query(`UPDATE ranks SET salary = $2 WHERE id = $1`, [p.rank_id, p.valor]);
       await cli.query(`UPDATE governo_propostas SET status = 'sancionada', aplicada_em = NOW(), decidida_em = COALESCE(decidida_em, NOW()), temporada_sancao = COALESCE(temporada_sancao, $2) WHERE id = $1`, [p.id, temporada]);
+    } else if (p.tipo === 'salario_corp' || p.tipo === 'emprego') {
+      // [24/10] cargo de corporação (só da mesma cidade) ou teto de emprego civil
+      const r = p.tipo === 'salario_corp'
+        ? await cli.query(`UPDATE ranks SET salary = $2 WHERE id = $1 AND corporation_id IN (SELECT id FROM corporations WHERE cidade_id = $3)`, [p.rank_id, p.valor, cidadeId])
+        : await cli.query(`UPDATE governo_empregos SET teto = $3 WHERE cidade_id = $1 AND emprego = $2`, [cidadeId, p.obra_chave, p.valor]);
+      await cli.query(`UPDATE governo_propostas SET status = 'sancionada', aplicada_em = NOW(), decidida_em = COALESCE(decidida_em, NOW()),
+                         temporada_sancao = COALESCE(temporada_sancao, $2), nota = $3 WHERE id = $1`,
+        [p.id, temporada, r.rowCount ? null : 'O cargo/emprego não existe mais: nada mudou']);
     } else {
       const cfg = await GOV.config(cli, cidadeId);
       await cli.query(`INSERT INTO corp_caixa (corporation_id, saldo) VALUES ($1, 0) ON CONFLICT DO NOTHING`, [cfg.corporation_id]);
@@ -298,8 +352,24 @@ async function listar(db, cidadeId, user) {
   const cfg = await GOV.config(db, cidadeId);
   const cargos = cfg ? (await db.query(`SELECT id, name, COALESCE(salary,0)::bigint AS salary FROM ranks WHERE corporation_id = $1 ORDER BY level DESC`, [cfg.corporation_id])).rows
     .map(r => ({ id: r.id, nome: r.name, salario: Number(r.salary), teto: tetoDoCargo(r.name) })) : [];
+  // [24/10] pra quem abre projeto: cargos de todas as corporações e os empregos civis
+  const corps = (await db.query(
+    `SELECT c.id AS corp_id, c.name AS corp, r.id, r.name, COALESCE(r.salary,0)::bigint AS salary, r.level
+       FROM corporations c JOIN ranks r ON r.corporation_id = c.id
+      WHERE c.cidade_id = $1 AND c.is_active = true AND c.tipo NOT IN ('governo','faccao')
+      ORDER BY c.name, r.level DESC`, [cidadeId])).rows;
+  const corporacoes = [];
+  for (const r of corps) {
+    let c = corporacoes[corporacoes.length - 1];
+    if (!c || c.id !== r.corp_id) { c = { id: r.corp_id, nome: r.corp, cargos: [] }; corporacoes.push(c); }
+    c.cargos.push({ id: r.id, nome: r.name, salario: Number(r.salary), teto: tetoRelativo(r.salary) });
+  }
+  const empregosL = (await GOV.empregos(db, cidadeId)).map(e => ({ ...e, teto: Number(e.teto), teto_max: tetoRelativo(e.teto) }));
   return {
     meu_cargo: eu ? eu.cargo : null,
+    pode_abrir: podeAbrir(user, eu),
+    corporacoes,
+    empregos: empregosL,
     parlamentares: await contarParlamentares(db, cidadeId),
     regras,
     cargos,
@@ -325,5 +395,5 @@ function iniciar(db, cidades) {
   if (_timer.unref) _timer.unref();
 }
 
-module.exports = { garantir, abrir, votar, sancionar, processar, listar, iniciar, resultado, derruba, tetoDoCargo, STATUS,
+module.exports = { garantir, abrir, tetoRelativo, podeAbrir, TIPOS, cargoNoGoverno, votar, sancionar, processar, listar, iniciar, resultado, derruba, tetoDoCargo, STATUS,
   DEBATE_H, VOTACAO_H, SANCAO_H, DERRUBADA_H };
