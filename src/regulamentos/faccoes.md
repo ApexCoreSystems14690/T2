@@ -2,7 +2,9 @@
 
 > **O que mudou.** Acabaram as missões com multa, o salário pago pela organização e as vagas fechadas. Entram a inscrição aberta, os níveis de facção, a boca com cofre e advertência só com prova.
 
-> **Marcações.** [NOVO] é regra que não existia. [ALTERADO] é regra que mudou. Os artigos ligados à boca e à fabricação valem quando a mecânica entrar no jogo.
+> **Em vigor.** Aprovado na votação de 22/10/2026. Esta é a versão final: a boca é de quem chegar, entram o contrabandista e os três produtos, e banco e sequestro valem pelos números da votação (Regulamento Oficial v2.4).
+
+> **Marcações.** [NOVO] é regra que não existia. [ALTERADO] é regra que mudou. Os artigos da boca, da fabricação e do contrabandista valem a partir da atualização do jogo que traz essas mecânicas.
 
 ## Capítulo 1 · Disposições gerais
 
@@ -27,8 +29,8 @@
 | Nível | Requisito | O que libera |
 |---|---|---|
 | 1 · Bonde | 4 membros registrados | Cargo no Discord, canal próprio, vestiário com uniforme, máscara e rádio |
-| 2 · Firma | 6 membros e 2 semanas ativa, com pelo menos 3 ações registradas (print ou gravação) | Abrir 1 boca e kit de laboratório |
-| 3 · Comando | 8 membros e 4 semanas no Nível 2 | Abrir até 2 bocas e cor própria no mural e no rádio pirata |
+| 2 · Firma | 6 membros e 2 semanas ativa, com pelo menos 3 ações registradas (print ou gravação) | Assumir 1 boca, laboratório e contrabandista (até 4 armas longas por semana) |
+| 3 · Comando | 8 membros e 4 semanas no Nível 2 | Até 2 bocas, contrabandista com até 8 armas longas por semana e cor própria no mural e no rádio pirata |
 
 **Art. 2.4** [ALTERADO] — Oficialização **não dá arma, carro nem dinheiro**. Arma de facção vem do crime (Regulamento, Art. 7.3).
 
@@ -54,9 +56,9 @@
 
 ## Capítulo 5 · Boca, cofre e dinheiro
 
-> Vale quando a mecânica da boca entrar no jogo.
+> Vale a partir da atualização do jogo que traz a boca, o laboratório e o contrabandista.
 
-**Art. 5.1** [NOVO] — Boca é um ponto de venda fixo do mapa. Facção a partir do Nível 2 pode abrir uma boca livre pelo balcão.
+**Art. 5.1** [ALTERADO] — Boca é um ponto de venda fixo do mapa, no armazém da favela grande. **A boca é de quem chegar:** não existe boca reservada nem facção dona de antemão. Facção a partir do Nível 2 assume uma boca livre pelo balcão.
 
 **Art. 5.2** [NOVO] — O dinheiro das vendas cai no cofre da boca. Esse dinheiro é da facção e é administrado na confiança (Regulamento, Art. 7.4).
 
@@ -67,6 +69,31 @@
 **Art. 5.5** [NOVO] — Os produtos fabricados são itens ilegais. Porte, venda e fabricação são crimes e seguem o Regulamento.
 
 **Art. 5.6** [NOVO] — Salário de membro, se existir, é decisão da liderança e é pago em mãos, dentro do jogo.
+
+**Art. 5.7** [NOVO] — **Contrabandista.** Vende só para facção a partir do Nível 2, na van da favela do morro. A arma vem **Sem registro** (Regulamento, Art. 4.4B).
+
+| Item | Preço |
+|---|---|
+| AK | R$ 12.000 |
+| CAR15 | R$ 18.000 |
+| Boito | R$ 5.000 |
+| Glock | R$ 2.500 |
+| Colete | R$ 8.000 |
+
+| Nível | Limite de armas longas por semana |
+|---|---|
+| 2 · Firma | 4 |
+| 3 · Comando | 8 |
+
+**Art. 5.8** [NOVO] — **Produtos.** A facção fabrica três produtos no laboratório da boca. Todos dão ressaca quando o efeito passa.
+
+| Produto | Efeito |
+|---|---|
+| Adrena | Regenera vida |
+| Mira Fina | Menos recuo na arma |
+| Casca Grossa | Aguenta mais tempo caído |
+
+**Art. 5.9** [NOVO] — **Apreensão.** Na apreensão da boca, metade do dinheiro do cofre vai para o caixa da corporação que apreendeu. Produto e insumo são destruídos; a arma apreendida vai para a custódia da polícia (Regulamento, Art. 4.4B).
 
 ## Capítulo 6 · Ações criminosas
 
@@ -81,7 +108,7 @@
 
 **Art. 6.2** — Civil neutro não é alvo de guerra. Matar neutro é RDM.
 
-**Art. 6.3** [ALTERADO] — As mudanças de banco e sequestro desta tabela dependem da votação e da versão 2.4 do Regulamento Oficial. Até lá, vale o Regulamento v2.3.
+**Art. 6.3** [ALTERADO] — Banco e sequestro valem pelos números desta tabela, aprovados na votação de 22/10 e confirmados no Regulamento Oficial v2.4 (Art. 4.8A, 4.9 e 4.10): banco com 4 criminosos e 3 policiais; sequestro com reféns + 1 (mínimo 2) e 2 policiais.
 
 ## Capítulo 7 · Guerra entre facções
 
@@ -95,7 +122,7 @@
 
 **Art. 8.1** [ALTERADO] — O QG de uma facção é um imóvel comum. A polícia só entra nele nos casos do Cap. 5 do Regulamento Oficial: flagrante ou mandado.
 
-**Art. 8.2** [NOVO] — O laboratório de fabricação fica dentro de um imóvel da facção. Bancada achada em busca com mandado é apreendida.
+**Art. 8.2** [ALTERADO] — O laboratório de fabricação fica na boca. Bancada, produto e insumo achados em flagrante ou em busca com mandado são apreendidos (Art. 5.9).
 
 ## Capítulo 9 · Advertências e punições
 

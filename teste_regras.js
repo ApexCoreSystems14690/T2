@@ -41,13 +41,13 @@ async function pedir(cookie, metodo, path, body, tipo) {
   require('./src/cidades').limparCache && require('./src/cidades').limparCache();
 
   console.log('\nPÁGINA PÚBLICA');
-  await caso('Santa Fé tem os 2 documentos e o Oficial tem os 196 artigos', async () => {
+  await caso('Santa Fé tem os 2 documentos e o Oficial tem os 207 artigos (v2.4)', async () => {
     const r = await pedir('', 'GET', '/cidade/santa-fe/regras/oficial');
     assert.strictEqual(r.s, 200);
-    assert.strictEqual((r.t.match(/class="rg-art"/g) || []).length, 196);
+    assert.strictEqual((r.t.match(/class="rg-art"/g) || []).length, 207);
     assert.ok(r.t.includes('id="art-2-5"') && r.t.includes('id="cap-14"'));
     const f = await pedir('', 'GET', '/cidade/santa-fe/regras/faccoes');
-    assert.ok(f.t.includes('Rascunho: entra em vigor após a votação'));
+    assert.ok(f.t.includes('Aprovado na votação de 22/10/2026') && !f.t.includes('Rascunho: entra em vigor'));
     assert.ok(f.t.includes('href="/cidade/santa-fe/regras/oficial#art-7-3"'), 'citação do Oficial não virou link');
   });
   await caso('sem login abre, e NÃO muda a cidade da sessão', async () => {
@@ -103,10 +103,10 @@ async function pedir(cookie, metodo, path, body, tipo) {
   await caso('Dono do Santa Fé edita, guarda a versão anterior e restaura', async () => {
     const c = await sessao(dono, 1);
     const antes = (await pedir(c, 'GET', '/api/regras/faccoes')).j;
-    let r = await pedir(c, 'PUT', '/api/regras/faccoes', { versao: '3.1' });
+    let r = await pedir(c, 'PUT', '/api/regras/faccoes', { versao: '3.2' });
     assert.strictEqual(r.s, 200, r.t);
     const h = (await pedir(c, 'GET', '/api/regras/faccoes/historico')).j;
-    assert.ok(h.length >= 1 && h[0].versao === '3');
+    assert.ok(h.length >= 1 && h[0].versao === '3.1');
     r = await pedir(c, 'POST', '/api/regras/faccoes/restaurar/' + h[0].id);
     assert.strictEqual(r.s, 200, r.t);
     const depois = (await pedir(c, 'GET', '/api/regras/faccoes')).j;

@@ -56,14 +56,15 @@ async function garantir(pool) {
   const ler = (f, bin) => { try { return fs.readFileSync(path.join(pasta, f), bin ? undefined : 'utf8'); } catch (e) { return null; } };
   const sementes = [
     { slug: 'oficial', titulo: 'Regulamento Oficial', subtitulo: 'Termos de Uso, Regras de Roleplay e Leis da Cidade',
-      versao: '2.3', status: 'vigente', vigente_desde: '2026-10-21', aviso: null,
+      versao: '2.4', status: 'vigente', vigente_desde: '2026-10-24', aviso: null, atualiza_de: ['2.3'],
       meta: [{ k: 'Publicado por', v: 'Equipe Santa Fé Roleplay' }, { k: 'Alterações', v: 'anunciadas em #avisos' }],
-      md: 'oficial.md', pdf: 'oficial.pdf', pdf_nome: 'Regulamento-Santa-Fe-RP-v2.3.pdf', ordem: 10 },
+      md: 'oficial.md', pdf: 'oficial.pdf', pdf_nome: 'Regulamento-Santa-Fe-RP-v2.4.pdf', ordem: 10 },
     { slug: 'faccoes', titulo: 'Regulamento das Facções', subtitulo: 'Facções Oficiais de Santa Fé · Reestruturação',
-      versao: '3', status: 'rascunho', vigente_desde: null, aviso: 'Rascunho: entra em vigor após a votação',
-      meta: [{ k: 'Responsável', v: 'Israel' }, { k: 'Substitui', v: 'Todas as regras anteriores do servidor das facções' },
-             { k: 'Liga com', v: 'Regulamento Oficial v2.3 (Cap. 4 a 7 e 11)' }],
-      md: 'faccoes.md', pdf: 'faccoes.pdf', pdf_nome: 'Regulamento-Faccoes-v3.pdf', ordem: 20 },
+      versao: '3.1', status: 'vigente', vigente_desde: '2026-10-22', aviso: null, atualiza_de: ['3'],
+      meta: [{ k: 'Responsável', v: 'Israel' }, { k: 'Aprovado', v: 'Votação de 22/10/2026' },
+             { k: 'Substitui', v: 'Todas as regras anteriores do servidor das facções' },
+             { k: 'Liga com', v: 'Regulamento Oficial v2.4 (Cap. 4 a 7 e 11)' }],
+      md: 'faccoes.md', pdf: 'faccoes.pdf', pdf_nome: 'Regulamento-Faccoes-v3.1.pdf', ordem: 20 },
   ];
   const tem = await pool.query('SELECT 1 FROM cidades WHERE id = $1', [SANTA_FE]);
   if (!tem.rows[0]) return;
@@ -76,6 +77,29 @@ async function garantir(pool) {
        ON CONFLICT (cidade_id, slug) DO NOTHING`,
       [SANTA_FE, s.slug, s.titulo, s.subtitulo, s.versao, s.status, s.vigente_desde, s.aviso,
        JSON.stringify(s.meta), md, ler(s.pdf, true), s.pdf_nome, s.ordem]);
+  }
+  // [24/10] VERSÃO NOVA DA SEMENTE: se o texto no banco ainda é a versão que esta semente
+  // substitui (atualiza_de), troca pelo texto novo. Antes guarda a versão atual no histórico
+  // (cidade_regulamentos_hist), então dá pra voltar pelo editor. Se o Dono já mexeu na versão
+  // (mudou o número), não encosta: o editor dele manda.
+  for (const s of sementes) {
+    if (!s.atualiza_de) continue;
+    const md = ler(s.md);
+    if (!md) continue;
+    const r = (await pool.query(`SELECT id, versao FROM cidade_regulamentos WHERE cidade_id = $1 AND slug = $2`, [SANTA_FE, s.slug])).rows[0];
+    if (!r || !s.atualiza_de.includes(String(r.versao))) continue;
+    const cli = await pool.connect();
+    try {
+      await cli.query('BEGIN');
+      await guardarFoto(cli, SANTA_FE, r.id, null);
+      await cli.query(
+        `UPDATE cidade_regulamentos SET versao = $2, status = $3, vigente_desde = $4, aviso = $5, meta = $6::jsonb,
+                conteudo = $7, pdf = COALESCE($8, pdf), pdf_nome = $9, atualizado_em = NOW() WHERE id = $1`,
+        [r.id, s.versao, s.status, s.vigente_desde, s.aviso, JSON.stringify(s.meta), md, ler(s.pdf, true), s.pdf_nome]);
+      await cli.query('COMMIT');
+      console.log(`[regras] ${s.slug}: ${r.versao} -> ${s.versao} (anterior guardada no histórico)`);
+    } catch (e) { await cli.query('ROLLBACK').catch(() => {}); console.error('[regras] atualizar', s.slug, e.message); }
+    finally { cli.release(); }
   }
 }
 

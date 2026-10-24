@@ -139,6 +139,10 @@
       .rg-casa { display: block; padding: 0; }
       .rg-papel, .rg-cabeca { border: 0; }
       body { background: #fff !important; }
+      /* [24/10] tabela inteira no papel: o sf.css de celular deixava a tabela em uma linha so e cortava a direita */
+      .rg-papel table { display: table !important; width: 100% !important; white-space: normal !important; overflow: visible !important; }
+      .rg-papel td, .rg-papel th { white-space: normal !important; }
+      .rg-papel tr, .rg-art { break-inside: avoid; }
     }
   </style>
   <link rel="stylesheet" href="/sf.css">

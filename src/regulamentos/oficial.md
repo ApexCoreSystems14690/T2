@@ -1,6 +1,8 @@
 > **Como ler este documento.** Cada regra é um artigo numerado. Quando houver quadro VALE / NÃO VALE, a lista é completa: o que não estiver em "vale" não é permitido. Em caso de dúvida, vale o texto do artigo, e a staff decide pela prova.
 
-> **O que mudou na versão 2.3.** O Tribunal passa a julgar também processos **eleitorais** e **civis** (Art. 13.21 a 13.27): perda de mandato, impugnação de candidatura, dívidas, contratos e disputa de bens. Novas regras de **troca de partido** durante o mandato e o que conta como justa causa (Art. 14.17 a 14.21). Ajustes ligados a isso nos Arts. 2.17, 10.5, 11.8, 12.3A, 13.5, 13.15 e 14.15.
+> **O que mudou na versão 2.4.** Entram as **disposições gerais** sobre o alto comando, a staff e a decisão final dos donos (Art. 1.10 a 1.13); o **número de série** das armas, a **Adulteração de arma** e a evidência ensacada (Art. 4.4A a 4.4D, 4.13 e 9.5); **banco e sequestro** pelos números aprovados na votação das Facções (Art. 4.8A, 4.9 e 4.10); a facção sem salário da organização e com contrabandista (Art. 7.2 e 7.3); o **salário político a cada 3 dias** pago pelo tesouro e a **Câmara no site**, com sanção, veto e derrubada do veto (Art. 10.8, 10.11, 10.11A, 10.11B e 10.12); e o novo poder do **Responsável das Corporações** (Art. 10.13).
+
+> **Marcações.** [NOVO] é regra que não existia. [ALTERADO] é regra que mudou nesta versão.
 
 ## Capítulo 1 · Termos de Uso
 
@@ -21,6 +23,16 @@
 **Art. 1.8** — Quando este regulamento disser **prova**, entende-se: gravação de tela ou print em que apareçam o jogo, os nomes envolvidos e o horário. Relato sem prova não vale.
 
 **Art. 1.9** — Os servidores oficiais de Santa Fé no Discord são: o servidor da cidade, o servidor do Governo (Parlamento, Governo, STF e eleições) e o servidor da OAB (formação de advogados, Art. 13.16). Os três seguem este regulamento.
+
+### Disposições gerais
+
+**Art. 1.10** [NOVO] — **Alto comando.** CEO, CO-CEO e COO não ocupam cargo político, cargo de corporação nem facção. Podem ter empresa e entrar em corporação só para teste ou evento, sem cargo.
+
+**Art. 1.11** [NOVO] — O alto comando não atende ticket nem toma decisão da staff. Tickets, punições e decisões são da staff. Bugs e reports são dos Secretários de QA.
+
+**Art. 1.12** [NOVO] — A staff é comandada por 2 Diretores Gerais, um acompanhando o outro.
+
+**Art. 1.13** [NOVO] — Em situação não prevista neste regulamento ou de risco grave ao servidor, os donos têm a decisão final. Toda decisão desse tipo é publicada com o motivo. Este artigo não muda o Art. 11.3: nas punições comuns, sem prova não há punição.
 
 ## Capítulo 2 · Regras Gerais
 
@@ -157,6 +169,25 @@
 
 **Art. 4.4** — Arma na mão sem porte é crime de **porte ilegal**: multa de R$ 2.500 e apreensão.
 
+**Art. 4.4A** [NOVO] — **Número de série.** Toda arma tem um número de série, que aparece no cartão do item. O número liga a arma ao dono (registro) e às cápsulas que ela deixa no chão (balística). Faca, katana e escudo não têm número.
+
+**Art. 4.4B** [NOVO] — **Origem e registro.** O registro de cada arma sai da origem dela:
+
+| Origem | Registro |
+|---|---|
+| Loja legal | Registrada no nome de quem comprou |
+| Arsenal da corporação | Registrada na corporação |
+| Mesa de craft, loja ilegal ou contrabandista | Sem registro |
+| Arma que já existia antes do número de série | Sem registro |
+| Número lixado com a Lima | RASPADA |
+| Arma apreendida | Custódia da polícia (não é destruída: serve para o disparo de teste) |
+
+Numa abordagem válida, arma Sem registro, RASPADA ou registrada no nome de outra pessoa é flagrante de porte ilegal (Art. 13.6). Arma registrada é conferida com o Porte de Armas, que lista os números do dono.
+
+**Art. 4.4C** [NOVO] — **Registro até o wipe.** Até 20/11/2026, quem tem Porte de Armas pode registrar no balcão da DP a arma curta que já tinha antes do número de série. Registrada, ela passa a constar no nome dele e no Porte.
+
+**Art. 4.4D** [NOVO] — **Adulteração de arma.** Raspar o número de série é crime próprio: 10 minutos de pena, **somados** à pena de porte ilegal (Art. 9.5). A Polícia Civil pode revelar o número na bancada de balística da DP.
+
 ### Assalto
 
 **Art. 4.5** — Sozinho, só com arma curta. Arma longa exige estar acompanhado.
@@ -167,11 +198,13 @@
 
 **Art. 4.8** — Quem é assaltado sob arma apontada deve cooperar. Reagir desarmado é Vida Leve.
 
+**Art. 4.8A** [NOVO] — **Assalto a banco** exige no mínimo 4 criminosos e 3 policiais em serviço no jogo.
+
 ### Sequestro
 
-**Art. 4.9** — Só é permitido com pelo menos um policial em serviço no jogo.
+**Art. 4.9** [ALTERADO] — Só é permitido com pelo menos 2 policiais em serviço no jogo.
 
-**Art. 4.10** — Para cada civil sequestrado, é obrigatório ter três sequestradores a mais que o número de reféns (1 refém = 4 sequestradores; 2 reféns = 5 sequestradores, e assim por diante).
+**Art. 4.10** [ALTERADO] — É obrigatório ter um sequestrador a mais que o número de reféns, com mínimo de 2 sequestradores (1 refém = 2 sequestradores; 2 reféns = 3 sequestradores, e assim por diante).
 
 **Art. 4.11** — Após 30 minutos sem desfecho, o refém deve ser liberado.
 
@@ -179,7 +212,7 @@
 
 ### Morte
 
-**Art. 4.13** — Ao morrer, você perde 35% do dinheiro da carteira, todas as armas e itens. Permanecem: CNH, Porte de Armas, Documento Governamental, Relatório e o celular. O celular pode ser usado como prova e periciado pela Polícia Civil.
+**Art. 4.13** [ALTERADO] — Ao morrer, você perde 35% do dinheiro da carteira, todas as armas e itens. Permanecem: CNH, Porte de Armas, Documento Governamental, Relatório, o celular e a **evidência ensacada** pela polícia. O celular pode ser usado como prova e periciado pela Polícia Civil. A evidência ensacada também não sai na revista: ela só se perde enquanto está no chão, antes de ser recolhida.
 
 **Art. 4.14** — Quem apertar DESISTIR perde tudo, inclusive os documentos. Permanece apenas o celular.
 
@@ -269,9 +302,9 @@
 
 **Art. 7.1** — Facção é uma organização criminosa com nome, hierarquia, território e membros registrados no painel.
 
-**Art. 7.2** — A facção possui cargos e hierarquia no site, vestiário com uniforme, máscara, colete e rádio, rádio próprio e salário por cargo. A facção **não** possui armas no vestiário nem estoque no painel.
+**Art. 7.2** [ALTERADO] — A facção possui cargos e hierarquia no site, vestiário com uniforme, máscara e rádio, e rádio próprio. A facção **não** possui armas no vestiário, estoque no painel nem salário pago pela organização: salário de membro, se existir, é decisão da liderança e é pago em mãos (Regulamento das Facções, Art. 5.6).
 
-**Art. 7.3** — Arma de facção vem do crime: fabricação, compra na deepweb, roubo ou desvio de policial corrupto.
+**Art. 7.3** [ALTERADO] — Arma de facção vem do crime: fabricação, compra na deepweb, compra no contrabandista (facção a partir do Nível 2, Regulamento das Facções, Art. 5.7), roubo ou desvio de policial corrupto.
 
 **Art. 7.4** — O dinheiro da facção é o dinheiro dos membros, administrado na confiança.
 
@@ -381,7 +414,8 @@
 | Desacato e perturbação | 2 min |
 | Furto, dano e direção perigosa | 5 min |
 | Porte ilegal de arma curta | 10 min |
-| Assalto, receptação e tráfico | 20 min |
+| Adulteração de arma (número raspado) [NOVO] | 10 min, somados ao porte ilegal |
+| Assalto, receptação e tráfico (inclui fabricar ou vender Adrena, Mira Fina e Casca Grossa) | 20 min |
 | Porte de arma longa, sequestro e tentativa de homicídio (graves) | 30 min |
 | Homicídio, chacina e atentado contra autoridade (graves) | 30 min + processo (pode resultar em PD) |
 
@@ -417,39 +451,50 @@
 
 **Art. 10.8** — Cada cargo entra de um único jeito:
 
-| Cargo | Como entra | Salário (a cada 3h in game) |
+| Cargo | Como entra | Salário (a cada 3 dias) |
 |---|---|---|
-| Presidente da República | Voto popular (Cap. 14) | 50.000$ |
-| Vice-Presidente | Eleito na chapa do Presidente | Fixado por lei (Art. 10.12) |
-| Presidente da Câmara | Indicado pelo partido vencedor da Presidência | 40.000$ |
-| Presidente do STF | Indicado pelo partido vencedor da Presidência | Fixado por lei (Art. 10.12) |
-| Secretário de Estado | Indicado pelo partido vencedor da Presidência | 30.000$ |
-| Parlamentar | Voto popular, só no 1º turno (Cap. 14) | 15.000$ |
-| Ministro do STF (até 3) | Escolhido pelo Presidente do STF (Art. 13.2) | Fixado por lei (Art. 10.12) |
-| Ministro da Saúde | Escolhido pelo Presidente da República | Fixado por lei (Art. 10.12) |
+| Presidente da República | Voto popular (Cap. 14) | 300.000$ |
+| Vice-Presidente | Eleito na chapa do Presidente | 240.000$ |
+| Presidente da Câmara | Indicado pelo partido vencedor da Presidência | 200.000$ |
+| Presidente do STF | Indicado pelo partido vencedor da Presidência | 200.000$ |
+| Secretário de Estado | Indicado pelo partido vencedor da Presidência | 160.000$ |
+| Parlamentar | Voto popular, só no 1º turno (Cap. 14) | 100.000$ |
+| Ministro do STF (até 3) | Escolhido pelo Presidente do STF (Art. 13.2) | 120.000$ |
+| Ministro da Saúde | Escolhido pelo Presidente da República | 150.000$ |
 
-| Cargo | Como entra | Salário (a cada 3h in game) |
+| Cargo | Como entra | Salário (a cada 3 dias) |
 |---|---|---|
-| Ministro da Segurança Pública | Escolhido pelo Presidente da República | Fixado por lei (Art. 10.12) |
-| Responsável das Corporações | Escolhido pelo Parlamento, por maioria simples | Fixado por lei (Art. 10.12) |
+| Ministro da Segurança Pública | Escolhido pelo Presidente da República | 150.000$ |
+| Responsável das Corporações | Escolhido pelo Parlamento, por maioria simples (Art. 10.13) | 140.000$ |
+
+[ALTERADO] O salário é pago **automaticamente a cada 3 dias** pelo **tesouro do Governo**, direto na carteira, a quem tem o cargo e entrou no jogo nesses 3 dias. Ninguém precisa bater ponto. Os valores da tabela mudam pela Câmara (Art. 10.11).
 
 **Art. 10.9** — Partido vencedor é o partido do Presidente da República eleito. Ele publica os nomes do Presidente da Câmara, do Presidente do STF e do Secretário de Estado no servidor do Governo até o horário do wipe que dá início ao mandato. Sem indicação até lá, o próprio Presidente da República indica os cargos que faltarem.
 
-**Art. 10.10** — Cada jogador ocupa um único cargo político ou judicial ao mesmo tempo. Quem aceita um segundo cargo perde o primeiro na hora.
+**Art. 10.10** — Cada jogador ocupa um único cargo político ou judicial ao mesmo tempo. Quem aceita um segundo cargo perde o primeiro na hora. O alto comando não ocupa cargo político (Art. 1.10).
 
 ### Salários
 
-**Art. 10.11** — **Projeto de salário.** Qualquer parlamentar pode apresentar projeto para aumentar ou baixar o salário de qualquer cargo da tabela do Art. 10.8 e o salário das corporações. Segue o mesmo rito de qualquer lei (Art. 10.2): 48 horas de debate, votação e sanção. O valor novo vale a partir de quando a staff aplica no jogo. Como toda lei que mexe no jogo, a equipe de desenvolvimento tem a palavra final sobre a aplicação.
+**Art. 10.11** [ALTERADO] — **Projeto de salário.** Qualquer Parlamentar, ou o Presidente da Câmara, abre o projeto na aba **Câmara** do site para aumentar ou baixar o salário de um cargo da tabela do Art. 10.8. O rito é:
+- 48 horas de debate e depois 24 horas de votação, no site;
+- votam os Parlamentares, um voto cada, com o nome à mostra; aprova pela regra do Art. 10.14;
+- aprovado, o Presidente da República tem 24 horas para **sancionar ou vetar**; sem resposta no prazo, o projeto é sancionado sozinho;
+- sancionado, o valor novo entra **sozinho** no site, sem esperar a staff.
+Nenhum salário pode passar de 2 vezes o valor da tabela do Art. 10.8 nem ficar abaixo de zero. Salário das corporações continua seguindo o Art. 10.2, e a equipe de desenvolvimento tem a palavra final sobre a aplicação.
 
-**Art. 10.12** — Cargo marcado como "Fixado por lei" no Art. 10.8 não recebe salário até que uma lei aprovada e sancionada fixe o valor.
+**Art. 10.11A** [NOVO] — **Veto.** O projeto vetado volta para a Câmara, que tem 24 horas para derrubar o veto. O veto só cai com **2/3 dos votos** dos Parlamentares que votaram; derrubado, o projeto entra em vigor. Se não cair, o projeto é arquivado.
 
-**Art. 10.12A** — Aumento do salário de Parlamentar aprovado pelo próprio Parlamento só passa a valer no mandato seguinte (depois do próximo wipe). Redução vale na hora.
+**Art. 10.11B** [NOVO] — **Obras do tesouro.** Obra paga pelo tesouro do Governo segue o mesmo rito (Art. 10.11 e 10.11A). Sancionada, o valor sai do tesouro e fica no extrato com o número da proposta. Sem saldo, a obra espera o tesouro ter o valor.
+
+**Art. 10.12** [ALTERADO] — Todo cargo da tabela do Art. 10.8 tem salário fixado. Mudar o valor depende de projeto aprovado e sancionado (Art. 10.11). Os donos também podem ajustar o valor, como staff.
+
+**Art. 10.12A** [ALTERADO] — Aumento do salário de Parlamentar aprovado pelo próprio Parlamento só passa a valer na próxima temporada (depois do próximo wipe): o site guarda o projeto sancionado e aplica sozinho no wipe. Redução vale na hora.
 
 ### Parlamento e Responsável das Corporações
 
-**Art. 10.13** — O Responsável das Corporações é escolhido e comandado pelo Parlamento. Ele padroniza procedimentos, define normas gerais das corporações e aprova ou recusa as propostas dos Ministérios (Art. 8.13). Ele não interfere em hierarquia, promoções, rebaixamentos ou punições de membros: isso é do comando de cada corporação.
+**Art. 10.13** [ALTERADO] — O Responsável das Corporações é escolhido e comandado pelo Parlamento, por maioria simples. A nomeação feita em 23/10/2026 vale até o Parlamento votar a confirmação; se a confirmação não passar, o Parlamento escolhe outro. Ele padroniza procedimentos, define normas gerais das corporações e aprova ou recusa as propostas dos Ministérios (Art. 8.13). Ele também pode **mudar o comando e a estrutura de uma corporação**, desde que tenha a aprovação de 2/4 do Parlamento e prova, direta ou subjetiva, de que a mudança melhora o RP. Fora disso, promoções, rebaixamentos e punições de membros continuam com o comando de cada corporação.
 
-**Art. 10.14** — **Votação no Parlamento.** Aprova com maioria simples dos votos SIM contra NÃO dos parlamentares que votaram. Em empate, o Presidente da Câmara desempata. Impeachment exige 2/3 do Parlamento e análise da staff.
+**Art. 10.14** [ALTERADO] — **Votação no Parlamento.** Aprova com maioria simples dos votos SIM contra NÃO dos parlamentares que votaram. Em empate, o Presidente da Câmara desempata; sem desempate, ou sem nenhum voto, o projeto é recusado. Impeachment exige 2/3 do Parlamento e análise da staff.
 
 **Art. 10.15** — O Parlamento também organiza sugestões da população, levanta falhas do jogo e encaminha relatórios à equipe de desenvolvimento, que tem a palavra final sobre o que entra no jogo.
 
