@@ -1262,6 +1262,9 @@ async function start() {
   // [23/10] Governo: corporação tipo 'governo', tesouro inflado, obras e salário a cada 3 dias
   try { await require('./governo').garantir(pool); require('./governo').iniciar(pool); }
   catch (e) { console.error('[governo] garantir:', e.message); }
+  // [24/10] Facções Vivas: nível, ações, advertências e a organização das facções
+  try { await require('./faccoes-org').garantir(pool); }
+  catch (e) { console.error('[faccoes-org] garantir:', e.message); }
   // [23/10] Câmara: propostas de salário/obra votadas pelo Parlamento (Regulamento Cap. 10)
   try { const CAM = require('./governo-camara'); await CAM.garantir(pool); CAM.iniciar(pool, [require('./governo').SANTA_FE]); }
   catch (e) { console.error('[camara] garantir:', e.message); }
@@ -1343,6 +1346,8 @@ async function start() {
   app.use(require('./routes/royalties').publico);
   // [23/10] Governo: /governo + /api/governo
   app.use(require('./routes/governo'));
+  // [24/10] Facções Vivas: /api/faccao/* (o painel da facção)
+  app.use(require('./routes/faccoes-org').faccao);
 
   // [21/10] ENTRADA = tela CIDADES. Mostra as cidades da rede (hoje só o Santa
   // Fé Oficial), quantos estão jogando em cada uma e o cargo de staff que a

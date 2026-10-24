@@ -69,11 +69,15 @@ const CARGOS = {
   // e tira, ele não mexe em ninguém.
   gestor_testers:{ nome: 'Gestor testers', nivel: 15,  cor: '#0E7490', lateral: true, poderes: ['testers'],
                    desc: 'Só o painel Testers: libera itens, carros e todas as corps pra um tester, com prazo. Tudo volta sozinho e fica registrado.' },
+  // [24/10] Responsável de Facções e Auxiliares (Regulamento das Facções, Art. 1.3): cargo LATERAL,
+  // só a aba Facções. Recurso de advertência NÃO é com eles (Art. 9.4): é da staff da cidade.
+  org_faccoes:   { nome: 'Organização de Facções', nivel: 14, cor: '#7F1D1D', lateral: true, poderes: ['faccoes'],
+                   desc: 'Só a aba Facções: oficialização, nível, ações registradas e advertências (com prova). Não julga recurso.' },
 };
 
-const ORDEM = ['dono', 'diretor', 'supervisor', 'administrador', 'moderador', 'estagiario', 'gestor_testers'];
+const ORDEM = ['dono', 'diretor', 'supervisor', 'administrador', 'moderador', 'estagiario', 'gestor_testers', 'org_faccoes'];
 // Cargos que o painel pode atribuir. 'dono' fica de fora de propósito.
-const CARGOS_ATRIBUIVEIS = ['diretor', 'supervisor', 'administrador', 'moderador', 'estagiario', 'gestor_testers'];
+const CARGOS_ATRIBUIVEIS = ['diretor', 'supervisor', 'administrador', 'moderador', 'estagiario', 'gestor_testers', 'org_faccoes'];
 
 // Cada poder diz o cargo MÍNIMO que o exerce. Quem está acima também tem.
 const PODERES = {
@@ -113,6 +117,12 @@ const PODERES = {
 
   // [23/10] Loja de Royalties: creditar/estornar pontos (sempre com comprovação). Diretor Geral+.
   royalties:     { rotulo: 'Royalties: creditar e estornar', min: 'diretor' },
+
+  // [24/10] Facções Vivas: a organização das facções (oficialização, nível, ações, advertências).
+  // Diretor+ pela escada, e o cargo lateral 'Organização de Facções'.
+  faccoes:       { rotulo: 'Facções: oficializar, nível, ações e advertências', min: 'diretor' },
+  // Recurso de advertência de facção: staff da cidade (Regulamento das Facções, Art. 9.4).
+  faccoes_recurso: { rotulo: 'Julgar recurso de advertência de facção', min: 'administrador' },
 
   wipe:          { rotulo: 'WIPE GERAL (reset da temporada)', min: 'dono'      },
 };

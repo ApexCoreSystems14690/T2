@@ -60,9 +60,29 @@
   </div>
   <div class="main">
     <div class="nota">
-      Facção funciona igual a uma corporação: cargos, membros e salários são os mesmos campos, e o jogo
-      lê pelo <strong>slug</strong>. A diferença é que ela não entra na lista das corporações — e não
-      recebe os alertas de ocorrência da polícia.
+      Facção tem cargos e membros como uma corporação, mas <strong>não tem caixa, estoque nem salário</strong> pelo site:
+      o dinheiro dela vem do crime e fica no cofre da boca (Regulamento das Facções, Art. 1.5). Ela sobe de nível
+      (Bonde, Firma, Comando) com membros, tempo e ações registradas.
+      <details style="margin-top:.6rem"><summary style="cursor:pointer;font-weight:700">Pedir oficialização de uma facção nova</summary>
+        <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(150px,1fr));gap:.5rem;margin-top:.6rem;align-items:end">
+          <label style="font-size:.78rem;font-weight:600">Nome<input id="pf-nome" style="width:100%;padding:.4rem;border:1px solid #C9CDD3;border-radius:4px"></label>
+          <label style="font-size:.78rem;font-weight:600">Sigla<input id="pf-sigla" maxlength="8" style="width:100%;padding:.4rem;border:1px solid #C9CDD3;border-radius:4px"></label>
+          <label style="font-size:.78rem;font-weight:600">Cor<input id="pf-cor" type="color" value="#7F1D1D" style="width:100%;height:34px;border:1px solid #C9CDD3;border-radius:4px"></label>
+          <label style="font-size:.78rem;font-weight:600">Sub-líder<input id="pf-sub" style="width:100%;padding:.4rem;border:1px solid #C9CDD3;border-radius:4px"></label>
+          <label style="font-size:.78rem;font-weight:600;grid-column:1/-1">Membros (usuário do Roblox de cada um)<input id="pf-membros" style="width:100%;padding:.4rem;border:1px solid #C9CDD3;border-radius:4px"></label>
+          <div><button class="create-btn" type="button" onclick="pedirFaccao()">Enviar pedido</button></div>
+        </div>
+        <p style="font-size:.78rem;color:#5B6573;margin:.4rem 0 0">Você é o líder. Toda facção começa no Nível 1 (4 membros). A organização das facções aprova ou recusa com motivo.</p>
+      </details>
+      <script>
+        async function pedirFaccao() {
+          var b = { nome: document.getElementById('pf-nome').value, sigla: document.getElementById('pf-sigla').value, cor: document.getElementById('pf-cor').value,
+                    sublider: document.getElementById('pf-sub').value, membros: document.getElementById('pf-membros').value };
+          var r = await fetch('/api/faccao/pedido', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(b) });
+          var j = await r.json().catch(function () { return {}; });
+          alert(r.ok ? 'Pedido enviado. A organização das facções responde por aqui.' : (j.error || 'Erro'));
+        }
+      </script>
     </div>
 
     <div class="section-title">
@@ -89,8 +109,7 @@
               <div class="corp-name"><%= corp.name %></div>
               <div class="corp-members">
                 <%= corp.member_count %> membros<% if (corp.sou_dono) { %> · você é o dono<% } else if (corp.meu_cargo) { %> · seu cargo: <%= corp.meu_cargo %><%
-                   /* [23/09, pedido do Julio] o membro comum ve o proprio salario aqui */
-                   if (corp.meu_salario) { %> · salário: R$ <%= Number(corp.meu_salario).toLocaleString('pt-BR') %><% }
+                   /* [24/10] facção não tem salário pelo site (Regulamento das Facções, Art. 1.5) */
                  } else if (corp.sou_gerente) { %> · você é co-gerente<% } %>
               </div>
             </div>
@@ -98,6 +117,8 @@
           <div style="display:flex;gap:0.5rem;align-items:center">
             <% if (corp.pode_gerenciar) { %>
             <a href="/dashboard/corp/<%= corp.id %>" class="corp-btn">Gerenciar</a>
+            <% } else if (corp.sou_membro) { %>
+            <a href="/dashboard/corp/<%= corp.id %>" class="corp-btn">Painel da facção</a>
             <% } %>
             <% if ((corp.sou_membro || corp.sou_gerente) && !corp.sou_dono) { %>
             <button class="corp-btn" style="color:#A86400;border-color:#A8640033;cursor:pointer;background:none" onclick="sairCorp(<%= corp.id %>, '<%= corp.name.replace(/'/g, "\\'") %>')">Sair</button>

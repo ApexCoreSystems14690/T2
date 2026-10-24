@@ -41,6 +41,8 @@ const DINHEIRO = {
   patio:    { sinal: +1, rotulo: 'Liberação de pátio' },
   divida:   { sinal: +1, rotulo: 'Dívida quitada' },
   venda:    { sinal: +1, rotulo: 'Veículo apreendido transferido' },
+  // [24/10] Facções Vivas: 50% do cofre da boca apreendida (o JOGO já manda a metade).
+  apreensao:{ sinal: +1, rotulo: 'Apreensão de boca (50% do cofre)' },
   aporte:   { sinal: +1, rotulo: 'Aporte do comando' },
   compra:   { sinal: -1, rotulo: 'Compra de equipamento' },
   bonus:    { sinal: -1, rotulo: 'Bônus pago' },

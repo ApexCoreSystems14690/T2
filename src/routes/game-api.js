@@ -275,11 +275,13 @@ router.get('/player/:robloxId', async (req, res) => {
         r.name as rank_name,
         r.level as rank_level,
         r.salary as rank_salary,
-        r.permissions as rank_permissions
+        r.permissions as rank_permissions,
+        fi.nivel as faccao_nivel
       FROM members m
       JOIN corporations c ON m.corporation_id = c.id
       JOIN users u ON m.user_id = u.id
       LEFT JOIN ranks r ON m.rank_id = r.id
+      LEFT JOIN faccao_info fi ON fi.corporation_id = c.id
       WHERE u.roblox_id = $1 AND c.is_active = true
     `, [robloxId]);
 
@@ -291,6 +293,8 @@ router.get('/player/:robloxId', async (req, res) => {
         corp_slug: row.corp_slug,
         corp_name: row.corp_name,
         corp_tipo: row.corp_tipo || 'corp',
+        // [24/10] Facções Vivas: o jogo (BocaService) lê o nível da facção aqui. Só vai pra facção.
+        ...(row.corp_tipo === 'faccao' ? { nivel: Number(row.faccao_nivel) || 1 } : {}),
         rank_name: row.rank_name || 'Sem cargo',
         rank_level: row.rank_level || 0,
         salary: row.rank_salary || 0,
@@ -1552,7 +1556,7 @@ router.get('/corps', async (req, res) => {
 router.post('/corp/caixa', async (req, res) => {
   try {
     const { corp, tipo, valor_pago, quem, por } = req.body || {};
-    if (!CC.RATEIO[String(tipo)] && String(tipo) !== 'venda') {
+    if (!CC.RATEIO[String(tipo)] && String(tipo) !== 'venda' && String(tipo) !== 'apreensao') {
       return res.status(400).json({ error: 'tipo inválido' });
     }
     const c = await corpPorSlug(corp);
@@ -1561,7 +1565,8 @@ router.post('/corp/caixa', async (req, res) => {
     // 'venda' (veículo apreendido transferido) vai 100%: o carro já era da
     // apreensão, não é cobrança de ninguém. O resto vai pela fatia do RATEIO.
     const pago = Math.max(0, Math.floor(Number(valor_pago) || 0));
-    const parte = String(tipo) === 'venda' ? pago : CC.parteDaCorp(String(tipo), pago);
+    // [24/10] 'apreensao' (cofre da boca) também vai inteiro: o jogo já manda só os 50% da corp.
+    const parte = (String(tipo) === 'venda' || String(tipo) === 'apreensao') ? pago : CC.parteDaCorp(String(tipo), pago);
     if (parte <= 0) return res.json({ ok: true, creditado: 0, motivo: 'fatia zerada' });
 
     const r = await caixa.movDinheiro(c.id, String(tipo), parte, {

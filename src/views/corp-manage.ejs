@@ -12,7 +12,8 @@
     .topbar a:hover { color: #1D3F94; }
     .topbar h1 { font-size: 1rem; color: #161A1F; flex: 1; }
     .main { max-width: 900px; margin: 0 auto; padding: 2rem 1.25rem; }
-    .tabs { display: flex; gap: 0; border-bottom: 1px solid #D6DADF; margin-bottom: 1.5rem; }
+    .tabs { display: flex; gap: 0; border-bottom: 1px solid #D6DADF; margin-bottom: 1.5rem; overflow-x: auto; scrollbar-width: none; }
+    .tabs .tab { white-space: nowrap; flex: 0 0 auto; }
     .tab { padding: 0.6rem 1.25rem; color: #5B6573; cursor: pointer; font-size: 0.85rem; font-weight: 600; border-bottom: 2px solid transparent; transition: all 0.15s; }
     .tab.active { color: #1D3F94; border-bottom-color: #1D3F94; }
     .tab:hover { color: #161A1F; }
@@ -79,7 +80,7 @@
 <body>
   <div class="topbar">
     <%- include('partials/placa') %>
-    <a href="/dashboard"><svg class="ic" aria-hidden="true"><use href="/icones.svg#voltar"/></svg>Corporações</a>
+    <% if (corporation.tipo === 'faccao') { %><a href="/faccoes"><svg class="ic" aria-hidden="true"><use href="/icones.svg#voltar"/></svg>Facções</a><% } else { %><a href="/dashboard"><svg class="ic" aria-hidden="true"><use href="/icones.svg#voltar"/></svg>Corporações</a><% } %>
     <% if (corporation.has_icon_file) { %>
       <img src="/api/corps/<%= corporation.id %>/icon" data-nome="<%= corporation.name %>" data-cor="<%= corporation.color || '#1D3F94' %>" onerror="sfSemFoto(this)" style="width:28px;height:28px;border-radius:5px;object-fit:cover">
     <% } else if (corporation.icon_url) { %>
@@ -105,10 +106,12 @@
       Você entra aqui como <strong style="color:#1D3F94"><%= MEU_PAPEL %></strong><% if (MEU_NIVEL !== null) { %> · seu nível de cargo: <%= MEU_NIVEL %><% } %>
     </div>
 
+    <% var EH_FAC = corporation.tipo === 'faccao'; /* [24/10] Facções Vivas: sem caixa, sem salário, com a aba Facção */ %>
     <div class="tabs">
-      <div class="tab active" data-tab="cargos">Cargos (<%= ranks.length %>)</div>
+      <% if (EH_FAC) { %><div class="tab active" data-tab="faccao">Facção</div><% } %>
+      <div class="tab<%= EH_FAC ? '' : ' active' %>" data-tab="cargos">Cargos (<%= ranks.length %>)</div>
       <div class="tab" data-tab="membros">Membros (<%= members.length %>)</div>
-      <% if (P.ver_caixa) { %><div class="tab" data-tab="caixa"><%= corporation.tipo === 'governo' ? 'Tesouro' : 'Caixa' %></div><% } %>
+      <% if (P.ver_caixa && !EH_FAC) { %><div class="tab" data-tab="caixa"><%= corporation.tipo === 'governo' ? 'Tesouro' : 'Caixa' %></div><% } %>
       <% if (P.editar_corp || P.gerir_gerentes) { %><div class="tab" data-tab="config">Configurações</div><% } %>
     </div>
 
@@ -136,7 +139,117 @@
          });
          return h;
        } %>
-    <div class="panel active" id="panel-cargos">
+    <% if (EH_FAC) { %>
+    <!-- [24/10] FACÇÃO — nível, ações registradas, advertências, boca e contrabandista.
+         Regulamento das Facções v3.1. Dados de /api/faccao/:id/painel. -->
+    <style>
+      .fac-topo { display:flex; gap:1rem; align-items:center; flex-wrap:wrap; padding:1rem 1.1rem; border-radius:6px; background:#161A1F; color:#F4F1E6; border-left:8px solid var(--fac-cor, #7F1D1D); margin-bottom:1rem; }
+      .fac-selo { display:inline-flex; flex-direction:column; align-items:center; justify-content:center; min-width:76px; border:2px solid #F4F1E6; border-radius:4px; overflow:hidden; background:#F4F1E6; color:#161A1F; }
+      .fac-selo small { display:block; width:100%; text-align:center; background:var(--fac-cor, #7F1D1D); color:#fff; font-size:.62rem; letter-spacing:.12em; font-weight:800; padding:.1rem .4rem; }
+      .fac-selo b { font-stretch:75%; font-variation-settings:"wdth" 75; font-size:1.9rem; line-height:1.1; font-weight:800; }
+      .fac-selo i { font-style:normal; font-size:.7rem; font-weight:800; letter-spacing:.06em; padding:0 .4rem .2rem; text-transform:uppercase; }
+      .fac-topo h2 { margin:0; font-size:1.3rem; } .fac-topo p { margin:.2rem 0 0; color:#C9C4B6; font-size:.82rem; }
+      .fac-bloco { background:#fff; border:1px solid #E2E5E9; border-radius:6px; padding:1rem 1.1rem; margin-bottom:1rem; }
+      .fac-bloco h3 { margin:0 0 .6rem; font-size:1rem; color:#161A1F; }
+      .fac-req { display:grid; grid-template-columns:repeat(auto-fit, minmax(150px,1fr)); gap:.6rem; }
+      .fac-req div { border:1px solid #E2E5E9; border-radius:5px; padding:.55rem .7rem; }
+      .fac-req b { font-size:1.2rem; font-variant-numeric:tabular-nums; } .fac-req .ok { color:#15803D; } .fac-req .falta { color:#B45309; }
+      .fac-req span { display:block; font-size:.75rem; color:#5B6573; }
+      .fac-niveis { display:grid; grid-template-columns:repeat(auto-fit, minmax(200px,1fr)); gap:.6rem; margin-top:.8rem; }
+      .fac-niveis div { border:1px dashed #C9CDD3; border-radius:5px; padding:.55rem .7rem; font-size:.8rem; color:#46505C; }
+      .fac-niveis div.atual { border:2px solid var(--fac-cor, #7F1D1D); }
+      .fac-form { display:grid; grid-template-columns:repeat(auto-fit, minmax(160px,1fr)); gap:.5rem; align-items:end; margin-bottom:.8rem; }
+      .fac-form label { display:flex; flex-direction:column; gap:.2rem; font-size:.78rem; font-weight:600; color:#46505C; }
+      .fac-form input, .fac-form select { padding:.45rem .55rem; border:1px solid #C9CDD3; border-radius:4px; font:inherit; }
+      .fac-pill { display:inline-block; font-size:.7rem; font-weight:700; padding:.05rem .45rem; border-radius:4px; background:#EEF0F2; color:#46505C; }
+      .fac-pill.ok { background:#DCFCE7; color:#15803D; } .fac-pill.nao { background:#FEE2E2; color:#B91C1C; } .fac-pill.esp { background:#FEF3C7; color:#92400E; }
+      .fac-linha { border-top:1px solid #EEF0F2; padding:.55rem 0; font-size:.85rem; } .fac-linha:first-child { border-top:0; }
+      .fac-aviso { font-size:.82rem; color:#5B6573; }
+    </style>
+    <div class="panel active" id="panel-faccao" style="--fac-cor: <%= /^#[0-9a-fA-F]{6}$/.test(corporation.color || '') ? corporation.color : '#7F1D1D' %>">
+      <div id="fac-carregando" class="fac-aviso">Carregando…</div>
+      <div id="fac-corpo" hidden>
+        <div class="fac-topo">
+          <span class="fac-selo"><small>NÍVEL</small><b id="fac-n"></b><i id="fac-nn"></i></span>
+          <div><h2><%= corporation.name %></h2><p id="fac-sub"></p></div>
+        </div>
+        <div class="fac-bloco"><h3>Próximo nível</h3><div id="fac-req"></div><div class="fac-niveis" id="fac-niveis"></div></div>
+        <div class="fac-bloco"><h3>Ações registradas</h3>
+          <p class="fac-aviso" style="margin-top:0">Cada ação com prova conta para subir de nível depois que a organização das facções aprova (Art. 2.3).</p>
+          <div class="fac-form">
+            <label>Tipo<select id="fa-tipo"><option value="assalto">Assalto</option><option value="sequestro">Sequestro</option><option value="banco">Banco</option><option value="guerra">Guerra</option></select></label>
+            <label>Data<input type="date" id="fa-data"></label>
+            <label style="grid-column:span 2">Link da prova (print ou vídeo)<input id="fa-prova" placeholder="https://..."></label>
+            <div><button class="btn" id="fa-enviar">Registrar ação</button></div>
+          </div>
+          <div id="fac-acoes"></div>
+        </div>
+        <div class="fac-bloco"><h3>Advertências</h3><div id="fac-advs"></div></div>
+        <div class="fac-bloco"><h3>Boca e contrabandista</h3><div id="fac-boca"></div></div>
+        <% if (corporation.owner_id === user.id) { %>
+        <div class="fac-bloco"><h3>Passar a liderança</h3>
+          <div class="fac-form"><label>Novo líder<select id="fl-alvo"><% members.filter(function (m) { return m.user_id !== user.id; }).forEach(function (m) { %><option value="<%= m.user_id %>"><%= m.roblox_username || m.discord_username %> (<%= m.rank_name || 'sem cargo' %>)</option><% }) %></select></label>
+            <div><button class="btn" id="fl-passar">Passar liderança</button></div></div>
+          <p class="fac-aviso" style="margin:0">O novo líder fica com o seu cargo e você fica com o dele.</p>
+        </div>
+        <% } %>
+      </div>
+    </div>
+    <script>
+    (function () {
+      var ID = <%= Number(corporation.id) %>;
+      var $ = function (i) { return document.getElementById(i); };
+      function esc(t) { return String(t == null ? '' : t).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;'); }
+      function dia(t) { return t ? new Date(t).toLocaleDateString('pt-BR') : '—'; }
+      async function chamar(met, url, corpo) {
+        var r = await fetch(url, { method: met, headers: { 'Content-Type': 'application/json', accept: 'application/json' }, body: corpo ? JSON.stringify(corpo) : undefined });
+        var j = await r.json().catch(function () { return {}; });
+        if (!r.ok) throw new Error(j.error || 'Erro'); return j;
+      }
+      var ST = { pendente: ['esp', 'Esperando a organização'], aprovada: ['ok', 'Aprovada'], recusada: ['nao', 'Recusada'] };
+      async function carregar() {
+        try {
+          var d = await chamar('GET', '/api/faccao/' + ID + '/painel');
+          var f = d.faccao, rq = d.requisitos;
+          $('fac-n').textContent = f.nivel; $('fac-nn').textContent = f.nivel_nome;
+          $('fac-sub').textContent = f.membros + ' membro(s) · ' + (f.ultima_atividade ? 'último membro no jogo em ' + dia(f.ultima_atividade) : 'nenhum membro entrou no jogo ainda')
+            + (f.advertencias_ativas ? ' · ' + f.advertencias_ativas + ' advertência(s) ativa(s)' : '') + (f.inativa ? ' · 2 semanas sem membro ativo: pode descer de nível (Art. 2.5)' : '');
+          $('fac-req').innerHTML = rq.proximo ? ('<p class="fac-aviso" style="margin-top:0">Para o Nível ' + rq.proximo + ' (' + esc(rq.nome) + '):</p><div class="fac-req">'
+            + rq.itens.map(function (i) { var ok = i.tem >= i.precisa; return '<div><b class="' + (ok ? 'ok' : 'falta') + '">' + i.tem + ' / ' + i.precisa + '</b><span>' + esc(i.rotulo) + '</span></div>'; }).join('')
+            + '</div><p class="fac-aviso">' + (rq.cumpre ? 'Os requisitos batem: a organização das facções confere e sobe o nível.' : 'Quem sobe o nível é a organização das facções, conferindo os registros e as provas.') + '</p>')
+            : '<p class="fac-aviso" style="margin:0">A facção está no nível mais alto.</p>';
+          $('fac-niveis').innerHTML = [1, 2, 3].map(function (n) { var N = d.niveis[n]; return '<div class="' + (n === f.nivel ? 'atual' : '') + '"><b>Nível ' + n + ' · ' + esc(N.nome) + '</b><br>' + esc(N.libera) + '</div>'; }).join('');
+          $('fac-acoes').innerHTML = d.acoes.length ? d.acoes.map(function (a) { var t = ST[a.status] || ['', a.status];
+            return '<div class="fac-linha"><span class="fac-pill ' + t[0] + '">' + t[1] + '</span> <b>' + esc(a.tipo) + '</b> em ' + esc(a.data.split('-').reverse().join('/')) + ' · <a href="' + esc(a.prova) + '" target="_blank" rel="noopener noreferrer">prova</a> · por ' + esc(a.enviada_nome || '?')
+              + (a.motivo ? '<br><span class="fac-aviso">' + esc(a.decidido_por || '') + ': ' + esc(a.motivo) + '</span>' : '') + '</div>'; }).join('') : '<p class="fac-aviso" style="margin:0">Nenhuma ação registrada.</p>';
+          $('fac-advs').innerHTML = d.advertencias.length ? d.advertencias.map(function (a) {
+            var rec = a.recurso_status ? '<br><span class="fac-aviso">Recurso: ' + esc({ pendente: 'esperando a staff', aceito: 'aceito: a advertência caiu', negado: 'negado' }[a.recurso_status] || a.recurso_status) + (a.recurso_motivo ? ' (' + esc(a.recurso_motivo) + ')' : '') + '</span>'
+              : (a.pode_recorrer ? '<br><button class="btn" data-recorrer="' + a.id + '" style="margin-top:.35rem">Recorrer (até 72 h)</button>' : '');
+            return '<div class="fac-linha"><span class="fac-pill ' + (a.ativa ? 'nao' : '') + '">' + (a.ativa ? 'Ativa até ' + dia(a.vence_em) : 'Vencida ou anulada') + '</span> Art. ' + esc(a.artigo) + ' · ' + esc(a.motivo)
+              + ' · <a href="' + esc(a.prova) + '" target="_blank" rel="noopener noreferrer">prova</a> · por ' + esc(a.aplicada_nome || '?') + ' em ' + dia(a.aplicada_em) + rec + '</div>'; }).join('')
+            : '<p class="fac-aviso" style="margin:0">Nenhuma advertência. Advertência só existe com prova e vence em 30 dias (Art. 9.1 e 9.5).</p>';
+          $('fac-advs').querySelectorAll('[data-recorrer]').forEach(function (b) { b.onclick = async function () {
+            var t = prompt('Explique o recurso (a staff da cidade decide):'); if (!t) return;
+            try { await chamar('POST', '/api/faccao/' + ID + '/advertencias/' + b.dataset.recorrer + '/recurso', { texto: t }); showAlert('Recurso enviado à staff', 'success'); carregar(); } catch (e) { showAlert(e.message, 'error'); } }; });
+          $('fac-boca').innerHTML = '<div class="fac-linha"><b>Boca:</b> ' + esc(d.boca.aviso) + '</div>'
+            + '<div class="fac-linha"><b>Contrabandista:</b> ' + (d.contrabandista.teto ? 'limite de ' + d.contrabandista.teto + ' armas longas por semana no seu nível. ' : 'libera no Nível 2. ') + esc(d.contrabandista.aviso) + '</div>';
+          $('fac-carregando').hidden = true; $('fac-corpo').hidden = false;
+        } catch (e) { $('fac-carregando').textContent = e.message; }
+      }
+      $('fa-data').value = new Date().toISOString().slice(0, 10);
+      $('fa-enviar').onclick = async function () {
+        try { await chamar('POST', '/api/faccao/' + ID + '/acoes', { tipo: $('fa-tipo').value, data: $('fa-data').value, prova: $('fa-prova').value.trim() });
+              $('fa-prova').value = ''; showAlert('Ação registrada: espera a organização das facções', 'success'); carregar(); } catch (e) { showAlert(e.message, 'error'); }
+      };
+      if ($('fl-passar')) $('fl-passar').onclick = async function () {
+        if (!confirm('Passar a liderança? Você deixa de ser o líder.')) return;
+        try { await chamar('POST', '/api/faccao/' + ID + '/lideranca', { user_id: Number($('fl-alvo').value) }); showAlert('Liderança passada', 'success'); setTimeout(function () { location.reload(); }, 700); } catch (e) { showAlert(e.message, 'error'); }
+      };
+      window.addEventListener('DOMContentLoaded', carregar); if (document.readyState !== 'loading') carregar();
+    })();
+    </script>
+    <% } %>
+    <div class="panel<%= EH_FAC ? '' : ' active' %>" id="panel-cargos">
       <% if (!P.gerir_cargos) { %>
         <div class="empty" style="margin-bottom:1rem">Só o dono e os co-gerentes mexem em cargo e salário. Aqui você só vê a lista.</div>
       <% } %>
@@ -155,7 +268,7 @@
           <label>Nível</label>
           <input type="number" id="rank-level" placeholder="1" min="0">
         </div>
-        <div class="form-group" style="max-width:120px">
+        <div class="form-group" style="max-width:120px<%= EH_FAC ? ';display:none' : '' %>">
           <label>Salário a cada <%= PERIODO_SAL %> (R$)</label>
           <input type="number" id="rank-salary" placeholder="500" min="0">
         </div>
@@ -176,7 +289,7 @@
               <div class="rank-info">
                 <span class="rank-level">Nv.<%= rank.level %></span>
                 <span class="rank-name"><%= rank.name %></span>
-                <span class="rank-salary">R$ <%= Number(rank.salary || 0).toLocaleString('pt-BR') %> <span style="color:#5B6573">a cada <%= PERIODO_SAL %></span></span>
+                <% if (!EH_FAC) { %><span class="rank-salary">R$ <%= Number(rank.salary || 0).toLocaleString('pt-BR') %> <span style="color:#5B6573">a cada <%= PERIODO_SAL %></span></span><% } %>
                 <% var gmOn = rank.permissions && rank.permissions.gerir_membros === true; %>
                 <% if (gmOn) { %><span style="color:#1D3F94;font-size:0.75rem" title="Pode adicionar, remover e trocar o cargo de quem está ABAIXO deste cargo"><svg class="ic" aria-hidden="true"><use href="/icones.svg#check"/></svg>gere membros abaixo</span><% } %>
               </div>
@@ -318,7 +431,7 @@
         <tbody id="tg-extrato"><tr><td colspan="5" class="empty">Carregando…</td></tr></tbody>
       </table>
     </div>
-    <% } else if (P.ver_caixa) { %>
+    <% } else if (P.ver_caixa && !EH_FAC) { %>
     <div class="panel" id="panel-caixa">
       <div style="display:flex;gap:2rem;align-items:baseline;margin-bottom:1.25rem;flex-wrap:wrap">
         <div>
@@ -589,7 +702,7 @@
       const name = prompt('Nome do cargo:', atual.name); if (name === null) return;
       const carreira = prompt('Carreira (vazio = sem carreira):', atual.carreira || ''); if (carreira === null) return;
       const level = prompt('Nível (pode repetir em carreiras diferentes):', atual.level); if (level === null) return;
-      const salary = prompt('Salário a cada <%= PERIODO_SAL %> (R$):', atual.salary); if (salary === null) return;
+      const salary = <%= EH_FAC ? 'true' : 'false' %> ? 0 : prompt('Salário a cada <%= PERIODO_SAL %> (R$):', atual.salary); if (salary === null) return;
       const data = await api('PUT', '/ranks/' + rankId, { name: name.trim(), carreira: carreira.trim(), level, salary });
       if (data && data.error) return showAlert(data.error, 'error');
       showAlert('Cargo atualizado', 'success');

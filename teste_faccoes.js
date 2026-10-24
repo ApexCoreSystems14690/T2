@@ -1,122 +1,198 @@
-// QA das migrações de 20/09: facção Pavuna, painel de facções e carreira da PC.
-// Roda contra um Postgres de verdade, local. Nada toca o Railway.
-const fs = require('fs');
+// [24/10] Facções Vivas no site: nível pro jogo, painel sem caixa, ações, advertências, recursos,
+// organização, alto comando, Ficha sem facção e isolamento entre cidades.
+// Rodar com o site no ar: TZ=UTC DATABASE_URL=... BASE=http://localhost:4600 ROBLOX_API_KEY=k123 node teste_faccoes.js
+const assert = require('assert');
 const { Pool } = require('pg');
-const pool = new Pool({ connectionString: process.env.DATABASE_URL || 'postgres://qa@localhost:5455/postgres' });
-
-// Pega os blocos SQL exatamente como estão no index.js — se o arquivo mudar, o teste muda junto.
-function blocosDoIndex() {
-  const src = fs.readFileSync('./src/index.js', 'utf8');
-  const ini = src.indexOf('// ===== FACÇÕES (20/09/2026');
-  const fim = src.indexOf("console.log('✅ Banco migrado');");
-  if (ini < 0 || fim < 0) throw new Error('não achei os blocos novos no index.js');
-  const trecho = src.slice(ini, fim);
-  const out = [];
-  const re = /await pool\.query\(`([\s\S]*?)`\);/g;
-  let m;
-  while ((m = re.exec(trecho)) !== null) out.push(m[1]);
-  return out;
+const sig = require('cookie-signature');
+const pool = new Pool({ connectionString: process.env.DATABASE_URL });
+const BASE = process.env.BASE || 'http://localhost:4600';
+const KEY = process.env.ROBLOX_API_KEY || 'k123';
+let ok = 0, falhou = 0;
+async function caso(n, f) { try { await f(); ok++; console.log('  ok  ' + n); } catch (e) { falhou++; console.log('  FALHOU  ' + n + '\n        ' + e.message); } }
+async function sessao(uid, cidadeId) {
+  const sid = 'fx' + uid + 'c' + cidadeId + Math.random().toString(36).slice(2);
+  await pool.query(`INSERT INTO session (sid, sess, expire) VALUES ($1,$2,NOW()+interval '1 day')`, [sid, { cookie: { originalMaxAge: 864e5, httpOnly: true, path: '/' }, userId: uid, cidadeId }]);
+  return 'connect.sid=' + encodeURIComponent('s:' + sig.sign(sid, 'dev-secret-apenas-local'));
 }
-
-let falhas = 0, testes = 0;
-function ok(nome, cond, extra) {
-  testes++;
-  if (cond) { console.log('  ok   ' + nome); }
-  else { falhas++; console.log('  FALHA ' + nome + (extra !== undefined ? '  -> ' + JSON.stringify(extra) : '')); }
+async function pedir(c, met, path, body) {
+  const r = await fetch(BASE + path, { method: met, redirect: 'manual', headers: { cookie: c || '', accept: 'application/json', 'Content-Type': 'application/json' }, body: body ? JSON.stringify(body) : undefined });
+  let j = null; try { j = await r.json(); } catch (e) {}
+  return { s: r.status, j };
 }
+const jogo = (met, path, body, cidade) => fetch(BASE + '/api/game' + path, { method: met, headers: { 'x-api-key': KEY, 'Content-Type': 'application/json', ...(cidade ? { 'x-cidade': cidade } : {}) }, body: body ? JSON.stringify(body) : undefined }).then(async r => ({ s: r.status, j: await r.json().catch(() => null) }));
+const PROVA = 'https://cdn.exemplo.com/print.png';
 
-async function main() {
-  const base = fs.readFileSync('./src/db/migrate.js', 'utf8');
-  const sqlBase = base.slice(base.indexOf('const migration = `') + 19, base.indexOf('`;\n\nasync function run'));
-  await pool.query(sqlBase);
-  console.log('esquema base criado');
+(async () => {
+  // limpeza
+  await pool.query(`DELETE FROM corporations WHERE slug LIKE 'fxt-%'`);
+  await pool.query(`DELETE FROM faccao_pedidos WHERE nome LIKE 'FXT %'`);
+  await pool.query(`DELETE FROM cidade_staff WHERE user_id IN (SELECT id FROM users WHERE discord_id LIKE 'fxt_%')`);
+  await pool.query(`DELETE FROM game_patrimonio WHERE roblox_id BETWEEN 6600 AND 6699`).catch(() => {});
+  await pool.query(`DELETE FROM users WHERE discord_id LIKE 'fxt_%' OR discord_id = '986522825219260446'`);
+  const u = async (d, rid) => (await pool.query(`INSERT INTO users (discord_id, discord_username, roblox_id, roblox_username, roblox_verificado) VALUES ($1,$1,$2,$1,true) RETURNING id`, [d, rid])).rows[0].id;
+  const lider = await u('fxt_lider', 6601), membro = await u('fxt_membro', 6602), org = await u('fxt_org', 6603), orgMembro = await u('fxt_orgm', 6604),
+        estag = await u('fxt_estag', 6605), admin = await u('fxt_admin', 6606), policial = await u('fxt_pol', 6607);
+  const alto = (await pool.query(`INSERT INTO users (discord_id, discord_username, roblox_id, roblox_username) VALUES ('986522825219260446','davix0001',6608,'davi') RETURNING id`)).rows[0].id;
+  await pool.query(`INSERT INTO cidade_staff (cidade_id, user_id, cargo) VALUES (1,$1,'org_faccoes'),(1,$2,'org_faccoes'),(1,$3,'estagiario'),(1,$4,'administrador')`, [org, orgMembro, estag, admin]);
+  const mk = async (slug, nome, nivel, cidade) => {
+    const id = (await pool.query(`INSERT INTO corporations (name, slug, tipo, cidade_id, owner_id, color) VALUES ($1,$2,'faccao',$3,$4,'#AA2233') RETURNING id`, [nome, slug, cidade || 1, lider])).rows[0].id;
+    await pool.query(`INSERT INTO faccao_info (corporation_id, nivel) VALUES ($1,$2) ON CONFLICT (corporation_id) DO UPDATE SET nivel = $2`, [id, nivel]);
+    const r = [];
+    for (const [n, l] of [['Líder', 3], ['Sub-líder', 2], ['Membro', 1]]) r.push((await pool.query(`INSERT INTO ranks (corporation_id, name, level, salary) VALUES ($1,$2,$3,0) RETURNING id`, [id, n, l])).rows[0].id);
+    return { id, r };
+  };
+  const A = await mk('fxt-alfa', 'FXT Alfa', 2);
+  await pool.query(`INSERT INTO members (corporation_id, user_id, rank_id) VALUES ($1,$2,$3),($1,$4,$5),($1,$6,$5)`, [A.id, lider, A.r[0], membro, A.r[2], orgMembro]);
+  const B = await mk('fxt-beta', 'FXT Beta', 3);
+  await pool.query(`INSERT INTO members (corporation_id, user_id, rank_id) VALUES ($1,$2,$3)`, [B.id, policial, B.r[2]]);
+  let pm = (await pool.query(`SELECT id FROM corporations WHERE slug = 'fxt-pm'`)).rows[0];
+  pm = (await pool.query(`INSERT INTO corporations (name, slug, tipo, cidade_id) VALUES ('FXT PM','fxt-pm','corp',1) RETURNING id`)).rows[0];
+  await pool.query(`INSERT INTO members (corporation_id, user_id) VALUES ($1,$2)`, [pm.id, policial]);
+  const S = { lider: await sessao(lider, 1), membro: await sessao(membro, 1), org: await sessao(org, 1), orgM: await sessao(orgMembro, 1),
+              estag: await sessao(estag, 1), admin: await sessao(admin, 1) };
 
-  // --- fixture: PC com os cargos ANTIGOS e membros espalhados ---
-  await pool.query(`
-    INSERT INTO users (discord_id, discord_username, roblox_id) VALUES
-      ('1','delegado',101), ('2','perito',102), ('3','agente',103),
-      ('4','legista',104), ('5','semmapa',105), ('6','semcargo',106)
-    ON CONFLICT DO NOTHING;
-    INSERT INTO corporations (name, slug, color) VALUES ('Polícia Civil','policia-civil','#123456')
-      ON CONFLICT DO NOTHING;
-    INSERT INTO corporations (name, slug, color) VALUES ('Jornal Nacional','jornal','#F59E0B')
-      ON CONFLICT DO NOTHING;
-  `);
-  const cid = (await pool.query(`SELECT id FROM corporations WHERE slug='policia-civil'`)).rows[0].id;
-  const antigos = [
-    ['[DLG-G] Delegado Geral', 18, 19000], ['[PRT-C] Perito Criminal', 12, 11000],
-    ['[AGT-P] Agente de Polícia', 3, 2550], ['[LEG] Legista', 11, 10500],
-    ['Cargo Inventado Que Ninguem Mapeou', 2, 1000], ['Aluno', 1, 2210],
-  ];
-  for (const [n, l, s] of antigos) {
-    await pool.query('INSERT INTO ranks (corporation_id,name,level,salary) VALUES ($1,$2,$3,$4)', [cid, n, l, s]);
-  }
-  const rid = async (n) => (await pool.query('SELECT id FROM ranks WHERE corporation_id=$1 AND name=$2', [cid, n])).rows[0].id;
-  const pares = [[1,'[DLG-G] Delegado Geral'],[2,'[PRT-C] Perito Criminal'],[3,'[AGT-P] Agente de Polícia'],
-                 [4,'[LEG] Legista'],[5,'Cargo Inventado Que Ninguem Mapeou']];
-  for (const [u, n] of pares) {
-    await pool.query('INSERT INTO members (corporation_id,user_id,rank_id) VALUES ($1,$2,$3)', [cid, u, await rid(n)]);
-  }
-  // membro SEM cargo nenhum (rank_id NULL) — o caso que mais quebra
-  await pool.query('INSERT INTO members (corporation_id,user_id,rank_id) VALUES ($1,6,NULL)', [cid]);
-  const membrosAntes = (await pool.query('SELECT COUNT(*)::int c FROM members WHERE corporation_id=$1', [cid])).rows[0].c;
+  console.log('\nJOGO');
+  await caso('o jogo recebe `nivel` da facção (2 e 3) e nada pra corp normal', async () => {
+    const r1 = await jogo('GET', '/player/6601'); const e1 = r1.j.corps.find(c => c.corp_slug === 'fxt-alfa');
+    assert.strictEqual(e1.nivel, 2);
+    const r2 = await jogo('GET', '/player/6607');
+    assert.strictEqual(r2.j.corps.find(c => c.corp_slug === 'fxt-beta').nivel, 3);
+    assert.strictEqual(r2.j.corps.find(c => c.corp_slug === 'fxt-pm').nivel, undefined);
+  });
+  await caso('facção nova sem linha de nível vai como Nível 1', async () => {
+    await pool.query(`DELETE FROM faccao_info WHERE corporation_id = $1`, [B.id]);
+    assert.strictEqual((await jogo('GET', '/player/6607')).j.corps.find(c => c.corp_slug === 'fxt-beta').nivel, 1);
+    await pool.query(`INSERT INTO faccao_info (corporation_id, nivel) VALUES ($1, 3)`, [B.id]);
+  });
+  await caso('caixa aceita `apreensao` e credita inteiro (o jogo já manda os 50%)', async () => {
+    await pool.query(`INSERT INTO corp_caixa (corporation_id, saldo) VALUES ($1,0) ON CONFLICT (corporation_id) DO UPDATE SET saldo = 0`, [pm.id]);
+    const r = await jogo('POST', '/corp/caixa', { corp: 'fxt-pm', tipo: 'apreensao', valor_pago: 25000, quem: 'pol', por: 'apreensao de boca' });
+    assert.strictEqual(r.j.creditado, 25000, JSON.stringify(r.j));
+    const l = (await pool.query(`SELECT tipo FROM corp_lancamentos WHERE corporation_id = $1 ORDER BY id DESC LIMIT 1`, [pm.id])).rows[0];
+    assert.strictEqual(l.tipo, 'apreensao');
+  });
 
-  // --- roda as migrações (duas vezes, pra provar que é idempotente) ---
-  const blocos = blocosDoIndex();
-  console.log('blocos SQL encontrados no index.js: ' + blocos.length);
-  for (const volta of [1, 2]) {
-    for (const b of blocos) await pool.query(b);
-    console.log('migração rodada (volta ' + volta + ')');
-  }
+  console.log('\nFACÇÃO NÃO TEM CAIXA');
+  await caso('caixa, estoque e vestiário da facção dão 403 até pela rota direta', async () => {
+    assert.strictEqual((await pedir(S.lider, 'GET', `/api/corps/${A.id}/caixa`)).s, 403);
+    assert.strictEqual((await pedir(S.lider, 'POST', `/api/corps/${A.id}/caixa/comprar`, { item: 'AK47', qtd: 1 })).s, 403);
+    assert.strictEqual((await pedir(S.lider, 'POST', `/api/corps/${A.id}/caixa/bonus`, { valor: 10 })).s, 403);
+  });
+  await caso('cargo de facção não guarda salário', async () => {
+    const r = await pedir(S.lider, 'POST', `/api/corps/${A.id}/ranks`, { name: 'Vapor', level: 0, salary: 9000 });
+    assert.strictEqual(r.s, 200, JSON.stringify(r.j)); assert.strictEqual(Number(r.j.rank.salary), 0);
+  });
+  await caso('membro comum abre o painel da facção; quem é de fora não', async () => {
+    const r = await pedir(S.membro, 'GET', `/api/faccao/${A.id}/painel`);
+    assert.strictEqual(r.s, 200); assert.strictEqual(r.j.faccao.nivel, 2); assert.ok(r.j.requisitos.proximo === 3);
+    assert.strictEqual((await pedir(await sessao(policial, 1), 'GET', `/api/faccao/${A.id}/painel`)).s, 403);
+    const pg = await fetch(BASE + '/dashboard/corp/' + A.id, { redirect: 'manual', headers: { cookie: S.membro } });
+    assert.strictEqual(pg.status, 200);
+  });
 
-  console.log('\n== coluna tipo / painel ==');
-  const col = await pool.query(`SELECT data_type, column_default FROM information_schema.columns
-                                WHERE table_name='corporations' AND column_name='tipo'`);
-  ok('coluna tipo existe com default corp', col.rows.length === 1 && /corp/.test(col.rows[0].column_default || ''), col.rows[0]);
-  const pcTipo = (await pool.query(`SELECT tipo FROM corporations WHERE slug='policia-civil'`)).rows[0].tipo;
-  ok("PC continua tipo 'corp'", pcTipo === 'corp', pcTipo);
+  console.log('\nAÇÕES REGISTRADAS');
+  let acaoId;
+  await caso('membro registra ação com prova; sem prova é recusada', async () => {
+    assert.strictEqual((await pedir(S.membro, 'POST', `/api/faccao/${A.id}/acoes`, { tipo: 'assalto', data: '2026-10-23', prova: 'sem link' })).s, 400);
+    const r = await pedir(S.membro, 'POST', `/api/faccao/${A.id}/acoes`, { tipo: 'assalto', data: '2026-10-23', prova: PROVA });
+    assert.strictEqual(r.s, 200, JSON.stringify(r.j)); acaoId = r.j.id;
+  });
+  await caso('organização aprova; membro da facção não decide a ação dela', async () => {
+    assert.strictEqual((await pedir(S.orgM, 'POST', `/api/admin/faccoes/acoes/${acaoId}`, { aprovar: true })).s, 403);
+    assert.strictEqual((await pedir(S.org, 'POST', `/api/admin/faccoes/acoes/${acaoId}`, { aprovar: true })).s, 200);
+  });
 
-  console.log('\n== facção Pavuna ==');
-  const pav = (await pool.query(`SELECT * FROM corporations WHERE slug='pavuna'`)).rows;
-  ok('Pavuna existe', pav.length === 1);
-  ok("Pavuna é tipo 'faccao'", pav[0] && pav[0].tipo === 'faccao', pav[0] && pav[0].tipo);
-  ok('Pavuna tem ícone', !!(pav[0] && pav[0].icon_url));
-  const cargosPav = (await pool.query('SELECT name,level,salary FROM ranks WHERE corporation_id=$1 ORDER BY level DESC', [pav[0].id])).rows;
-  ok('Pavuna tem 14 cargos (sem duplicar na 2a volta)', cargosPav.length === 14, cargosPav.length);
-  ok('topo da Pavuna é Dono do Morro 21000', cargosPav[0].name === 'Dono do Morro' && cargosPav[0].salary === 21000, cargosPav[0]);
-  ok('base da Pavuna é Novato 1200', cargosPav[13].name === 'Novato' && cargosPav[13].salary === 1200, cargosPav[13]);
-  ok('níveis da Pavuna são 14..1 sem buraco',
-     cargosPav.every((c, i) => c.level === 14 - i), cargosPav.map(c => c.level));
+  console.log('\nADVERTÊNCIAS');
+  await caso('sem o poder: estagiário toma 403 na aba Facções; organização não julga recurso', async () => {
+    assert.strictEqual((await pedir(S.estag, 'GET', '/api/admin/faccoes')).s, 403);
+    assert.strictEqual((await pedir(S.org, 'GET', '/api/admin/faccoes-recursos')).s, 403);
+    assert.strictEqual((await pedir(S.admin, 'GET', '/api/admin/faccoes-recursos')).s, 200);
+  });
+  await caso('advertência sem prova é recusada', async () => {
+    const r = await pedir(S.org, 'POST', `/api/admin/faccoes/${A.id}/advertencias`, { artigo: '5.3', motivo: 'chegou atirando na boca' });
+    assert.strictEqual(r.s, 400);
+  });
+  await caso('membro da facção punida não adverte ela (Art. 9.2)', async () => {
+    const r = await pedir(S.orgM, 'POST', `/api/admin/faccoes/${A.id}/advertencias`, { artigo: '5.3', motivo: 'chegou atirando', prova: PROVA });
+    assert.strictEqual(r.s, 403);
+  });
+  let adv1;
+  await caso('2 advertências ativas: desce um nível', async () => {
+    adv1 = (await pedir(S.org, 'POST', `/api/admin/faccoes/${A.id}/advertencias`, { artigo: '5.3', motivo: 'chegou atirando na boca', prova: PROVA })).j.id;
+    const r = await pedir(S.org, 'POST', `/api/admin/faccoes/${A.id}/advertencias`, { artigo: '7.1', motivo: 'guerra sem declarar', prova: PROVA });
+    assert.strictEqual(r.j.consequencia, 'desceu_nivel', JSON.stringify(r.j));
+    assert.strictEqual(Number((await pool.query(`SELECT nivel FROM faccao_info WHERE corporation_id = $1`, [A.id])).rows[0].nivel), 1);
+  });
+  await caso('advertência vencida (mais de 30 dias) não conta', async () => {
+    await pool.query(`UPDATE faccao_advertencias SET vence_em = NOW() - INTERVAL '1 day' WHERE corporation_id = $1`, [A.id]);
+    const r = await pedir(S.org, 'POST', `/api/admin/faccoes/${A.id}/advertencias`, { artigo: '4.1', motivo: 'convite pelo discord', prova: PROVA });
+    assert.strictEqual(r.j.consequencia, null);
+    assert.strictEqual((await pedir(S.membro, 'GET', `/api/faccao/${A.id}/painel`)).j.faccao.advertencias_ativas, 1);
+  });
+  await caso('recurso: só líder/sub; até 72 h; depois de 72 h é recusado; a staff decide', async () => {
+    const adv = (await pool.query(`SELECT id FROM faccao_advertencias WHERE corporation_id = $1 ORDER BY id DESC LIMIT 1`, [A.id])).rows[0].id;
+    assert.strictEqual((await pedir(S.membro, 'POST', `/api/faccao/${A.id}/advertencias/${adv}/recurso`, { texto: 'não fomos nós, o print é de outra facção' })).s, 403);
+    await pool.query(`UPDATE faccao_advertencias SET aplicada_em = NOW() - INTERVAL '73 hours' WHERE id = $1`, [adv1]);
+    const tarde = await pedir(S.lider, 'POST', `/api/faccao/${A.id}/advertencias/${adv1}/recurso`, { texto: 'recurso fora do prazo de propósito' });
+    assert.strictEqual(tarde.s, 400); assert.ok(/72/.test(tarde.j.error));
+    assert.strictEqual((await pedir(S.lider, 'POST', `/api/faccao/${A.id}/advertencias/${adv}/recurso`, { texto: 'não fomos nós, o print é de outra facção' })).s, 200);
+    const lista = (await pedir(S.admin, 'GET', '/api/admin/faccoes-recursos')).j.recursos;
+    assert.ok(lista.some(x => x.id === adv));
+    assert.strictEqual((await pedir(S.admin, 'POST', `/api/admin/faccoes-recursos/${adv}`, { aceitar: true, motivo: 'print era de outra facção' })).s, 200);
+    assert.strictEqual((await pedir(S.membro, 'GET', `/api/faccao/${A.id}/painel`)).j.faccao.advertencias_ativas, 0);
+  });
+  await caso('3 advertências ativas: desoficializa', async () => {
+    let r;
+    for (let i = 0; i < 3; i++) r = await pedir(S.org, 'POST', `/api/admin/faccoes/${B.id}/advertencias`, { artigo: '6.1', motivo: 'ação sem anúncio ' + i, prova: PROVA });
+    assert.strictEqual(r.j.consequencia, 'desoficializada', JSON.stringify(r.j));
+    assert.strictEqual((await pool.query(`SELECT is_active FROM corporations WHERE id = $1`, [B.id])).rows[0].is_active, false);
+    const log = (await pool.query(`SELECT acao FROM faccao_log WHERE corporation_id = $1 ORDER BY id DESC LIMIT 1`, [B.id])).rows[0];
+    assert.strictEqual(log.acao, 'desoficializada');
+  });
 
-  console.log('\n== ícone do Jornal ==');
-  const jor = (await pool.query(`SELECT icon_url FROM corporations WHERE slug='jornal'`)).rows[0];
-  ok('Jornal ganhou ícone', !!jor.icon_url, jor.icon_url);
+  console.log('\nOFICIALIZAÇÃO E ALTO COMANDO');
+  await caso('pedido aprovado cria a facção no Nível 1 com o líder dentro; recusa exige motivo', async () => {
+    const p = await pedir(S.membro, 'POST', '/api/faccao/pedido', { nome: 'FXT Gama', sigla: 'GMA', cor: '#22AA55', sublider: 'fulano', membros: 'a, b, c' });
+    assert.strictEqual(p.s, 200, JSON.stringify(p.j));
+    assert.strictEqual((await pedir(S.org, 'POST', `/api/admin/faccoes/pedidos/${p.j.id}`, { aprovar: false })).s, 400);
+    const r = await pedir(S.org, 'POST', `/api/admin/faccoes/pedidos/${p.j.id}`, { aprovar: true });
+    assert.strictEqual(r.s, 200, JSON.stringify(r.j));
+    await pool.query(`UPDATE corporations SET slug = 'fxt-gama' WHERE id = $1`, [r.j.corporation_id]);
+    assert.strictEqual(Number((await pool.query(`SELECT nivel FROM faccao_info WHERE corporation_id = $1`, [r.j.corporation_id])).rows[0].nivel), 1);
+    assert.ok((await pool.query(`SELECT 1 FROM members WHERE corporation_id = $1 AND user_id = $2`, [r.j.corporation_id, membro])).rows[0]);
+  });
+  await caso('alto comando não entra em facção (Art. 1.10): 403 ao adicionar e ao pedir', async () => {
+    const r = await pedir(S.lider, 'POST', `/api/corps/${A.id}/members`, { user_id: alto, rank_id: A.r[2] });
+    assert.strictEqual(r.s, 403, JSON.stringify(r.j));
+    assert.strictEqual((await pedir(await sessao(alto, 1), 'POST', '/api/faccao/pedido', { nome: 'FXT Delta', sigla: 'DLT', cor: '#112233' })).s, 403);
+  });
+  await caso('a aba Facções lista quem do alto comando está dentro de facção', async () => {
+    await pool.query(`INSERT INTO members (corporation_id, user_id, rank_id) VALUES ($1,$2,$3)`, [A.id, alto, A.r[2]]);
+    const d = (await pedir(S.org, 'GET', '/api/admin/faccoes')).j;
+    assert.ok(d.faccoes.find(f => f.id === A.id).alto_comando_dentro.includes('davi'));
+    await pool.query(`DELETE FROM members WHERE corporation_id = $1 AND user_id = $2`, [A.id, alto]);
+  });
 
-  console.log('\n== carreira da Polícia Civil ==');
-  const novos = (await pool.query('SELECT name,level,salary FROM ranks WHERE corporation_id=$1 ORDER BY level DESC', [cid])).rows;
-  ok('PC tem 21 cargos', novos.length === 21, novos.length);
-  ok('nenhum cargo antigo sobrou', !novos.some(r => /^\[DLG|^\[AGT|^\[PRT|^\[LEG|^\[INV-\d º|Inventado|^Aluno$/.test(r.name)),
-     novos.filter(r => /DLG|AGT|PRT|LEG|Inventado|^Aluno$/.test(r.name)).map(r => r.name));
-  ok('topo é [DG] Delegado-Geral', novos[0].name === '[DG] Delegado-Geral', novos[0]);
-  ok('níveis 21..1 sem buraco', novos.every((c, i) => c.level === 21 - i), novos.map(c => c.level));
-  ok('nenhum nível >= 100 sobrou (temporários limpos)', !novos.some(c => c.level >= 100));
+  console.log('\nFICHA E ISOLAMENTO');
+  await caso('a Ficha da Polícia Civil (dossiê) não devolve a facção', async () => {
+    await pool.query(`INSERT INTO game_patrimonio (roblox_id, nome) VALUES (6602, 'fxt_membro') ON CONFLICT (roblox_id) DO NOTHING`);
+    const r = await jogo('GET', '/dossie/fxt_membro');
+    assert.ok(r.j && r.j.ok, JSON.stringify(r.j));
+    const txt = JSON.stringify(r.j);
+    assert.ok(!/faccao|FXT Alfa|fxt-alfa/i.test(txt), txt.slice(0, 300));
+  });
+  await caso('2ª cidade não vê nem mexe nas facções do Santa Fé', async () => {
+    const dono = (await pool.query(`SELECT id FROM users WHERE discord_id = '111'`)).rows[0].id;
+    let c2 = (await pool.query(`SELECT id FROM cidades WHERE slug = 'teste-sal2'`)).rows[0];
+    if (!c2) c2 = (await pool.query(`INSERT INTO cidades (slug, nome, sigla, tipo, status, loja_prefixo, dono_user_id) VALUES ('teste-sal2','Sal2','SL2','comunidade','ativa','SL2',$1) RETURNING id`, [dono])).rows[0];
+    const c = await sessao(dono, c2.id);
+    const l = (await pedir(c, 'GET', '/api/admin/faccoes')).j;
+    assert.ok(!l.faccoes.some(f => String(f.slug).startsWith('fxt-')));
+    assert.strictEqual((await pedir(c, 'GET', `/api/faccao/${A.id}/painel`)).s, 404);
+    assert.strictEqual((await pedir(c, 'POST', `/api/admin/faccoes/${A.id}/advertencias`, { artigo: '5.3', motivo: 'teste isolamento', prova: PROVA })).s, 404);
+  });
 
-  const semCargo = (await pool.query('SELECT user_id FROM members WHERE corporation_id=$1 AND rank_id IS NULL', [cid])).rows;
-  ok('NINGUÉM ficou sem cargo', semCargo.length === 0, semCargo);
-  const membrosDepois = (await pool.query('SELECT COUNT(*)::int c FROM members WHERE corporation_id=$1', [cid])).rows[0].c;
-  ok('nenhum membro sumiu', membrosDepois === membrosAntes, { antes: membrosAntes, depois: membrosDepois });
-
-  const destino = async (u) => (await pool.query(
-    'SELECT r.name FROM members m JOIN ranks r ON m.rank_id=r.id WHERE m.corporation_id=$1 AND m.user_id=$2', [cid, u])).rows[0].name;
-  ok('Delegado Geral -> [DG] Delegado-Geral', await destino(1) === '[DG] Delegado-Geral', await destino(1));
-  ok('Perito Criminal -> [PER-1] 1ª Classe', await destino(2) === '[PER-1] Perito Criminal 1ª Classe', await destino(2));
-  ok('Agente de Polícia -> [APJ-3] 3ª Classe', await destino(3) === '[APJ-3] Agente de Polícia Judiciária 3ª Classe', await destino(3));
-  ok('Legista -> [PER-2] 2ª Classe', await destino(4) === '[PER-2] Perito Criminal 2ª Classe', await destino(4));
-  ok('cargo sem mapa -> [ESPC] Instruendo', await destino(5) === '[ESPC] Instruendo', await destino(5));
-  ok('membro que estava SEM cargo -> [ESPC] Instruendo', await destino(6) === '[ESPC] Instruendo', await destino(6));
-
-  console.log('\n' + (falhas === 0 ? 'TUDO PASSOU' : falhas + ' FALHA(S)') + ' — ' + testes + ' testes');
+  console.log(`\n${ok} ok, ${falhou} falharam`);
   await pool.end();
-  process.exit(falhas === 0 ? 0 : 1);
-}
-main().catch(e => { console.error('ERRO:', e.message); process.exit(1); });
+  process.exit(falhou ? 1 : 0);
+})();

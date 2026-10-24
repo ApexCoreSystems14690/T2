@@ -62,6 +62,32 @@ router.get('/:corpId/icon', async (req, res) => {
 // Todas as rotas precisam de login
 router.use(requireAuth);
 
+// [24/10] FACÇÕES VIVAS: facção não tem caixa, estoque, vestiário nem salário pelo site
+// (Regulamento das Facções, Art. 1.5 e 2.4). O front esconde; aqui o back barra.
+// Os dados antigos ficam no banco, só não aparecem. E o alto comando não entra em facção
+// (Regulamento Oficial, Art. 1.10).
+router.use('/:corpId', async (req, res, next) => {
+  try {
+    const id = parseInt(req.params.corpId);
+    if (!id) return next();
+    const t = (await pool.query(`SELECT tipo FROM corporations WHERE id = $1`, [id])).rows[0];
+    if (!t || t.tipo !== 'faccao') return next();
+    const sub = req.path || '/';
+    if (/^\/caixa(\/|$)/.test(sub)) return res.status(403).json({ error: 'Facção não tem caixa, estoque nem vestiário no site: o dinheiro dela fica no cofre da boca.' });
+    if (/^\/ranks(\/|$)/.test(sub) && req.body && req.body.salary !== undefined) req.body.salary = 0;   // sem salário por cargo
+    if (req.method === 'POST' && /^\/members\/?$/.test(sub)) {
+      const F = require('../faccoes-org');
+      let uid = parseInt(req.body && req.body.user_id) || null;
+      if (!uid && req.body && req.body.roblox_id) {
+        const u = (await pool.query(`SELECT id FROM users WHERE roblox_id = $1`, [parseInt(req.body.roblox_id) || 0])).rows[0];
+        uid = u ? u.id : null;
+      }
+      if (uid && await F.ehAltoComando(pool, uid)) return res.status(403).json({ error: 'Alto comando (CEO, CO-CEO e COO) não entra em facção (Regulamento Oficial, Art. 1.10)' });
+    }
+  } catch (e) { console.error('corps-api faccao:', e.message); }
+  next();
+});
+
 // GET /api/corps — listar corporações do usuário (que ele é dono)
 router.get('/', async (req, res) => {
   try {

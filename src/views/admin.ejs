@@ -115,6 +115,8 @@
       <div class="tab" data-tab="seguranca">Segurança</div>
       <div class="tab" data-tab="testers">Testers</div>
       <div class="tab" data-tab="royalties">Royalties</div>
+      <div class="tab" data-tab="faccoes">Facções</div>
+      <div class="tab" data-tab="recursosfac">Recursos de facção</div>
       <div class="tab" data-tab="economia" id="tab-economia" style="display:none">Economia</div>
     </div>
 
@@ -445,6 +447,33 @@
     </div>
 
     <!-- ECONOMIA (15/10) — só o Dono -->
+    <!-- FACÇÕES (24/10) — organização das facções (poder 'faccoes'). Regulamento das Facções v3.1. -->
+    <div class="panel" id="panel-faccoes">
+      <style>
+        .fx-cor { display:inline-block; width:12px; height:12px; border-radius:3px; vertical-align:-1px; margin-right:.35rem; border:1px solid #0002; }
+        .fx-selo { display:inline-block; font-weight:800; font-size:.72rem; padding:.05rem .4rem; border-radius:3px; background:#161A1F; color:#F4F1E6; letter-spacing:.04em; }
+        .fx-pill { display:inline-block; font-size:.7rem; font-weight:700; padding:.05rem .4rem; border-radius:4px; background:#EEF0F2; color:#46505C; }
+        .fx-pill.alerta { background:#FEF3C7; color:#92400E; } .fx-pill.ruim { background:#FEE2E2; color:#B91C1C; } .fx-pill.ok { background:#DCFCE7; color:#15803D; }
+        .fx-fac { border:1px solid #D6DADF; border-radius:6px; padding:.75rem .9rem; margin-bottom:.6rem; }
+        .fx-acts { display:flex; gap:.4rem; flex-wrap:wrap; margin-top:.5rem; }
+        .fx-linha { border-top:1px solid #EEF0F2; padding:.5rem 0; font-size:.85rem; } .fx-linha:first-child { border-top:0; }
+      </style>
+      <div class="card"><h3>Facções da cidade</h3>
+        <p class="muted" style="font-size:.8rem;margin-bottom:.6rem">O painel sugere subir ou descer; quem aplica é uma pessoa, e tudo vai para o registro. Advertência só com prova e artigo; quem é membro da facção não adverte ela (Art. 9.2). Com 2 advertências ativas a facção desce um nível e com 3 é desoficializada, sozinha.</p>
+        <div id="fx-lista"><span class="muted">Carregando…</span></div>
+      </div>
+      <div class="card"><h3>Pedidos de oficialização</h3><div id="fx-pedidos"></div></div>
+      <div class="card"><h3>Ações registradas esperando decisão</h3><div id="fx-acoes"></div></div>
+      <div class="card"><h3>Registro</h3><div id="fx-log" style="max-height:340px;overflow:auto"></div></div>
+    </div>
+    <!-- RECURSOS DE FACÇÃO (24/10) — a staff da cidade julga (Art. 9.4), não a organização -->
+    <div class="panel" id="panel-recursosfac">
+      <div class="card"><h3>Recursos de advertência de facção</h3>
+        <p class="muted" style="font-size:.8rem;margin-bottom:.6rem">A facção tem 72 h para recorrer. Quem julga é a staff da cidade, não a organização das facções (Regulamento das Facções, Art. 9.4). Recurso aceito derruba a advertência.</p>
+        <div id="rf-lista"><span class="muted">Carregando…</span></div>
+      </div>
+    </div>
+
     <!-- ROYALTIES (23/10) — só Diretor Geral pra cima; o back barra com 403 -->
     <div class="panel" id="panel-royalties">
       <div class="card">
@@ -636,7 +665,7 @@
     const btnSe = (tipo, html) => podeCmd(tipo) ? html : '';
 
     // Painéis e abas por poder. Aba sem nenhum poder some do topo.
-    const PODER_DA_ABA = { jogadores: null, registro: 'ver_registro', servidor: 'servidor', logs: 'ver_registro', cargos: 'corp', usuarios: 'admins', historico: 'admins', analise: 'ver_registro', banidos: 'banir', pds: 'ver_registro', seguranca: 'ver_registro', testers: 'testers', royalties: 'royalties' };
+    const PODER_DA_ABA = { jogadores: null, registro: 'ver_registro', servidor: 'servidor', logs: 'ver_registro', cargos: 'corp', usuarios: 'admins', historico: 'admins', analise: 'ver_registro', banidos: 'banir', pds: 'ver_registro', seguranca: 'ver_registro', testers: 'testers', royalties: 'royalties', faccoes: 'faccoes', recursosfac: 'faccoes_recurso' };
 
     async function carregarEu() {
       EU = await api('GET', '/eu');
@@ -663,8 +692,90 @@
       if (EU.souDono) $('tab-economia').style.display = '';
       // [21/10] cargo lateral (Gestor testers): abre direto na aba dele
       if ((EU.CARGOS[EU.cargo] || {}).lateral && podeP('testers')) document.querySelector('.tab[data-tab="testers"]').click();
+      if ((EU.CARGOS[EU.cargo] || {}).lateral && podeP('faccoes')) document.querySelector('.tab[data-tab="faccoes"]').click();
     }
 
+
+    // ---------------------------------------------------------------- FACÇÕES [24/10]
+    const fxLink = u => '<a href="' + esc(u) + '" target="_blank" rel="noopener noreferrer">prova</a>';
+    const fxDia = t => t ? new Date(t).toLocaleDateString('pt-BR') : '—';
+    let FX = null;
+    async function loadFx() {
+      try { FX = await api('GET', '/faccoes'); } catch (e) { $('fx-lista').innerHTML = '<span class="muted">' + esc(e.message) + '</span>'; return; }
+      $('fx-lista').innerHTML = FX.faccoes.length ? FX.faccoes.map(f => {
+        const cor = /^#[0-9a-fA-F]{6}$/.test(f.color || '') ? f.color : '#7F1D1D';
+        const reqs = f.req && f.req.proximo ? f.req.itens.map(i => esc(i.rotulo) + ' ' + i.tem + '/' + i.precisa).join(' · ') : 'nível máximo';
+        const alto = f.alto_comando_dentro && f.alto_comando_dentro.length ? ' <span class="fx-pill ruim">alto comando dentro: ' + esc(f.alto_comando_dentro.join(', ')) + '</span>' : '';
+        const acts = !f.is_active ? '' : '<div class="fx-acts">'
+          + '<button class="btn-sm" data-fxnivel="' + f.id + '">Mudar nível</button>'
+          + (f.sou_membro ? '<span class="muted" style="font-size:.78rem">Você é membro: não adverte esta facção (Art. 9.2)</span>' : '<button class="btn-sm" data-fxadv="' + f.id + '">Advertir</button>')
+          + '<button class="btn-sm" data-fxdes="' + f.id + '" style="color:#B91C1C">Desoficializar</button></div>';
+        return '<div class="fx-fac" style="border-left:6px solid ' + cor + '"><b><span class="fx-cor" style="background:' + cor + '"></span>' + esc(f.name) + '</b> '
+          + (f.is_active ? '<span class="fx-selo">NÍVEL ' + f.nivel + ' · ' + esc(f.nivel_nome).toUpperCase() + '</span>' : '<span class="fx-pill">desoficializada ' + fxDia(f.desoficializada_em) + '</span>')
+          + (f.slug === 'pavuna' ? ' <span class="fx-pill alerta">a Pavuna não existe mais (23/10): a boca é de quem chegar</span>' : '') + alto
+          + '<div class="muted" style="font-size:.8rem;margin-top:.25rem">' + f.membros + ' membro(s) · último membro no jogo: ' + (f.ultima_atividade ? fmtT(f.ultima_atividade) : 'nunca')
+          + ' · advertências ativas: ' + f.advertencias_ativas + ' · próximo nível: ' + reqs + '</div>'
+          + (f.sugestao ? '<div style="margin-top:.3rem"><span class="fx-pill ' + (/descer/.test(f.sugestao) ? 'alerta' : 'ok') + '">Sugestão: ' + esc(f.sugestao) + '</span></div>' : '')
+          + '<details style="margin-top:.4rem"><summary class="muted" style="font-size:.8rem;cursor:pointer">Membros</summary><div style="font-size:.82rem;margin-top:.3rem">'
+          + (f.membros_lista.map(m => esc(m.nome) + ' <span class="muted">(' + esc(m.cargo || 'sem cargo') + ')</span>').join(' · ') || 'nenhum') + '</div></details>'
+          + acts + '</div>';
+      }).join('') : '<span class="muted">Nenhuma facção nesta cidade.</span>';
+      $('fx-lista').querySelectorAll('[data-fxnivel]').forEach(b => b.onclick = async () => {
+        const n = prompt('Novo nível (1 Bonde, 2 Firma, 3 Comando):'); if (!n) return;
+        const m = prompt('Motivo (vai para o registro):'); if (!m) return;
+        try { await api('POST', '/faccoes/' + b.dataset.fxnivel + '/nivel', { nivel: Number(n), motivo: m }); showAlert('Nível mudado', 'success'); loadFx(); } catch (e) { showAlert(e.message, 'error'); }
+      });
+      $('fx-lista').querySelectorAll('[data-fxadv]').forEach(b => b.onclick = async () => {
+        const art = prompt('Artigo do regulamento (ex.: 5.3 ou Oficial 7.6):'); if (!art) return;
+        const mot = prompt('Motivo:'); if (!mot) return;
+        const prova = prompt('Link da prova (print ou vídeo, https://...):'); if (!prova) return;
+        try { const r = await api('POST', '/faccoes/' + b.dataset.fxadv + '/advertencias', { artigo: art, motivo: mot, prova });
+              showAlert('Advertência aplicada' + (r.consequencia === 'desceu_nivel' ? ': 2 ativas, a facção desceu um nível' : r.consequencia === 'desoficializada' ? ': 3 ativas, a facção foi desoficializada' : ''), 'success'); loadFx(); }
+        catch (e) { showAlert(e.message, 'error'); }
+      });
+      $('fx-lista').querySelectorAll('[data-fxdes]').forEach(b => b.onclick = async () => {
+        const m = prompt('Motivo da desoficialização (nada é apagado; a facção pode pedir de novo depois de 7 dias):'); if (!m) return;
+        try { await api('POST', '/faccoes/' + b.dataset.fxdes + '/desoficializar', { motivo: m }); showAlert('Facção desoficializada', 'success'); loadFx(); } catch (e) { showAlert(e.message, 'error'); }
+      });
+      $('fx-pedidos').innerHTML = FX.pedidos.length ? FX.pedidos.map(p => '<div class="fx-linha"><span class="fx-cor" style="background:' + esc(p.cor) + '"></span><b>' + esc(p.nome) + '</b> [' + esc(p.sigla) + '] · líder ' + esc(p.lider_nome || '?')
+        + (p.sublider ? ' · sub-líder ' + esc(p.sublider) : '') + ' · ' + fxDia(p.criado_em)
+        + (p.membros ? '<div class="muted" style="font-size:.8rem">' + esc(p.membros) + '</div>' : '')
+        + (p.status === 'pendente' ? '<div class="fx-acts"><button class="btn-sm" data-pedok="' + p.id + '">Aprovar (Nível 1)</button><button class="btn-sm" data-pednao="' + p.id + '">Recusar</button></div>'
+           : '<div><span class="fx-pill ' + (p.status === 'aprovado' ? 'ok' : 'ruim') + '">' + esc(p.status) + '</span> <span class="muted" style="font-size:.8rem">' + esc(p.decidido_por || '') + (p.motivo ? ': ' + esc(p.motivo) : '') + '</span></div>') + '</div>').join('')
+        : '<span class="muted">Nenhum pedido.</span>';
+      $('fx-pedidos').querySelectorAll('[data-pedok]').forEach(b => b.onclick = async () => {
+        try { await api('POST', '/faccoes/pedidos/' + b.dataset.pedok, { aprovar: true }); showAlert('Facção oficializada no Nível 1', 'success'); loadFx(); } catch (e) { showAlert(e.message, 'error'); } });
+      $('fx-pedidos').querySelectorAll('[data-pednao]').forEach(b => b.onclick = async () => {
+        const m = prompt('Motivo da recusa:'); if (!m) return;
+        try { await api('POST', '/faccoes/pedidos/' + b.dataset.pednao, { aprovar: false, motivo: m }); showAlert('Pedido recusado', 'success'); loadFx(); } catch (e) { showAlert(e.message, 'error'); } });
+      $('fx-acoes').innerHTML = FX.acoes_pendentes.length ? FX.acoes_pendentes.map(a => '<div class="fx-linha"><b>' + esc(a.faccao) + '</b> · ' + esc(a.tipo) + ' em ' + esc(a.data.split('-').reverse().join('/')) + ' · ' + fxLink(a.prova) + ' · enviada por ' + esc(a.enviada_nome || '?')
+        + '<div class="fx-acts"><button class="btn-sm" data-acok="' + a.id + '">Aprovar</button><button class="btn-sm" data-acnao="' + a.id + '">Recusar</button></div></div>').join('')
+        : '<span class="muted">Nenhuma ação esperando.</span>';
+      $('fx-acoes').querySelectorAll('[data-acok]').forEach(b => b.onclick = async () => {
+        try { await api('POST', '/faccoes/acoes/' + b.dataset.acok, { aprovar: true }); showAlert('Ação aprovada', 'success'); loadFx(); } catch (e) { showAlert(e.message, 'error'); } });
+      $('fx-acoes').querySelectorAll('[data-acnao]').forEach(b => b.onclick = async () => {
+        const m = prompt('Motivo da recusa:'); if (!m) return;
+        try { await api('POST', '/faccoes/acoes/' + b.dataset.acnao, { aprovar: false, motivo: m }); showAlert('Ação recusada', 'success'); loadFx(); } catch (e) { showAlert(e.message, 'error'); } });
+      const ROT = { oficializada: 'oficializou', pedido_recusado: 'recusou pedido', subiu_nivel: 'subiu de nível', desceu_nivel: 'desceu de nível', advertencia: 'advertência', desoficializada: 'desoficializou',
+                    acao_aprovada: 'aprovou ação', acao_recusada: 'recusou ação', recurso_aberto: 'recurso aberto', recurso_aceito: 'recurso aceito', recurso_negado: 'recurso negado', lideranca: 'liderança passada', aviso: 'aviso' };
+      $('fx-log').innerHTML = FX.log.length ? FX.log.map(l => '<div class="fx-linha"><span class="muted">' + fmtT(l.em) + '</span> · <b>' + esc(ROT[l.acao] || l.acao) + '</b>' + (l.faccao ? ' · ' + esc(l.faccao) : '')
+        + (l.detalhe && l.detalhe.motivo ? ' · ' + esc(l.detalhe.motivo) : '') + (l.detalhe && l.detalhe.para ? ' (nível ' + esc(l.detalhe.de) + ' → ' + esc(l.detalhe.para) + ')' : '') + ' · por ' + esc(l.por || '?') + '</div>').join('')
+        : '<span class="muted">Nada registrado ainda.</span>';
+    }
+    async function loadRf() {
+      let d; try { d = await api('GET', '/faccoes-recursos'); } catch (e) { $('rf-lista').innerHTML = '<span class="muted">' + esc(e.message) + '</span>'; return; }
+      $('rf-lista').innerHTML = d.recursos.length ? d.recursos.map(r => '<div class="fx-linha" style="font-size:.85rem"><b>' + esc(r.faccao) + '</b> · Art. ' + esc(r.artigo) + ' · ' + esc(r.motivo) + ' · ' + fxLink(r.prova)
+        + ' · aplicada por ' + esc(r.aplicada_nome || '?') + ' em ' + fxDia(r.aplicada_em)
+        + '<div style="margin:.3rem 0">Recurso de ' + esc(r.recurso_por || '?') + ': "' + esc(r.recurso_texto) + '"</div>'
+        + '<div class="fx-acts"><button class="btn-sm" data-rfok="' + r.id + '">Aceitar (derruba a advertência)</button><button class="btn-sm" data-rfnao="' + r.id + '">Negar</button></div></div>').join('')
+        : '<span class="muted">Nenhum recurso esperando.</span>';
+      const dec = (id, aceitar) => async () => {
+        const m = prompt('Motivo da decisão:'); if (!m) return;
+        try { await api('POST', '/faccoes-recursos/' + id, { aceitar, motivo: m }); showAlert('Recurso ' + (aceitar ? 'aceito' : 'negado'), 'success'); loadRf(); } catch (e) { showAlert(e.message, 'error'); }
+      };
+      $('rf-lista').querySelectorAll('[data-rfok]').forEach(b => b.onclick = dec(b.dataset.rfok, true));
+      $('rf-lista').querySelectorAll('[data-rfnao]').forEach(b => b.onclick = dec(b.dataset.rfnao, false));
+    }
     // ---------------------------------------------------------------- SSU
     // O painel NAO decide nada: pergunta ao site o estado e quais acoes cabem
     // agora, e desenha so essas. Assim nunca aparece botao que o back recusa.
@@ -1090,6 +1201,8 @@
       if (tab.dataset.tab === 'economia') loadEcon();
       if (tab.dataset.tab === 'testers') loadTesters();
       if (tab.dataset.tab === 'royalties') loadRoy();
+      if (tab.dataset.tab === 'faccoes') loadFx();
+      if (tab.dataset.tab === 'recursosfac') loadRf();
     }));
 
     // ---------------------------------------------------------------- ROYALTIES (23/10)

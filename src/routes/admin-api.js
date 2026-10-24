@@ -964,6 +964,8 @@ router.post('/testers/:id/estender', requirePoder('testers'), async (req, res) =
 
 // [23/10] Loja de Royalties (staff): Diretor Geral+, a trava mora em routes/royalties.js
 router.use('/royalties', require('./royalties').admin);
+// [24/10] Facções Vivas: aba Facções (poder 'faccoes') e recursos de advertência (poder 'faccoes_recurso')
+router.use(require('./faccoes-org').org);
 
 // [22/10] liga/desliga noclip + Modo Deus de uma liberação ativa
 router.post('/testers/:id/noclip', requirePoder('testers'), async (req, res) => {

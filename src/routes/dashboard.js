@@ -70,6 +70,13 @@ router.get('/', async (req, res) => {
 router.get('/corp/:corpId', async (req, res) => {
   try {
     const info = await ctxDaCorp(req.params.corpId, req.user);
+    // [24/10] Facções Vivas: membro comum de FACÇÃO abre o painel da facção dele (nível, ações,
+    // advertências), só pra ver e registrar ação. Sem nenhum poder de gestão.
+    if (info && !CP.pode(info.ctx, 'ver_painel') && info.corp && info.corp.tipo === 'faccao') {
+      const mm = await pool.query('SELECT 1 FROM members WHERE corporation_id = $1 AND user_id = $2', [info.corp.id, req.user.id]);
+      if (mm.rows[0]) info.poderes = { ver_membros: true };
+      else return res.redirect('/dashboard');
+    } else
     if (!info || !CP.pode(info.ctx, 'ver_painel')) return res.redirect('/dashboard');
 
     const ranks = await pool.query(
