@@ -1,0 +1,195 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Rede — Donos das cidades</title>
+  <meta name="theme-color" content="#1C2127">
+  <style>
+    /* [24/10] Tela da REDE: o Dono de cada cidade. Só a conta da plataforma abre. */
+    body { margin: 0; }
+    .topbar { display: flex; align-items: center; justify-content: space-between; gap: 1rem; flex-wrap: wrap; }
+    .casa { max-width: 1100px; margin: 0 auto; padding: 1.2rem clamp(16px, 3vw, 28px) 4rem; }
+    .aviso { font-size: .86rem; color: var(--tinta-2); background: var(--papel-2); border-left: 3px solid var(--placa); border-radius: var(--rs); padding: .7rem .9rem; margin-bottom: 1rem; line-height: 1.55; }
+    .lista { display: grid; gap: .8rem; }
+    .cid { background: var(--papel); border: 1px solid var(--linha); border-radius: var(--r); overflow: hidden; }
+    .cid-topo { display: flex; align-items: center; gap: .8rem; padding: .8rem 1rem; border-bottom: 1px solid var(--linha); flex-wrap: wrap; }
+    .sigla { font-weight: 800; letter-spacing: .08em; color: #fff; border-radius: 4px; padding: .2rem .45rem; font-size: .78rem; }
+    .cid-topo h2 { font-size: 1.05rem; margin: 0; flex: 1; min-width: 10rem; }
+    .tag { font-size: .66rem; font-weight: 800; text-transform: uppercase; padding: .12rem .4rem; border-radius: 3px; background: var(--papel-2); color: var(--tinta-2); border: 1px solid var(--linha); }
+    .tag.of { background: var(--placa); color: #fff; border-color: var(--placa); }
+    .num { font-size: .8rem; color: var(--tinta-3); }
+    .cid-corpo { padding: .9rem 1rem; display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 1fr); gap: 1rem; }
+    .dono-atual { display: flex; flex-direction: column; gap: .2rem; }
+    .rot { font-size: .72rem; text-transform: uppercase; letter-spacing: .08em; color: var(--tinta-3); font-weight: 700; }
+    .dono-nome { font-size: 1rem; font-weight: 700; }
+    .dono-nome small { font-weight: 400; color: var(--tinta-3); }
+    .sem { color: var(--tinta-3); font-style: italic; }
+    .trocar { display: flex; flex-direction: column; gap: .45rem; }
+    .trocar input { padding: .5rem .6rem; border: 1px solid var(--linha-2); border-radius: var(--rs); font-size: .92rem; background: #fff; color: var(--tinta); width: 100%; box-sizing: border-box; }
+    .achados { border: 1px solid var(--linha); border-radius: var(--rs); max-height: 220px; overflow: auto; display: none; }
+    .achados button { display: block; width: 100%; text-align: left; border: 0; border-top: 1px solid var(--linha); background: #fff; padding: .5rem .6rem; cursor: pointer; font-size: .88rem; color: var(--tinta); }
+    .achados button:first-child { border-top: 0; }
+    .achados button:hover, .achados button.on { background: var(--papel-2); }
+    .achados small { color: var(--tinta-3); }
+    .escolhido { font-size: .86rem; }
+    .linha { display: flex; gap: .5rem; flex-wrap: wrap; align-items: center; }
+    .hist { grid-column: 1 / -1; font-size: .84rem; border-top: 1px solid var(--linha); padding-top: .6rem; }
+    .hist summary { cursor: pointer; font-weight: 700; color: var(--tinta-2); }
+    .hist .h { display: flex; gap: .6rem; padding: .35rem 0; border-bottom: 1px solid var(--linha); flex-wrap: wrap; }
+    .hist .h span:first-child { color: var(--tinta-3); min-width: 9rem; }
+    .msg { position: fixed; right: 16px; bottom: 16px; padding: .7rem 1rem; border-radius: var(--rs); color: #fff; font-weight: 700; display: none; z-index: 99; max-width: calc(100vw - 32px); }
+    .msg.ok { background: var(--ok); } .msg.err { background: var(--perigo); }
+    @media (max-width: 760px) { .cid-corpo { grid-template-columns: 1fr; } }
+  </style>
+  <link rel="stylesheet" href="/sf.css">
+</head>
+<body>
+  <div class="topbar">
+    <div style="display:flex;align-items:center;gap:1rem">
+      <%- include('partials/placa') %>
+      <h1>Rede · Donos das cidades</h1>
+    </div>
+    <div class="user" style="display:flex;gap:1rem;align-items:center">
+      <a href="/">Cidades</a>
+    </div>
+  </div>
+
+  <main class="casa">
+    <div class="aviso">
+      Só a sua conta abre esta tela. O Dono de uma cidade manda em tudo dentro <strong>dela</strong>
+      (staff, SSU, wipe, regras, economia) e não enxerga nenhuma outra. Na cidade oficial o Dono é sempre você.
+      Toda troca fica no histórico da cidade.
+    </div>
+    <div class="lista" id="lista"><p class="num">Carregando…</p></div>
+  </main>
+  <div class="msg" id="msg"></div>
+
+<script>
+(function () {
+  var lista = document.getElementById('lista');
+  function el(tag, cls, txt) { var e = document.createElement(tag); if (cls) e.className = cls; if (txt != null) e.textContent = txt; return e; }
+  function aviso(t, ok) { var m = document.getElementById('msg'); m.textContent = t; m.className = 'msg ' + (ok ? 'ok' : 'err'); m.style.display = 'block'; clearTimeout(aviso._t); aviso._t = setTimeout(function () { m.style.display = 'none'; }, 3500); }
+  function data(d) { if (!d) return ''; var x = new Date(d); return x.toLocaleDateString('pt-BR') + ' ' + x.toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit' }); }
+  function nomeP(p) { return p ? (p.nome + (p.roblox ? ' · ' + p.roblox : '')) : ''; }
+
+  function carregar() {
+    fetch('/api/rede/cidades').then(function (r) { return r.json().then(function (j) { return { ok: r.ok, j: j }; }); })
+      .then(function (x) {
+        if (!x.ok) { lista.textContent = x.j.error || 'Erro'; return; }
+        lista.innerHTML = '';
+        x.j.cidades.forEach(function (c) { lista.appendChild(cartao(c)); });
+      }).catch(function () { lista.textContent = 'Erro ao carregar.'; });
+  }
+
+  function cartao(c) {
+    var box = el('section', 'cid');
+    var topo = el('div', 'cid-topo');
+    var s = el('span', 'sigla', c.sigla); s.style.background = c.cor || '#1D3F94'; topo.appendChild(s);
+    topo.appendChild(el('h2', null, c.nome));
+    if (c.oficial) topo.appendChild(el('span', 'tag of', 'Oficial'));
+    else topo.appendChild(el('span', 'tag', c.tipo));
+    if (c.status !== 'ativa') topo.appendChild(el('span', 'tag', c.status));
+    topo.appendChild(el('span', 'num', c.online + '/' + c.vagas + ' online · ' + c.staff + ' na staff'));
+    box.appendChild(topo);
+
+    var corpo = el('div', 'cid-corpo');
+    var at = el('div', 'dono-atual');
+    at.appendChild(el('span', 'rot', 'Dono atual'));
+    var dn = el('span', 'dono-nome');
+    if (c.oficial) { dn.textContent = c.dono.nome + ' '; dn.appendChild(el('small', null, '(conta da plataforma)')); }
+    else if (c.dono) { dn.textContent = c.dono.nome + ' '; if (c.dono.roblox) dn.appendChild(el('small', null, '· ' + c.dono.roblox)); }
+    else { dn.className = 'dono-nome sem'; dn.textContent = 'Sem dono'; }
+    at.appendChild(dn);
+    if (c.trocado_em) at.appendChild(el('span', 'num', 'Última troca: ' + data(c.trocado_em)));
+    corpo.appendChild(at);
+
+    if (!c.oficial) corpo.appendChild(formTroca(c));
+    else corpo.appendChild(el('div', 'num', 'Não dá pra trocar: na oficial o Dono é a conta da plataforma.'));
+
+    var h = el('details', 'hist');
+    h.appendChild(el('summary', null, 'Histórico de donos'));
+    var hc = el('div'); h.appendChild(hc);
+    h.addEventListener('toggle', function () { if (h.open && !hc.dataset.ok) historico(c.id, hc); });
+    corpo.appendChild(h);
+    box.appendChild(corpo);
+    return box;
+  }
+
+  function formTroca(c) {
+    var f = el('div', 'trocar');
+    f.appendChild(el('span', 'rot', 'Trocar dono'));
+    var busca = el('input'); busca.type = 'search'; busca.placeholder = 'Nome do Discord, do Roblox ou ID'; busca.autocomplete = 'off';
+    var achados = el('div', 'achados');
+    var escolhido = el('div', 'escolhido');
+    var motivo = el('input'); motivo.placeholder = 'Motivo (opcional — ex.: pagou a taxa)'; motivo.maxLength = 200;
+    var linha = el('div', 'linha');
+    var ok = el('button', 'btn', 'Tornar Dono'); ok.type = 'button'; ok.disabled = true;
+    var tirar = el('button', 'btn sec', 'Deixar sem dono'); tirar.type = 'button'; tirar.disabled = !c.dono;
+    linha.appendChild(ok); linha.appendChild(tirar);
+    var alvo = null, t = null;
+
+    busca.addEventListener('input', function () {
+      clearTimeout(t); alvo = null; ok.disabled = true; escolhido.textContent = '';
+      var q = busca.value.trim();
+      if (q.length < 2) { achados.style.display = 'none'; return; }
+      t = setTimeout(function () {
+        fetch('/api/rede/usuarios?q=' + encodeURIComponent(q)).then(function (r) { return r.json(); }).then(function (j) {
+          achados.innerHTML = '';
+          (j.usuarios || []).forEach(function (u) {
+            var b = el('button'); b.type = 'button'; b.textContent = u.nome + ' ';
+            b.appendChild(el('small', null, (u.roblox ? u.roblox + ' · ' : '') + 'Discord ' + u.discord_id));
+            b.onclick = function () {
+              alvo = u; achados.style.display = 'none'; busca.value = u.nome;
+              escolhido.textContent = 'Escolhido: ' + nomeP(u);
+              ok.disabled = !!(c.dono && c.dono.id === u.id);
+              if (ok.disabled) escolhido.textContent += ' (já é o dono)';
+            };
+            achados.appendChild(b);
+          });
+          if (!achados.children.length) achados.appendChild(el('div', 'num', 'Ninguém com esse nome entrou no site ainda.')).style.padding = '.5rem .6rem';
+          achados.style.display = 'block';
+        });
+      }, 250);
+    });
+
+    function enviar(userId, texto) {
+      if (!confirm(texto)) return;
+      ok.disabled = tirar.disabled = true;
+      fetch('/api/rede/cidades/' + c.id + '/dono', {
+        method: 'PUT', headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ user_id: userId, motivo: motivo.value.trim() || null }),
+      }).then(function (r) { return r.json().then(function (j) { return { ok: r.ok, j: j }; }); })
+        .then(function (x) {
+          if (!x.ok) { aviso(x.j.error || 'Erro', false); ok.disabled = !alvo; tirar.disabled = !c.dono; return; }
+          aviso('Dono de ' + c.nome + ' atualizado.', true); carregar();
+        }).catch(function () { aviso('Erro de conexão.', false); ok.disabled = !alvo; tirar.disabled = !c.dono; });
+    }
+    ok.onclick = function () { if (alvo) enviar(alvo.id, 'Tornar ' + nomeP(alvo) + ' Dono de ' + c.nome + '?' + (c.dono ? '\n' + c.dono.nome + ' deixa de ser Dono.' : '')); };
+    tirar.onclick = function () { enviar(null, 'Deixar ' + c.nome + ' sem dono?\n' + (c.dono ? c.dono.nome : '') + ' perde o painel de Dono dela.'); };
+
+    f.appendChild(busca); f.appendChild(achados); f.appendChild(escolhido); f.appendChild(motivo); f.appendChild(linha);
+    return f;
+  }
+
+  function historico(id, alvo) {
+    alvo.textContent = 'Carregando…';
+    fetch('/api/rede/cidades/' + id + '/historico').then(function (r) { return r.json(); }).then(function (j) {
+      alvo.innerHTML = ''; alvo.dataset.ok = '1';
+      var hs = j.historico || [];
+      if (!hs.length) { alvo.appendChild(el('div', 'num', 'Nenhuma troca registrada.')); return; }
+      hs.forEach(function (x) {
+        var d = el('div', 'h');
+        d.appendChild(el('span', null, data(x.em)));
+        d.appendChild(el('span', null, (x.de_nome || 'sem dono') + ' → ' + (x.para_nome || 'sem dono')));
+        d.appendChild(el('span', 'num', 'por ' + (x.por_nome || '?') + (x.motivo ? ' · ' + x.motivo : '')));
+        alvo.appendChild(d);
+      });
+    });
+  }
+
+  carregar();
+})();
+</script>
+</body>
+</html>

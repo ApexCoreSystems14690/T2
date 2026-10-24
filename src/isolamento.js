@@ -107,7 +107,7 @@ async function porCidade(pool, fn) {
 // ------------------------------------------------------------------ banco
 // Tabelas que NÃO ganham RLS (globais da rede, ou lidas explicitamente por cidade da URL)
 const GLOBAIS = new Set(['cidades', 'cidade_staff', 'users', 'session', 'user_ips', 'plataforma_migracoes',
-  'cidade_regulamentos', 'cidade_regulamentos_hist']);
+  'cidade_regulamentos', 'cidade_regulamentos_hist', 'cidade_donos_hist']);
 
 // Chaves únicas que viram "por cidade". [tabela, nome antigo, tipo, definição nova]
 //   tipo 'pk' troca a chave primária; 'uq' é constraint UNIQUE; 'ix' é índice único.

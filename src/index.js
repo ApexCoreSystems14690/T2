@@ -1336,6 +1336,8 @@ async function start() {
   app.use(require('./routes/governo'));
   // [24/10] Facções Vivas: /api/faccao/* (o painel da facção)
   app.use(require('./routes/faccoes-org').faccao);
+  // [24/10] Rede: /rede + /api/rede (só a conta da plataforma troca o Dono de cada cidade)
+  app.use(require('./routes/rede'));
 
   // [21/10] ENTRADA = tela CIDADES. Mostra as cidades da rede (hoje só o Santa
   // Fé Oficial), quantos estão jogando em cada uma e o cargo de staff que a
@@ -1366,6 +1368,7 @@ async function start() {
         user: req.usuarioPlataforma || null,
         cidades: cidadesVis,
         atual: req.cidade ? req.cidade.id : null,
+        plataforma,   // [24/10] mostra o atalho "Rede" (tela de Donos) só pra conta da plataforma
         voltar: CID.voltarSeguro(req.query.voltar) || '',
       });
     } catch (err) {

@@ -252,6 +252,7 @@
     <div class="conta">
       <% if (user) { %>
         <span>Conectado como <strong><%= user.discord_username %></strong></span>
+        <% if (typeof plataforma !== 'undefined' && plataforma) { %><a href="/rede" title="Donos das cidades"><svg class="ic" aria-hidden="true"><use href="/icones.svg#escudo"/></svg>Rede</a><% } %>
         <a href="/auth/logout"><svg class="ic" aria-hidden="true"><use href="/icones.svg#sair"/></svg>Sair</a>
       <% } else { %>
         <a class="btn-discord" href="/auth/discord"><svg class="ic" aria-hidden="true"><use href="/icones.svg#discord"/></svg>Entrar com Discord</a>

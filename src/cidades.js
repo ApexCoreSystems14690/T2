@@ -141,6 +141,20 @@ async function garantir(pool) {
     );
     CREATE INDEX IF NOT EXISTS idx_cidade_staff_user ON cidade_staff(user_id);
 
+    -- [24/10] HISTÓRICO DE DONO de cada cidade. [stated] Julio: tela pra escolher/trocar o Dono
+    -- de cada cidade, "desde que somente eu possa fazer isso". Só a conta da plataforma troca
+    -- (routes/rede.js). Tabela global da rede (fora do RLS: ver isolamento.GLOBAIS).
+    CREATE TABLE IF NOT EXISTS cidade_donos_hist (
+      id SERIAL PRIMARY KEY,
+      cidade_id INTEGER NOT NULL REFERENCES cidades(id) ON DELETE CASCADE,
+      de_user_id INTEGER REFERENCES users(id) ON DELETE SET NULL,
+      para_user_id INTEGER REFERENCES users(id) ON DELETE SET NULL,
+      por_user_id INTEGER REFERENCES users(id) ON DELETE SET NULL,
+      motivo VARCHAR(200),
+      em TIMESTAMP DEFAULT NOW()
+    );
+    CREATE INDEX IF NOT EXISTS idx_cidade_donos_hist ON cidade_donos_hist(cidade_id, em DESC);
+
     CREATE TABLE IF NOT EXISTS plataforma_migracoes (
       nome VARCHAR(64) PRIMARY KEY,
       em TIMESTAMP DEFAULT NOW()
@@ -391,7 +405,8 @@ async function montarTodas(pool) {
     const t = cs.find(c => c.slug === 'testes');
     if (t) {
       await pool.query(`UPDATE cidades SET dono_user_id = (SELECT id FROM users WHERE discord_id = '810270743925489676')
-                         WHERE id = $1 AND dono_user_id IS NULL`, [t.id]);
+                         WHERE id = $1 AND dono_user_id IS NULL
+                           AND NOT EXISTS (SELECT 1 FROM cidade_donos_hist WHERE cidade_id = $1)`, [t.id]);   // [24/10] trocado na tela Rede = não volta no boot
       // grade própria: servidor da equipe, sempre aberto (o Dono muda na aba SSU do painel dela)
       await pool.query(`DELETE FROM game_config WHERE cidade_id = $1 AND key = 'ssu' AND value = '{"sempre_aberta": true}'::jsonb`, [t.id]);
       await pool.query(`INSERT INTO game_config (cidade_id, key, value) VALUES ($1, 'ssu_grade', '{"sempre_aberta": true}'::jsonb) ON CONFLICT DO NOTHING`, [t.id]);
@@ -423,7 +438,52 @@ async function apagarCidadeDeTeste(pool, slug) {
   });
 }
 
+// ------------------------------------------------------------ dono de cada cidade
+// [24/10] Só quem chama decide se pode (routes/rede.js: só a conta da plataforma).
+// A cidade OFICIAL não tem dono por este campo: lá o Dono é sempre a conta da
+// plataforma (permissoes.cargoDe), então trocar aqui seria enganoso -> recusa.
+async function trocarDono(pool, cidadeId, paraUserId, porUserId, motivo) {
+  return ISO.global(async () => {
+    const cli = await pool.connect();
+    try {
+      await cli.query('BEGIN');
+      const c = (await cli.query('SELECT id, tipo, dono_user_id FROM cidades WHERE id = $1 FOR UPDATE', [cidadeId])).rows[0];
+      if (!c) { await cli.query('ROLLBACK'); return { erro: 'Cidade não existe.', status: 404 }; }
+      if (c.tipo === 'oficial') { await cli.query('ROLLBACK'); return { erro: 'Na cidade oficial o Dono é sempre a conta da plataforma.', status: 400 }; }
+      let para = null;
+      if (paraUserId != null) {
+        para = (await cli.query('SELECT id, discord_username FROM users WHERE id = $1', [paraUserId])).rows[0];
+        if (!para) { await cli.query('ROLLBACK'); return { erro: 'Usuário não existe.', status: 404 }; }
+      }
+      const novo = para ? para.id : null;
+      if ((c.dono_user_id || null) === novo) { await cli.query('ROLLBACK'); return { erro: 'Essa pessoa já é a dona dessa cidade.', status: 409 }; }
+      await cli.query('UPDATE cidades SET dono_user_id = $2 WHERE id = $1', [c.id, novo]);
+      await cli.query(
+        'INSERT INTO cidade_donos_hist (cidade_id, de_user_id, para_user_id, por_user_id, motivo) VALUES ($1, $2, $3, $4, $5)',
+        [c.id, c.dono_user_id || null, novo, porUserId || null, motivo ? String(motivo).slice(0, 200) : null]);
+      await cli.query('COMMIT');
+      limparCache();
+      return { ok: true, de: c.dono_user_id || null, para: novo };
+    } catch (e) {
+      try { await cli.query('ROLLBACK'); } catch (_) {}
+      throw e;
+    } finally { cli.release(); }
+  });
+}
+
+async function historicoDono(pool, cidadeId, limite) {
+  return ISO.global(async () => (await pool.query(
+    `SELECT h.id, h.em, h.motivo,
+            de.discord_username AS de_nome, para.discord_username AS para_nome, por.discord_username AS por_nome
+       FROM cidade_donos_hist h
+       LEFT JOIN users de ON de.id = h.de_user_id
+       LEFT JOIN users para ON para.id = h.para_user_id
+       LEFT JOIN users por ON por.id = h.por_user_id
+      WHERE h.cidade_id = $1 ORDER BY h.em DESC, h.id DESC LIMIT $2`, [cidadeId, Math.min(Number(limite) || 20, 100)])).rows);
+}
+
 module.exports = {
+  trocarDono, historicoDono,
   montarCidade, montarTodas, apagarCidadeDeTeste,
   SANTA_FE, TABELAS_DA_CIDADE,
   slugValido, nomeDaLoja, slugDoJogo, abaTrocada, voltarSeguro, senhaConfere,
