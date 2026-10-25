@@ -1496,6 +1496,32 @@ router.get('/bans/faltando', async (req, res) => {
   } catch (err) { res.status(500).json({ error: 'Erro interno' }); }
 });
 
+// [25/10] [stated] Julio: "Um carinha foi banido, automaticamente deveria ser desbanido no jogo tbm
+// ( no roblox ) nao so no site". O ban oficial do Roblox (Players:BanAsync) barra a ENTRADA antes de
+// qualquer script rodar, entao o jogo nunca pergunta /acesso pra esse jogador. Quem desfaz: todo
+// servidor da cidade pergunta isto a cada minuto, roda UnbanAsync e confirma no /ok.
+router.get('/desbans-roblox', async (req, res) => {
+  try {
+    const r = await pool.query(
+      `SELECT roblox_id FROM game_bans
+        WHERE desfeito_em IS NOT NULL AND roblox_sync_em IS NULL
+          AND desfeito_em > NOW() - INTERVAL '30 days'
+        ORDER BY desfeito_em LIMIT 50`);
+    res.json({ ok: true, ids: r.rows.map(x => Number(x.roblox_id)) });
+  } catch (err) { console.error('desbans-roblox:', err.message); res.status(500).json({ error: 'Erro interno' }); }
+});
+router.post('/desbans-roblox/ok', async (req, res) => {
+  try {
+    const ids = (Array.isArray((req.body || {}).ids) ? req.body.ids : [])
+      .map(Number).filter(n => Number.isFinite(n) && n > 0).slice(0, 50);
+    if (!ids.length) return res.json({ ok: true, n: 0 });
+    const r = await pool.query(
+      `UPDATE game_bans SET roblox_sync_em = NOW()
+        WHERE roblox_id = ANY($1::bigint[]) AND desfeito_em IS NOT NULL AND roblox_sync_em IS NULL`, [ids]);
+    res.json({ ok: true, n: r.rowCount });
+  } catch (err) { console.error('desbans-roblox/ok:', err.message); res.status(500).json({ error: 'Erro interno' }); }
+});
+
 // [16/10] RG do espelho: so os campos do documento, com teto de tamanho. A foto e a
 // descricao do personagem in-game (RGFoto.descrever, ~1 KB). Formato = Data.RG do jogo.
 function rgDoJogo(rg) {

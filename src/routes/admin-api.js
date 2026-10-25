@@ -224,7 +224,7 @@ router.post('/command', async (req, res) => {
           [alvoId, alvoNome || null, dados.motivo || null, ate, quem]);
       } else if (tipo === 'unban') {
         await pool.query(
-          `UPDATE game_bans SET desfeito_em = NOW(), desfeito_por = $2 WHERE roblox_id = $1`,
+          `UPDATE game_bans SET desfeito_em = NOW(), desfeito_por = $2, roblox_sync_em = NULL WHERE roblox_id = $1`,
           [alvoId, quem]);
       }
     } catch (e) {

@@ -255,6 +255,9 @@ async function start() {
         desfeito_por VARCHAR(64)
       );
       CREATE INDEX IF NOT EXISTS idx_game_bans_ativo ON game_bans(desfeito_em, banido_em DESC);
+      -- [25/10] desban do painel tambem tira o ban OFICIAL do Roblox (BanAsync). NULL = o jogo
+      -- ainda nao rodou o UnbanAsync; qualquer servidor da cidade faz isso em ate 1 min.
+      ALTER TABLE game_bans ADD COLUMN IF NOT EXISTS roblox_sync_em TIMESTAMP;
 
       -- ===== PROCURADOS (26/09) =====
       -- A policia marca alguem A MAO. Nao confundir com a aba "Procurados" antiga
