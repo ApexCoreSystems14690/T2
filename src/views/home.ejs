@@ -126,6 +126,14 @@
           <span class="d">Corporações, facções e empresas numa lista só, com dono, membros e caixa.</span>
         </a>
         <% } %>
+        <%# [25/10] Rede: senha, place e dono de cada cidade (só a conta da plataforma) %>
+        <% if (typeof plataforma !== 'undefined' && plataforma) { %>
+        <a class="item adm" href="/rede">
+          <span class="selo"><svg class="ic" aria-hidden="true"><use href="/icones.svg#escudo"/></svg></span>
+          <span class="t">Rede de cidades</span>
+          <span class="d">Dono, senha de entrada e place do Roblox de cada cidade. Só a sua conta vê.</span>
+        </a>
+        <% } %>
         <% if (user.is_admin) { %>
         <a class="item adm" href="/admin">
           <span class="selo"><svg class="ic" aria-hidden="true"><use href="/icones.svg#escudo"/></svg></span>

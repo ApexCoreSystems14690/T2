@@ -9,10 +9,6 @@ const pool = require('./db/pool');
 const { getUserById } = require('./services/discord-auth');
 
 async function start() {
-  // [24/10] isolamento: as chaves únicas viram POR CIDADE antes de qualquer migração (as migrações
-  // já gravam com ON CONFLICT (cidade_id, ...)). Banco novo: não faz nada aqui, faz no fim do boot.
-  try { await require('./isolamento').chaves(pool); }
-  catch (e) { console.error('[isolamento] chaves (início):', e.message); }
   // Migrar banco ANTES de tudo
   try {
     await pool.query(`
@@ -128,16 +124,6 @@ async function start() {
         [porId ? donosId : donos]);
       if (r.rowCount > 0) console.log('[migracao] ' + r.rowCount + ' "dono por banco" perderam o admin (so ' + donos.join(', ') + ' e Dono)');
     } catch (e) { console.error('migracao dono fixo:', e.message); }
-    // [30/09 Julio] "owner ainda nao me detecta". Resolve o nome do Dono pro
-    // discord_id de verdade (a conta mais antiga com aquele nome) e trava nele.
-    // A partir daqui o Dono e reconhecido pelo id mesmo que troque de nome, e o
-    // log imprime o id pra copiar pra DONO_DISCORD_ID no Railway.
-    try { await require('./permissoes').resolverDono(pool); }
-    catch (e) { console.error('resolver dono:', e.message); }
-    // [21/10] Painel Testers: tabela das liberações temporárias + o relógio que
-    // vence prazo, entrega carro pendente e tira o que foi dado (src/testers.js).
-    try { const T = require('./testers'); await T.garantir(pool); T.iniciar(pool); }
-    catch (e) { console.error('testers:', e.message); }
     // Painel admin: fila de comandos, logs do jogo, servidores online, auditoria
     await pool.query(`
       CREATE TABLE IF NOT EXISTS game_servers (
@@ -237,177 +223,6 @@ async function start() {
       );
       CREATE INDEX IF NOT EXISTS idx_game_patrimonio_atualizado ON game_patrimonio(atualizado_em DESC);
 
-      -- ===== BANIDOS (05/10) =====
-      -- O ban DE VERDADE mora no DataStore do Roblox (BanidosDB, chave <id>_Banido) e o
-      -- site NAO alcanca aquilo. Esta tabela e o ESPELHO, pra o painel poder LISTAR e
-      -- oferecer o Desbanir. Quem escreve: o proprio /command quando bane ou desbane, e
-      -- o jogo (ban feito in-game + a varredura do DataStore no boot).
-      -- ate = epoch do fim; 0 ou NULL = permanente. desfeito_em preenchido = desbanido.
-      CREATE TABLE IF NOT EXISTS game_bans (
-        roblox_id BIGINT PRIMARY KEY,
-        nome VARCHAR(64),
-        motivo TEXT,
-        ate BIGINT DEFAULT 0,
-        banido_por VARCHAR(64),
-        banido_em TIMESTAMP DEFAULT NOW(),
-        origem VARCHAR(16) DEFAULT 'painel',
-        desfeito_em TIMESTAMP,
-        desfeito_por VARCHAR(64)
-      );
-      CREATE INDEX IF NOT EXISTS idx_game_bans_ativo ON game_bans(desfeito_em, banido_em DESC);
-      -- [25/10] desban do painel tambem tira o ban OFICIAL do Roblox (BanAsync). NULL = o jogo
-      -- ainda nao rodou o UnbanAsync; qualquer servidor da cidade faz isso em ate 1 min.
-      ALTER TABLE game_bans ADD COLUMN IF NOT EXISTS roblox_sync_em TIMESTAMP;
-
-      -- ===== PROCURADOS (26/09) =====
-      -- A policia marca alguem A MAO. Nao confundir com a aba "Procurados" antiga
-      -- da Ficha, que e DERIVADA (quem deve dinheiro). Esta aqui e a lista de
-      -- caca: descricao escrita pelo policial (roupa, cor, cabelo, carro).
-      -- O CADASTRO DE CIDADAOS NAO PRECISOU DE TABELA NOVA: game_players ja e
-      -- todo mundo que entrou (roblox_id, nome, primeira_vez, ultima_vez, visitas),
-      -- alimentado pelo log 'entrou'. A foto sai do roblox_id no lado do jogo.
-      -- estado: 'ativo' (valendo) | 'aguardo' (marcado por NOME, o dono ainda nao
-      -- entrou nenhuma vez -- "em aguardo de dados", sem prazo pra vencer) |
-      -- 'encerrado'.
-      CREATE TABLE IF NOT EXISTS procurados (
-        id SERIAL PRIMARY KEY,
-        roblox_id BIGINT,
-        nome VARCHAR(64) NOT NULL,
-        descricao TEXT,
-        motivo VARCHAR(160),
-        por_roblox_id BIGINT,
-        por_nome VARCHAR(64),
-        corp VARCHAR(64),
-        estado VARCHAR(16) NOT NULL DEFAULT 'ativo',
-        criado_em TIMESTAMP DEFAULT NOW(),
-        atualizado_em TIMESTAMP DEFAULT NOW(),
-        encerrado_em TIMESTAMP,
-        encerrado_por VARCHAR(64)
-      );
-      CREATE INDEX IF NOT EXISTS idx_procurados_estado ON procurados(estado, id DESC);
-      CREATE INDEX IF NOT EXISTS idx_procurados_nome ON procurados(LOWER(nome));
-      -- um alvo so pode ter UM mandado aberto por vez
-      -- [24/10] depois do isolamento a chave é POR CIDADE (uq_procurados_aberto_cidade, src/isolamento.js)
-      DO $u$ BEGIN
-        IF NOT EXISTS (SELECT 1 FROM pg_class WHERE relname = 'uq_procurados_aberto_cidade') THEN
-          CREATE UNIQUE INDEX IF NOT EXISTS uq_procurados_aberto
-            ON procurados(roblox_id) WHERE estado <> 'encerrado' AND roblox_id IS NOT NULL;
-        END IF;
-      END $u$;
-
-      -- ===== VEICULOS PROCURADOS (12/10) =====
-      -- Julio: "a policia civil pelo pc deve conseguir por esse carro como procurado
-      -- alem de players". Nao tem placa no jogo: o carro e (dono + id do modelo).
-      -- Um carro so tem UM alerta aberto por vez.
-      CREATE TABLE IF NOT EXISTS veiculos_procurados (
-        id SERIAL PRIMARY KEY,
-        dono_roblox_id BIGINT,
-        dono_nome VARCHAR(64) NOT NULL,
-        carro_id VARCHAR(64) NOT NULL,
-        carro_nome VARCHAR(80),
-        motivo VARCHAR(160),
-        descricao TEXT,
-        por_nome VARCHAR(64),
-        corp VARCHAR(64),
-        estado VARCHAR(16) NOT NULL DEFAULT 'ativo',
-        criado_em TIMESTAMP DEFAULT NOW(),
-        encerrado_em TIMESTAMP,
-        encerrado_por VARCHAR(64)
-      );
-      DO $u$ BEGIN
-        IF NOT EXISTS (SELECT 1 FROM pg_class WHERE relname = 'uq_veiculos_procurados_aberto_cidade') THEN
-          CREATE UNIQUE INDEX IF NOT EXISTS uq_veiculos_procurados_aberto
-            ON veiculos_procurados(LOWER(dono_nome), carro_id) WHERE estado <> 'encerrado';
-        END IF;
-      END $u$;
-
-      -- ===== ALERTAS DE COMPRA SUSPEITA (30/09) =====
-      -- Julio: "se o cara comprar muito papel parafuso etc coisas suspeitas de
-      -- fabricacao de armas, faca chegar no pc da policia civil notificando eles,
-      -- junto do contacto direto nome etc, para que possam investigar".
-      -- O JOGO decide o que e suspeito (ReplicatedStorage.Shared.SuspeitaNucleo, que
-      -- le as receitas de arma de verdade); aqui so fica o registro, porque a PC
-      -- precisa ver alerta de quem ja saiu do servidor.
-      -- numero e o numero do cll do comprador: e com ele que a PC puxa o rastreio
-      -- do aparelho que ja existe. Por isso a compra SO gera alerta se vier do
-      -- celular -- e o que torna o cidadao rastreavel.
-      CREATE TABLE IF NOT EXISTS alertas_compra (
-        id SERIAL PRIMARY KEY,
-        roblox_id BIGINT NOT NULL,
-        nome VARCHAR(64) NOT NULL,
-        numero VARCHAR(24),
-        motivo VARCHAR(16) NOT NULL,
-        nivel VARCHAR(8) NOT NULL DEFAULT 'media',
-        pontos INT NOT NULL DEFAULT 0,
-        acumulado INT NOT NULL DEFAULT 0,
-        itens JSONB NOT NULL DEFAULT '[]'::jsonb,
-        resumo VARCHAR(200),
-        pedido_id VARCHAR(40),
-        vezes INT NOT NULL DEFAULT 1,
-        estado VARCHAR(16) NOT NULL DEFAULT 'aberto',
-        criado_em TIMESTAMP DEFAULT NOW(),
-        atualizado_em TIMESTAMP DEFAULT NOW(),
-        arquivado_em TIMESTAMP,
-        arquivado_por VARCHAR(64)
-      );
-      CREATE INDEX IF NOT EXISTS idx_alertas_compra_estado ON alertas_compra(estado, id DESC);
-      CREATE INDEX IF NOT EXISTS idx_alertas_compra_alvo ON alertas_compra(roblox_id, id DESC);
-
-      -- ===== REEMBOLSO PENDENTE DO MERCADO FECHADO (30/09) =====
-      -- O cliente paga o pedido NA HORA. Se ele desloga antes da entrega, o pedido
-      -- morre e o jogo nao tem como devolver o dinheiro -- o perfil de quem saiu nao
-      -- esta carregado. Ate aqui isso virava um warn no console e o cara perdia tudo.
-      -- Mesmo caminho que a OLX ja usava pra pagar venda feita offline: o jogo grava
-      -- aqui e acerta no proximo login, com o pago marcado na MESMA transacao da
-      -- leitura, entao nao paga duas vezes.
-      CREATE TABLE IF NOT EXISTS mf_reembolsos (
-        id SERIAL PRIMARY KEY,
-        roblox_id BIGINT NOT NULL,
-        nome VARCHAR(64),
-        valor INT NOT NULL CHECK (valor > 0),
-        pedido_id VARCHAR(40),
-        motivo VARCHAR(40),
-        criado_em TIMESTAMP DEFAULT NOW(),
-        pago_em TIMESTAMP
-      );
-      CREATE INDEX IF NOT EXISTS idx_mf_reembolsos_aberto ON mf_reembolsos(roblox_id) WHERE pago_em IS NULL;
-
-      -- ===== OLX (03/10) =====
-      -- O jogo (SiteCelular.olx*) chamava /olx/* desde 20/09 e o site NUNCA teve essas
-      -- rotas nem tabelas: toda chamada dava 404, entao a OLX do cll e o "anunciar" do
-      -- Meu Patrimonio nao faziam nada. O anuncio mora aqui; o item sai do inventario
-      -- quando anuncia e so volta por /olx/devolver (cancelado ou vencido em 7 dias).
-      CREATE TABLE IF NOT EXISTS olx_anuncios (
-        id SERIAL PRIMARY KEY,
-        vendedor_id BIGINT NOT NULL,
-        vendedor_nome VARCHAR(64),
-        vendedor_numero VARCHAR(24),
-        item VARCHAR(80) NOT NULL,
-        qtd INT NOT NULL DEFAULT 1 CHECK (qtd > 0),
-        preco BIGINT NOT NULL CHECK (preco > 0),
-        status VARCHAR(12) NOT NULL DEFAULT 'ativo',
-        criado_em TIMESTAMP DEFAULT NOW(),
-        expira_em TIMESTAMP NOT NULL DEFAULT (NOW() + INTERVAL '7 days'),
-        fechado_em TIMESTAMP,
-        devolvido_em TIMESTAMP
-      );
-      CREATE INDEX IF NOT EXISTS idx_olx_ativos ON olx_anuncios(expira_em) WHERE status = 'ativo';
-      CREATE INDEX IF NOT EXISTS idx_olx_vendedor ON olx_anuncios(vendedor_id);
-      CREATE TABLE IF NOT EXISTS olx_vendas (
-        id SERIAL PRIMARY KEY,
-        anuncio_id INT NOT NULL REFERENCES olx_anuncios(id) ON DELETE CASCADE,
-        vendedor_id BIGINT NOT NULL,
-        comprador_id BIGINT NOT NULL,
-        comprador_nome VARCHAR(64),
-        item VARCHAR(80),
-        qtd INT,
-        valor BIGINT NOT NULL CHECK (valor > 0),
-        criado_em TIMESTAMP DEFAULT NOW(),
-        pago_em TIMESTAMP
-      );
-      CREATE INDEX IF NOT EXISTS idx_olx_vendas_aberto ON olx_vendas(vendedor_id) WHERE pago_em IS NULL;
-
-
       -- ===== CELULAR (Aparelho com uid) =====
       -- [fix 17/09] Estas tabelas só existiam em src/db/migrate.js, que roda com
       -- 'npm run db:migrate'. O Procfile e 'node src/index.js', entao no Railway
@@ -503,92 +318,6 @@ async function start() {
         UNIQUE(edital_id, roblox_id)
       );
       CREATE INDEX IF NOT EXISTS idx_net_cand_edital ON net_candidaturas(edital_id, id);
-
-      -- ===== CAIXA E ESTOQUE DA CORPORACAO (28/09) =====
-      -- Julio: "o comandante controlar isso pelo site da corp, poder ver o stock, o
-      -- lucro, oque a corp tem de dinheiro, quantos equipamentos perderam".
-      -- O SALDO NUNCA VIVE SOZINHO: corp_lancamentos e o extrato, e o saldo e a soma.
-      -- Sem extrato nao da pra auditar, e sem auditoria a corrupcao vira sumico
-      -- invisivel em vez de inquerito.
-      CREATE TABLE IF NOT EXISTS corp_caixa (
-        corporation_id INTEGER PRIMARY KEY REFERENCES corporations(id) ON DELETE CASCADE,
-        saldo BIGINT NOT NULL DEFAULT 0,
-        atualizado_em TIMESTAMP DEFAULT NOW()
-      );
-
-      CREATE TABLE IF NOT EXISTS corp_lancamentos (
-        id SERIAL PRIMARY KEY,
-        corporation_id INTEGER REFERENCES corporations(id) ON DELETE CASCADE,
-        tipo VARCHAR(24) NOT NULL,        -- multa|patio|divida|venda|aporte|compra|bonus|ajuste|estoque
-        motivo VARCHAR(24),               -- quando tipo='estoque': retirou|devolveu|saiu|roubada|morreu|comprou|baixa
-        valor BIGINT NOT NULL DEFAULT 0,  -- com sinal: positivo entra, negativo sai
-        saldo_depois BIGINT,
-        item VARCHAR(64),
-        qtd INTEGER,
-        perda BOOLEAN NOT NULL DEFAULT false,
-        quem VARCHAR(64),                 -- o jogador envolvido
-        por VARCHAR(64),                  -- quem autorizou (e o que acusa o desvio)
-        detalhe JSONB NOT NULL DEFAULT '{}',
-        criado_em TIMESTAMP DEFAULT NOW()
-      );
-      CREATE INDEX IF NOT EXISTS idx_corp_lanc ON corp_lancamentos(corporation_id, id DESC);
-      CREATE INDEX IF NOT EXISTS idx_corp_lanc_perda ON corp_lancamentos(corporation_id, item) WHERE perda = true;
-
-      -- O CHECK nao e enfeite: estoque negativo e bug de rota que some em silencio e
-      -- envenena a economia. Melhor estourar um erro alto na hora.
-      CREATE TABLE IF NOT EXISTS corp_estoque (
-        corporation_id INTEGER NOT NULL REFERENCES corporations(id) ON DELETE CASCADE,
-        item VARCHAR(64) NOT NULL,
-        qtd INTEGER NOT NULL DEFAULT 0 CHECK (qtd >= 0),
-        perdidos INTEGER NOT NULL DEFAULT 0 CHECK (perdidos >= 0),
-        atualizado_em TIMESTAMP DEFAULT NOW(),
-        PRIMARY KEY (corporation_id, item)
-      );
-
-      -- Quem esta com o que AGORA. O UNIQUE e a trava contra dois servidores
-      -- entregando a mesma peca pro mesmo policial ao mesmo tempo.
-      CREATE TABLE IF NOT EXISTS corp_emprestimos (
-        id SERIAL PRIMARY KEY,
-        corporation_id INTEGER NOT NULL REFERENCES corporations(id) ON DELETE CASCADE,
-        nome VARCHAR(64) NOT NULL,
-        roblox_id BIGINT,
-        item VARCHAR(64) NOT NULL,
-        qtd INTEGER NOT NULL DEFAULT 1 CHECK (qtd > 0),
-        pego_em TIMESTAMP DEFAULT NOW(),
-        UNIQUE(corporation_id, nome, item)
-      );
-      CREATE INDEX IF NOT EXISTS idx_corp_empr_corp ON corp_emprestimos(corporation_id);
-      CREATE INDEX IF NOT EXISTS idx_corp_empr_nome ON corp_emprestimos(LOWER(nome));
-
-      -- ===== ORÇAMENTO DO GOVERNO (28/09) =====
-      -- Toda corp recebe um repasse a cada 7 dias: base fixa + parte por atividade.
-      -- Sem isto a SAMU fica em zero para sempre (ela não multa, não apreende, não cobra dívida).
-      -- corp_atividade: UMA linha por ocorrência. É a única definição de "atividade" —
-      -- o site insere sozinho quando entra dinheiro, e o jogo insere as da SAMU (reanimação).
-      CREATE TABLE IF NOT EXISTS corp_atividade (
-        id SERIAL PRIMARY KEY,
-        corporation_id INTEGER NOT NULL REFERENCES corporations(id) ON DELETE CASCADE,
-        tipo VARCHAR(24) NOT NULL,
-        quem VARCHAR(64),
-        em TIMESTAMP DEFAULT NOW()
-      );
-      CREATE INDEX IF NOT EXISTS idx_corp_ativ_corp_em ON corp_atividade(corporation_id, em DESC);
-
-      -- corp_orcamento_pago: a TRAVA da idempotência. O período é um inteiro derivado do
-      -- relógio, e o UNIQUE abaixo é o que impede pagar duas vezes o mesmo período mesmo
-      -- com dois servidores pedindo ao mesmo tempo.
-      CREATE TABLE IF NOT EXISTS corp_orcamento_pago (
-        id SERIAL PRIMARY KEY,
-        corporation_id INTEGER NOT NULL REFERENCES corporations(id) ON DELETE CASCADE,
-        periodo BIGINT NOT NULL,
-        valor BIGINT NOT NULL,
-        base BIGINT NOT NULL,
-        atividade INTEGER NOT NULL DEFAULT 0,
-        em TIMESTAMP DEFAULT NOW(),
-        UNIQUE (corporation_id, periodo)
-      );
-      CREATE INDEX IF NOT EXISTS idx_corp_orc_corp ON corp_orcamento_pago(corporation_id, periodo DESC);
-
     `);
     // Backfill: popula game_players a partir dos logs de "entrou" que já existem,
     // pra aba Registro já nascer com histórico. Roda toda vez, mas é idempotente.
@@ -600,7 +329,7 @@ async function start() {
     try {
       await pool.query(
         `INSERT INTO game_config (key, value, updated_at) VALUES ('temporada', '{"n":1}'::jsonb, NOW())
-         ON CONFLICT DO NOTHING`);
+         ON CONFLICT (key) DO NOTHING`);
     } catch (e) { console.error('seed temporada:', e.message); }
 
     // [CONSERTO 19/09] O backfill era o motivo de "apagar jogador nao
@@ -608,26 +337,28 @@ async function start() {
       // Railway reinicia em todo deploy. Apagou o jogador, subiu uma versao,
       // ele voltava. Agora so considera log posterior ao ultimo wipe, e o
       // /registro/apagar leva os logs do jogador junto.
-      // [24/10 isolamento] por cidade: o log de cada cidade vira o registro DAQUELA cidade, e o
-      // corte é o último wipe DAQUELA cidade.
+      let desde = '1970-01-01';
+      try {
+        const w = await pool.query(`SELECT value->>'em' AS em FROM game_config WHERE key = 'wipe_em'`);
+        if (w.rows[0] && w.rows[0].em) desde = w.rows[0].em;
+      } catch (e) {}
       await pool.query(`
-        INSERT INTO game_players (cidade_id, roblox_id, nome, primeira_vez, ultima_vez, visitas)
-        SELECT l.cidade_id, (detalhe->>'userId')::bigint AS rid,
+        INSERT INTO game_players (roblox_id, nome, primeira_vez, ultima_vez, visitas)
+        SELECT (detalhe->>'userId')::bigint AS rid,
                MAX(jogador) AS nome,
                MIN(COALESCE(ocorrido_em, created_at)) AS pv,
                MAX(COALESCE(ocorrido_em, created_at)) AS uv,
                COUNT(*) AS n
-        FROM game_logs l
+        FROM game_logs
         WHERE tipo = 'entrou' AND detalhe->>'userId' ~ '^[0-9]+$'
-          AND COALESCE(ocorrido_em, created_at) > COALESCE((SELECT (g.value->>'em')::timestamptz FROM game_config g
-                                                             WHERE g.key = 'wipe_em' AND g.cidade_id = l.cidade_id), '1970-01-01'::timestamptz)
-        GROUP BY l.cidade_id, (detalhe->>'userId')::bigint
-        ON CONFLICT (cidade_id, roblox_id) DO UPDATE SET
+          AND COALESCE(ocorrido_em, created_at) > $1::timestamptz
+        GROUP BY (detalhe->>'userId')::bigint
+        ON CONFLICT (roblox_id) DO UPDATE SET
           nome = COALESCE(EXCLUDED.nome, game_players.nome),
           primeira_vez = LEAST(game_players.primeira_vez, EXCLUDED.primeira_vez),
           ultima_vez = GREATEST(game_players.ultima_vez, EXCLUDED.ultima_vez),
           visitas = GREATEST(game_players.visitas, EXCLUDED.visitas);
-      `);
+      `, [desde]);
     } catch (e) { console.error('backfill game_players:', e.message); }
     // [limpeza 26/09] O throttle do snapshot estava quebrado (NOT EXISTS no WHERE de
     // um agregado gravava um ZERO a cada heartbeat), então player_snapshots encheu de
@@ -646,7 +377,7 @@ async function start() {
           )`);
         await pool.query(
           `INSERT INTO game_config (key, value, updated_at)
-           VALUES ('analise_limpeza', '{"v":1}'::jsonb, NOW()) ON CONFLICT DO NOTHING`);
+           VALUES ('analise_limpeza', '{"v":1}'::jsonb, NOW()) ON CONFLICT (key) DO NOTHING`);
         console.log('[limpeza analise] snapshots-lixo removidos:', r.rowCount);
       }
     } catch (e) { console.error('limpeza analise:', e.message); }
@@ -657,14 +388,14 @@ async function start() {
     try {
       await pool.query(`
         UPDATE corporations SET slug = 'policia-civil-vazia', is_active = false, updated_at = NOW()
-         WHERE cidade_id = 1 AND slug = 'policia-civil'
-           AND EXISTS (SELECT 1 FROM corporations c2 WHERE c2.cidade_id = 1 AND c2.slug = 'policia-federal')
+         WHERE slug = 'policia-civil'
+           AND EXISTS (SELECT 1 FROM corporations c2 WHERE c2.slug = 'policia-federal')
            AND NOT EXISTS (SELECT 1 FROM members m WHERE m.corporation_id = corporations.id);
         UPDATE corporations SET slug = 'policia-civil',
                name = CASE WHEN name ILIKE '%federal%' THEN 'Polícia Civil' ELSE name END,
                updated_at = NOW()
-         WHERE cidade_id = 1 AND slug = 'policia-federal'
-           AND NOT EXISTS (SELECT 1 FROM corporations c2 WHERE c2.cidade_id = 1 AND c2.slug = 'policia-civil');
+         WHERE slug = 'policia-federal'
+           AND NOT EXISTS (SELECT 1 FROM corporations c2 WHERE c2.slug = 'policia-civil');
       `);
     } catch (e) { console.error('migração PF->PC:', e.message); }
     // Cargos da PC (13/09/2026, pedido do Julio): a corp herdou os cargos da antiga PF (Diretor Geral...).
@@ -698,17 +429,9 @@ async function start() {
           ];
           i INTEGER; n INTEGER; velho_id INTEGER; novo_id INTEGER;
         BEGIN
-          SELECT id INTO cid FROM corporations WHERE cidade_id = 1 AND slug = 'policia-civil' AND is_active = true;
+          SELECT id INTO cid FROM corporations WHERE slug = 'policia-civil' AND is_active = true;
           IF cid IS NULL THEN RETURN; END IF;
           IF EXISTS (SELECT 1 FROM ranks WHERE corporation_id = cid AND name = '[DLG-G] Delegado Geral') THEN RETURN; END IF;
-          -- [10/10] BUG DO RESET: esta migracao e a da CARREIRA (abaixo) se desfaziam uma
-          -- a outra a CADA BOOT. A carreira apaga '[DLG-G] Delegado Geral' -> no boot seguinte
-          -- esta aqui achava que nunca tinha rodado, mandava TODO MUNDO pra 'Aluno' e apagava
-          -- os cargos; ai a carreira via '[DG]' sumido, recriava tudo e mandava 'Aluno' pra
-          -- '[ESPC] Instruendo'. Resultado: cada deploy/restart do Railway = PC inteira
-          -- Instruendo e cargo criado no painel apagado. Agora tem trava em game_config.
-          IF EXISTS (SELECT 1 FROM game_config WHERE key = 'pc_cargos_feito') THEN RETURN; END IF;
-          IF EXISTS (SELECT 1 FROM ranks WHERE corporation_id = cid AND name = '[DG] Delegado-Geral') THEN RETURN; END IF;
           n := array_length(novos, 1);
           -- 1) cria os cargos novos em níveis temporários (100+) pra não colidir com os da PF
           FOR i IN 1..n LOOP
@@ -744,7 +467,7 @@ async function start() {
           cid INTEGER;
         BEGIN
           -- 1) garante a corp (só cria se não existir; nunca mexe numa que já existe)
-          SELECT id INTO cid FROM corporations WHERE cidade_id = 1 AND slug = 'jornal';
+          SELECT id INTO cid FROM corporations WHERE slug = 'jornal';
           IF cid IS NULL THEN
             INSERT INTO corporations (name, slug, description, color, max_members, is_active)
             VALUES ('Jornal Nacional', 'jornal', 'Jornal Nacional. Cobertura jornalística e reportagens da cidade.', '#F59E0B', 100, true)
@@ -777,8 +500,53 @@ async function start() {
       `);
     } catch (e) { console.error('migração coluna tipo:', e.message); }
 
-    // [24/10] a Pavuna saiu: ver o bloco 'PAVUNA SAIU' logo depois do faccoes-org.garantir
-
+    // Pavuna — a facção inicial. O jogo já a conhece pelo slug 'pavuna'
+    // (CorpService traduz o grupo 35175874 pra esse slug) e paga pelo nome do cargo,
+    // então os 14 cargos abaixo são IGUAIS à tabela SalariosPavuna do RemotesHandler.
+    // Mexer num dos dois lados sem o outro faz o salário sair nil no jogo.
+    // Ícone: textura da MascaraCaveira do vestuário da Pavuna, tirada do próprio jogo.
+    try {
+      await pool.query(`
+        DO $$
+        DECLARE
+          cid INTEGER;
+          cargos TEXT[][] := ARRAY[
+            ['Dono do Morro','21000'], ['Frente','18000'], ['Gerente Geral','15000'],
+            ['Gerente de Boca','12000'], ['Contenção','9500'], ['Fiel','8000'],
+            ['Soldado','6000'], ['Endolador','4500'], ['Vapor','3500'],
+            ['Avião','2500'], ['Olheiro','2000'], ['Fogueteiro','1600'],
+            ['Radinho','1200'], ['Novato','1200']
+          ];
+          i INTEGER; n INTEGER;
+        BEGIN
+          SELECT id INTO cid FROM corporations WHERE slug = 'pavuna';
+          IF cid IS NULL THEN
+            INSERT INTO corporations (name, slug, description, color, max_members, is_active, tipo, icon_url)
+            VALUES ('Pavuna', 'pavuna',
+                    'Facção da Pavuna. Domínio do morro, boca de venda e o que vier junto.',
+                    '#8B1A1A', 100, true, 'faccao',
+                    'https://www.roblox.com/asset-thumbnail/image?assetId=12867403810&width=420&height=420&format=png')
+            RETURNING id INTO cid;
+          END IF;
+          UPDATE corporations SET tipo = 'faccao', is_active = true, updated_at = NOW()
+           WHERE id = cid AND (tipo <> 'faccao' OR is_active = false);
+          -- ícone só se ainda não tiver nenhum (não sobrescreve upload do Julio)
+          UPDATE corporations
+             SET icon_url = 'https://www.roblox.com/asset-thumbnail/image?assetId=12867403810&width=420&height=420&format=png',
+                 updated_at = NOW()
+           WHERE id = cid AND icon_url IS NULL AND icon_data IS NULL;
+          -- cargos: só semeia se a facção não tem nenhum
+          IF NOT EXISTS (SELECT 1 FROM ranks WHERE corporation_id = cid) THEN
+            n := array_length(cargos, 1);
+            FOR i IN 1..n LOOP
+              INSERT INTO ranks (corporation_id, name, level, salary)
+              VALUES (cid, cargos[i][1], n - i + 1, cargos[i][2]::INTEGER)
+              ON CONFLICT (corporation_id, name) DO NOTHING;
+            END LOOP;
+          END IF;
+        END $$;
+      `);
+    } catch (e) { console.error('migração facção Pavuna:', e.message); }
 
     // Ícone do Jornal: o ícone do Microfone da imprensa, tirado do próprio jogo
     // (ServerStorage.Tools.Microfone). Só entra se o Jornal ainda não tem imagem.
@@ -787,7 +555,7 @@ async function start() {
         UPDATE corporations
            SET icon_url = 'https://www.roblox.com/asset-thumbnail/image?assetId=7560648021&width=420&height=420&format=png',
                updated_at = NOW()
-         WHERE cidade_id = 1 AND slug = 'jornal' AND icon_url IS NULL AND icon_data IS NULL;
+         WHERE slug = 'jornal' AND icon_url IS NULL AND icon_data IS NULL;
       `);
     } catch (e) { console.error('migração ícone Jornal:', e.message); }
 
@@ -848,16 +616,9 @@ async function start() {
           ];
           i INTEGER; n INTEGER; velho_id INTEGER; novo_id INTEGER;
         BEGIN
-          SELECT id INTO cid FROM corporations WHERE cidade_id = 1 AND slug = 'policia-civil' AND is_active = true;
+          SELECT id INTO cid FROM corporations WHERE slug = 'policia-civil' AND is_active = true;
           IF cid IS NULL THEN RETURN; END IF;
-          -- [10/10] trava definitiva: rodou uma vez (ou a carreira ja existe) -> nunca mais.
-          -- Renomear/apagar '[DG] Delegado-Geral' no painel NAO dispara reset de ninguem.
-          IF EXISTS (SELECT 1 FROM game_config WHERE key = 'pc_cargos_feito') THEN RETURN; END IF;
-          IF EXISTS (SELECT 1 FROM ranks WHERE corporation_id = cid AND name = '[DG] Delegado-Geral') THEN
-            INSERT INTO game_config (key, value) VALUES ('pc_cargos_feito', '{"em":"carreira ja existia"}')
-            ON CONFLICT DO NOTHING;
-            RETURN;
-          END IF;
+          IF EXISTS (SELECT 1 FROM ranks WHERE corporation_id = cid AND name = '[DG] Delegado-Geral') THEN RETURN; END IF;
           n := array_length(novos, 1);
           -- 1) cria os novos em níveis temporários (100+) pra não colidir com os antigos
           FOR i IN 1..n LOOP
@@ -881,251 +642,9 @@ async function start() {
           -- 4) apaga os antigos e renumera os novos de 21 (topo) até 1
           DELETE FROM ranks WHERE corporation_id = cid AND level < 100;
           UPDATE ranks SET level = level - 100 WHERE corporation_id = cid AND level >= 100;
-          INSERT INTO game_config (key, value) VALUES ('pc_cargos_feito', '{"em":"carreira aplicada"}')
-          ON CONFLICT DO NOTHING;
         END $$;
       `);
     } catch (e) { console.error('migração carreira PC:', e.message); }
-    // ===== [10/10] CARREIRAS (Policia Civil) =====
-    // [stated Julio] "a pc e por Carreiras, ent pode ter 2 com lv 14 mais carreira
-    // diferente, delegado / agente". O nivel deixa de ser unico na corp inteira e passa
-    // a ser unico DENTRO da carreira. Corp sem carreira (todas as outras) segue igual:
-    // carreira = '' pra todo mundo, entao o unico (corp, '', nivel) e o mesmo de antes.
-    // Nivel continua sendo o GRAU (quem pode promover quem compara nivel), so que agora
-    // um Investigador 1a e um Perito 1a estao no MESMO grau.
-    try {
-      await pool.query(`
-        ALTER TABLE ranks ADD COLUMN IF NOT EXISTS carreira VARCHAR(48) NOT NULL DEFAULT '';
-        ALTER TABLE ranks DROP CONSTRAINT IF EXISTS ranks_corporation_id_level_key;
-        -- garante: se o UNIQUE(corp, level) tiver outro nome em producao, cai tambem
-        DO $$
-        DECLARE c RECORD;
-        BEGIN
-          FOR c IN
-            SELECT con.conname FROM pg_constraint con
-             WHERE con.conrelid = 'ranks'::regclass AND con.contype = 'u'
-               AND (SELECT array_agg(a.attname::text ORDER BY a.attname) FROM pg_attribute a
-                     WHERE a.attrelid = con.conrelid AND a.attnum = ANY (con.conkey))
-                   = ARRAY['corporation_id','level']
-          LOOP
-            EXECUTE 'ALTER TABLE ranks DROP CONSTRAINT ' || quote_ident(c.conname);
-          END LOOP;
-        END $$;
-        CREATE UNIQUE INDEX IF NOT EXISTS uq_ranks_corp_carreira_level ON ranks(corporation_id, carreira, level);
-        DO $$
-        DECLARE
-          cid INTEGER;
-          plano TEXT[][] := ARRAY[
-            ['[DG] Delegado-Geral','Direção','12'],
-            ['[DGA] Delegado-Geral Adjunto','Direção','11'],
-            ['[DD] Diretor de Departamento','Direção','10'],
-            ['[CG] Corregedor-Geral','Corregedoria','10'],
-            ['[DP-1] Delegado de Polícia 1ª Classe','Delegados','9'],
-            ['[DP-2] Delegado de Polícia 2ª Classe','Delegados','8'],
-            ['[DP-3] Delegado de Polícia 3ª Classe','Delegados','7'],
-            ['[DINV] Diretor de Investigação','Investigação','7'],
-            ['[INV-1] Investigador 1ª Classe','Investigação','6'],
-            ['[INV-2] Investigador 2ª Classe','Investigação','5'],
-            ['[INV-3] Investigador 3ª Classe','Investigação','4'],
-            ['[AUX] Auxiliar de Investigação','Investigação','3'],
-            ['[PER-1] Perito Criminal 1ª Classe','Perícia','6'],
-            ['[PER-2] Perito Criminal 2ª Classe','Perícia','5'],
-            ['[PER-3] Perito Criminal 3ª Classe','Perícia','4'],
-            ['[PAP] Papiloscopista Policial','Papiloscopia','5'],
-            ['[APJ-1] Agente de Polícia Judiciária 1ª Classe','Agentes','5'],
-            ['[APJ-2] Agente de Polícia Judiciária 2ª Classe','Agentes','4'],
-            ['[APJ-3] Agente de Polícia Judiciária 3ª Classe','Agentes','3'],
-            ['[ESPC] Instruendo','Escola','2'],
-            ['Holder','Escola','1']
-          ];
-          i INTEGER;
-        BEGIN
-          IF EXISTS (SELECT 1 FROM game_config WHERE key = 'pc_carreiras_v1') THEN RETURN; END IF;
-          SELECT id INTO cid FROM corporations WHERE cidade_id = 1 AND slug = 'policia-civil' AND is_active = true;
-          IF cid IS NULL THEN RETURN; END IF;
-          -- tira todo mundo do caminho (nivel +500) pra nao colidir no meio da troca
-          UPDATE ranks SET level = level + 500 WHERE corporation_id = cid;
-          FOR i IN 1..array_length(plano, 1) LOOP
-            UPDATE ranks SET carreira = plano[i][2], level = plano[i][3]::INTEGER
-             WHERE corporation_id = cid AND name = plano[i][1];
-          END LOOP;
-          -- cargo criado no painel que nao esta no plano: volta pro nivel que tinha, carreira 'Outros'
-          UPDATE ranks SET level = level - 500, carreira = 'Outros'
-           WHERE corporation_id = cid AND level >= 500;
-          INSERT INTO game_config (key, value) VALUES ('pc_carreiras_v1', '{"em":"aplicado"}')
-          ON CONFLICT DO NOTHING;
-        END $$;
-      `);
-    } catch (e) { console.error('migração carreiras PC:', e.message); }
-    // ===== [11/10] CARREIRAS v2 (Policia Civil) — modelo do Arthur =====
-    // [stated] "tem de ter 15 cargos / Do nivel I ao nivel XI / e dps tem o Diretor de
-    // Departamento, Corregedor-Geral, Delegado Geral adjunto / E delegado geral".
-    // Carreiras: Delegado, Perito, Investigador, Papiloscopista, Agente -- cada uma do
-    // Nivel I ao XI, e Nivel N vale o MESMO grau em todas (level = N). Nenhuma carreira
-    // e superior a outra. Em cima: DD 12, CG 13, DGA 14, DG 15 (carreira Direcao).
-    // Escola: Instruendo 1 (mesmo grau do Nivel I), Holder 0.
-    // Nome: "[DP-IX] Delegado de Polícia Nível IX". Roda UMA vez (flag pc_carreiras_v2).
-    // Membros dos cargos de classe (v1) vao pro equivalente: 3a -> I, 2a -> II, 1a -> III.
-    try {
-      await pool.query(`
-        DO $$
-        DECLARE
-          cid INTEGER;
-          rom TEXT[] := ARRAY['I','II','III','IV','V','VI','VII','VIII','IX','X','XI'];
-          -- sigla, nome do cargo, carreira, salario do Nivel I, passo por nivel
-          carr TEXT[][] := ARRAY[
-            ['DP','Delegado de Polícia','Delegado','11000','400'],
-            ['PER','Perito Criminal','Perito','7500','450'],
-            ['INV','Investigador de Polícia','Investigador','7500','450'],
-            ['PAP','Papiloscopista Policial','Papiloscopista','7000','400'],
-            ['APJ','Agente de Polícia Judiciária','Agente','4000','400']
-          ];
-          topo TEXT[][] := ARRAY[
-            ['[DG] Delegado-Geral','Direção','15','19000'],
-            ['[DGA] Delegado-Geral Adjunto','Direção','14','17500'],
-            ['[CG] Corregedor-Geral','Direção','13','16500'],
-            ['[DD] Diretor de Departamento','Direção','12','15500'],
-            ['[ESPC] Instruendo','Escola','1','2210'],
-            ['Holder','Escola','0','2125']
-          ];
-          mapa TEXT[][] := ARRAY[
-            ['[DP-1] Delegado de Polícia 1ª Classe','[DP-III] Delegado de Polícia Nível III'],
-            ['[DP-2] Delegado de Polícia 2ª Classe','[DP-II] Delegado de Polícia Nível II'],
-            ['[DP-3] Delegado de Polícia 3ª Classe','[DP-I] Delegado de Polícia Nível I'],
-            ['[DINV] Diretor de Investigação','[INV-XI] Investigador de Polícia Nível XI'],
-            ['[INV-1] Investigador 1ª Classe','[INV-III] Investigador de Polícia Nível III'],
-            ['[INV-2] Investigador 2ª Classe','[INV-II] Investigador de Polícia Nível II'],
-            ['[INV-3] Investigador 3ª Classe','[INV-I] Investigador de Polícia Nível I'],
-            ['[AUX] Auxiliar de Investigação','[INV-I] Investigador de Polícia Nível I'],
-            ['[PER-1] Perito Criminal 1ª Classe','[PER-III] Perito Criminal Nível III'],
-            ['[PER-2] Perito Criminal 2ª Classe','[PER-II] Perito Criminal Nível II'],
-            ['[PER-3] Perito Criminal 3ª Classe','[PER-I] Perito Criminal Nível I'],
-            ['[PAP] Papiloscopista Policial','[PAP-I] Papiloscopista Policial Nível I'],
-            ['[APJ-1] Agente de Polícia Judiciária 1ª Classe','[APJ-III] Agente de Polícia Judiciária Nível III'],
-            ['[APJ-2] Agente de Polícia Judiciária 2ª Classe','[APJ-II] Agente de Polícia Judiciária Nível II'],
-            ['[APJ-3] Agente de Polícia Judiciária 3ª Classe','[APJ-I] Agente de Polícia Judiciária Nível I']
-          ];
-          i INTEGER; n INTEGER; velho_id INTEGER; novo_id INTEGER; r RECORD; lv INTEGER;
-          nomes TEXT[] := ARRAY[]::TEXT[];
-        BEGIN
-          IF EXISTS (SELECT 1 FROM game_config WHERE key = 'pc_carreiras_v2') THEN RETURN; END IF;
-          SELECT id INTO cid FROM corporations WHERE cidade_id = 1 AND slug = 'policia-civil' AND is_active = true;
-          IF cid IS NULL THEN RETURN; END IF;
-          -- tudo pra fora do caminho (nivel +500) pra nao colidir no meio da troca
-          UPDATE ranks SET level = level + 500 WHERE corporation_id = cid AND level < 500;
-          -- 1) cria/ajusta os 55 cargos de carreira + direcao + escola
-          FOR i IN 1..array_length(carr, 1) LOOP
-            FOR n IN 1..11 LOOP
-              nomes := nomes || ('[' || carr[i][1] || '-' || rom[n] || '] ' || carr[i][2] || ' Nível ' || rom[n]);
-              INSERT INTO ranks (corporation_id, name, level, salary, carreira)
-              VALUES (cid, '[' || carr[i][1] || '-' || rom[n] || '] ' || carr[i][2] || ' Nível ' || rom[n],
-                      n, carr[i][4]::INTEGER + (n - 1) * carr[i][5]::INTEGER, carr[i][3])
-              ON CONFLICT (corporation_id, name) DO UPDATE
-                SET level = EXCLUDED.level, salary = EXCLUDED.salary, carreira = EXCLUDED.carreira;
-            END LOOP;
-          END LOOP;
-          FOR i IN 1..array_length(topo, 1) LOOP
-            nomes := nomes || topo[i][1];
-            INSERT INTO ranks (corporation_id, name, level, salary, carreira)
-            VALUES (cid, topo[i][1], topo[i][3]::INTEGER, topo[i][4]::INTEGER, topo[i][2])
-            ON CONFLICT (corporation_id, name) DO UPDATE
-              SET level = EXCLUDED.level, salary = EXCLUDED.salary, carreira = EXCLUDED.carreira;
-          END LOOP;
-          -- 2) quem estava num cargo de classe vai pro equivalente; o cargo velho some
-          FOR i IN 1..array_length(mapa, 1) LOOP
-            SELECT id INTO velho_id FROM ranks WHERE corporation_id = cid AND name = mapa[i][1];
-            SELECT id INTO novo_id  FROM ranks WHERE corporation_id = cid AND name = mapa[i][2];
-            IF velho_id IS NOT NULL AND novo_id IS NOT NULL THEN
-              UPDATE members SET rank_id = novo_id WHERE corporation_id = cid AND rank_id = velho_id;
-              DELETE FROM ranks WHERE id = velho_id;
-            END IF;
-          END LOOP;
-          -- 3) cargo que nao esta no plano (criado no painel): fica, na carreira 'Outros',
-          --    no nivel que tinha (ou o mais proximo livre) -- ninguem perde cargo
-          FOR r IN SELECT id, level FROM ranks
-                    WHERE corporation_id = cid AND level >= 500 AND NOT (name = ANY (nomes))
-                    ORDER BY level DESC LOOP
-            -- teto 11: cargo solto nunca fica acima da Direcao (o topo do nivel e quem e chefe)
-            lv := LEAST(GREATEST(r.level - 500, 1), 11);
-            WHILE EXISTS (SELECT 1 FROM ranks WHERE corporation_id = cid AND carreira = 'Outros' AND level = lv) LOOP
-              lv := lv - 1;
-              IF lv < 1 THEN lv := 600; END IF;
-            END LOOP;
-            UPDATE ranks SET level = lv, carreira = 'Outros' WHERE id = r.id;
-          END LOOP;
-          INSERT INTO game_config (key, value) VALUES ('pc_carreiras_v2', '{"em":"aplicado"}')
-          ON CONFLICT DO NOTHING;
-        END $$;
-      `);
-    } catch (e) { console.error('migração carreiras PC v2:', e.message); }
-    // ===== [10/10] PC DA POLICIA CIVIL — ficha identica online/offline =====
-    // (1) As colunas da FICHA no espelho so existiam no migrate.js -- que nao roda no
-    //     Railway (o Procfile e `node src/index.js`). Sem elas o POST /patrimonio
-    //     falhava em producao e o PC so via quem estava no servidor.
-    // (2) financiamentos + versao: a ficha detalha "Devendo" (cada parcela).
-    //     versao < 2 faz o backfill do jogo reenviar a foto desses perfis.
-    // (3) corp_vinculos_hist: TODA saida de corp vira linha aqui por TRIGGER no
-    //     DELETE de members -- pega qualquer rota que tire alguem, sem caçar uma por uma.
-    //     A PC ve "entrou em X, saiu em Y".
-    try {
-      await pool.query(`
-        -- [11/10 PD] a ficha encerrada do PD morava SO no migrate.js (que o Railway nao roda):
-        -- sem ela o POST /player/:id/encerrar-personagem falha e o wipe sai sem registro.
-        CREATE TABLE IF NOT EXISTS fichas_encerradas (
-          id SERIAL PRIMARY KEY,
-          chave VARCHAR(80) UNIQUE,
-          roblox_id BIGINT NOT NULL,
-          nome VARCHAR(64),
-          estado VARCHAR(32) NOT NULL DEFAULT 'preso_permanente',
-          motivo VARCHAR(300),
-          por_nome VARCHAR(64),
-          corp VARCHAR(64),
-          prisoes JSONB NOT NULL DEFAULT '[]'::jsonb,
-          dividas JSONB NOT NULL DEFAULT '[]'::jsonb,
-          resumo JSONB,
-          encerrado_em TIMESTAMP DEFAULT NOW()
-        );
-        CREATE INDEX IF NOT EXISTS idx_fichas_enc ON fichas_encerradas(roblox_id, id DESC);
-        ALTER TABLE game_patrimonio ADD COLUMN IF NOT EXISTS prisoes JSONB NOT NULL DEFAULT '[]'::jsonb;
-        ALTER TABLE game_patrimonio ADD COLUMN IF NOT EXISTS dividas JSONB NOT NULL DEFAULT '[]'::jsonb;
-        ALTER TABLE game_patrimonio ADD COLUMN IF NOT EXISTS divida_estado VARCHAR(16) DEFAULT 'Pagando';
-        ALTER TABLE game_patrimonio ADD COLUMN IF NOT EXISTS divida_recusas INTEGER NOT NULL DEFAULT 0;
-        ALTER TABLE game_patrimonio ADD COLUMN IF NOT EXISTS preso INTEGER NOT NULL DEFAULT 0;
-        ALTER TABLE game_patrimonio ADD COLUMN IF NOT EXISTS financiamentos JSONB NOT NULL DEFAULT '[]'::jsonb;
-        ALTER TABLE game_patrimonio ADD COLUMN IF NOT EXISTS versao INTEGER NOT NULL DEFAULT 1;
-        -- [16/10] RG (Carteira de Identidade) no espelho: o PC da PC mostra quem esta fora da cidade
-        ALTER TABLE game_patrimonio ADD COLUMN IF NOT EXISTS rg JSONB;
-        CREATE INDEX IF NOT EXISTS idx_game_patrimonio_nome ON game_patrimonio(LOWER(nome));
-        CREATE TABLE IF NOT EXISTS corp_vinculos_hist (
-          id SERIAL PRIMARY KEY,
-          user_id INTEGER,
-          corporation_id INTEGER,
-          cargo VARCHAR(64),
-          entrou_em TIMESTAMP,
-          saiu_em TIMESTAMP DEFAULT NOW()
-        );
-        CREATE INDEX IF NOT EXISTS idx_corp_vinc_hist_user ON corp_vinculos_hist(user_id, saiu_em DESC);
-        CREATE OR REPLACE FUNCTION fn_members_saida() RETURNS trigger AS $$
-        BEGIN
-          INSERT INTO corp_vinculos_hist (user_id, corporation_id, cargo, entrou_em)
-          VALUES (OLD.user_id, OLD.corporation_id,
-                  (SELECT name FROM ranks WHERE id = OLD.rank_id), OLD.joined_at);
-          RETURN OLD;
-        END $$ LANGUAGE plpgsql;
-        DROP TRIGGER IF EXISTS trg_members_saida ON members;
-        CREATE TRIGGER trg_members_saida AFTER DELETE ON members
-          FOR EACH ROW EXECUTE FUNCTION fn_members_saida();
-      `);
-    } catch (e) { console.error('migração ficha PC:', e.message); }
-    // [14/10 SEGURANCA] hash de IP por conta (anti-alt), vinculo Roblox verificado, config
-    try { await require('./seguranca').migrar(pool); }
-    catch (e) { console.error('migração segurança:', e.message); }
-    // [14/10 ELEICAO] votantes e votos em tabelas separadas (voto secreto), estado do turno
-    try { await require('./eleicao').migrar(pool); }
-    catch (e) { console.error('migração eleição:', e.message); }
-    // [16/10] aba PDs + reverter: colunas novas em fichas_encerradas
-    try { await require('./pd').migrar(pool); }
-    catch (e) { console.error('migração PDs:', e.message); }
     console.log('✅ Banco migrado');
   } catch (err) {
     console.error('❌ Migração falhou:', err.message);
@@ -1184,82 +703,6 @@ async function start() {
   app.locals.limitar = limitar;
   app.use(express.static(path.join(__dirname, 'public')));
 
-  // [14/10] FOTO DA ORGANIZACAO VINDA DO ROBLOX. O link antigo
-  // www.roblox.com/asset-thumbnail/image?assetId=N foi DESLIGADO pela Roblox e
-  // agora volta sem imagem (o Jornal Nacional ficou com a foto quebrada).
-  // O jeito atual e perguntar ao thumbnails.roblox.com qual a URL da imagem.
-  // Aqui o site faz isso e redireciona; guarda a resposta 6 h pra nao bater
-  // na Roblox a cada pagina. As views chamam fotoUrl(icon_url).
-  const cacheThumb = new Map();
-  app.get('/roblox-thumb/:assetId', limitar('thumb', 120, 60), async (req, res) => {
-    const id = String(req.params.assetId || '').replace(/\D/g, '');
-    if (!id || id.length > 20) return res.status(400).end();
-    const c = cacheThumb.get(id);
-    if (c && c.ate > Date.now()) return c.url ? res.redirect(302, c.url) : res.status(404).end();
-    let url = null;
-    try {
-      const r = await fetch('https://thumbnails.roblox.com/v1/assets?assetIds=' + id + '&size=420x420&format=Png&isCircular=false');
-      const j = r.ok ? await r.json() : null;
-      const d = j && j.data && j.data[0];
-      if (d && d.state === 'Completed' && /^https:\/\/[a-z0-9.-]+\.rbxcdn\.com\//.test(d.imageUrl || '')) url = d.imageUrl;
-    } catch (e) { /* sem rede: cai no 404 e a pagina mostra as iniciais */ }
-    cacheThumb.set(id, { url, ate: Date.now() + (url ? 6 : 0.25) * 3600 * 1000 });
-    if (cacheThumb.size > 500) cacheThumb.delete(cacheThumb.keys().next().value);
-    res.set('Cache-Control', 'public, max-age=3600');
-    return url ? res.redirect(302, url) : res.status(404).end();
-  });
-  app.locals.fotoUrl = function (u) {
-    const s = String(u || '');
-    const m = s.match(/^https?:\/\/(?:www\.)?roblox\.com\/asset-thumbnail\/image\?(?:.*&)?assetId=(\d+)/i);
-    return m ? '/roblox-thumb/' + m[1] : s;
-  };
-
-  // [21/10] CIDADES: tabela das cidades, staff por cidade e cidade_id em toda
-  // tabela da cidade. Vem DEPOIS de todos os CREATE TABLE do boot (ver src/cidades.js).
-  const CID = require('./cidades');
-  try { await CID.garantir(pool); }
-  catch (e) { console.error('[cidades] garantir:', e.message); throw e; }
-  // [22/10] boost automático do Discord (src/booster.js)
-  try { await require('./booster').garantir(pool); }
-  catch (e) { console.error('[booster] garantir:', e.message); }
-  // [22/10] regulamentos de cada cidade, nativos no site (semente: os do Santa Fé Oficial)
-  try { await require('./regulamentos').garantir(pool); }
-  catch (e) { console.error('[regras] garantir:', e.message); }
-  // [23/10] Loja de Royalties (tabelas + semente do catálogo e dos motivos do Santa Fé)
-  try { await require('./royalties').garantir(pool); }
-  catch (e) { console.error('[royalties] garantir:', e.message); }
-  // [23/10] Governo: corporação tipo 'governo', tesouro inflado, obras e salário a cada 3 dias
-  try { await require('./governo').garantir(pool); require('./governo').iniciar(pool); }
-  catch (e) { console.error('[governo] garantir:', e.message); }
-  // [24/10] Facções Vivas: nível, ações, advertências e a organização das facções
-  try { await require('./faccoes-org').garantir(pool); }
-  catch (e) { console.error('[faccoes-org] garantir:', e.message); }
-  // [24/10] PAVUNA SAIU. [stated] Julio: "remove ja, vou adicionar as facs com o botao da staff".
-  // A facção Pavuna não existe mais (a boca é de quem chegar). Antes, este bloco CRIAVA a Pavuna
-  // e a REATIVAVA a cada boot (is_active = true), então desativar pelo painel não durava.
-  // Agora ele faz o contrário: desativa a Pavuna (nada é apagado: cargos, membros e histórico
-  // ficam no banco) e registra no log das facções. As facções novas entram pelo botão da staff.
-  try {
-    const pv = await pool.query(
-      `UPDATE corporations SET is_active = false, updated_at = NOW()
-        WHERE slug = 'pavuna' AND tipo = 'faccao' AND is_active = true AND cidade_id = 1 RETURNING id, cidade_id`);
-    for (const r of pv.rows) {
-      await pool.query(`INSERT INTO faccao_log (cidade_id, corporation_id, acao, detalhe, por) VALUES ($1,$2,'desoficializada',$3,'sistema')`,
-        [r.cidade_id, r.id, JSON.stringify({ motivo: 'A Pavuna não existe mais (decisão do Julio, 23-24/10): a boca é de quem chegar' })]).catch(() => {});
-      console.log('[faccoes] Pavuna desativada (corp ' + r.id + ')');
-    }
-  } catch (e) { console.error('desativar Pavuna:', e.message); }
-  // [23/10] Câmara: propostas de salário/obra votadas pelo Parlamento (Regulamento Cap. 10)
-  try { const CAM = require('./governo-camara'); await CAM.garantir(pool); CAM.iniciar(pool); }
-  catch (e) { console.error('[camara] garantir:', e.message); }
-  // [24/10] ISOLAMENTO TOTAL POR CIDADE (src/isolamento.js): papel sf_app, chaves por cidade e
-  // Row-Level Security em toda tabela de cidade. Depois de TODAS as tabelas existirem.
-  try { await require('./isolamento').garantir(pool); }
-  catch (e) { console.error('[isolamento] garantir:', e.message); throw e; }
-  // [24/10] pré-modelo: toda cidade ativa tem as corporações, cargos, Governo e regulamentos
-  try { await CID.montarTodas(pool); }
-  catch (e) { console.error('[cidades] pré-modelo:', e.message); }
-
   // Sessão com PostgreSQL
   app.use(session({
     store: new PgSession({ pool, tableName: 'session' }),
@@ -1296,14 +739,6 @@ async function start() {
     next();
   });
 
-  // [21/10] Cidade do pedido (sessão) + cargo de staff DESTA cidade no req.user
-  // + trava de aba trocada. Tem que vir logo depois de carregar o usuário.
-  app.use(CID.contexto(pool));
-
-  // [14/10 SEGURANCA] grava o HASH do IP de quem esta logado (1x por sessao/IP) pro
-  // anti-alt. O jogo nao ve IP; o site ve. IP cru nunca vai pro banco.
-  app.use(require('./seguranca').middlewareIp(pool));
-
   // View engine
   app.set('view engine', 'ejs');
   app.set('views', path.join(__dirname, 'views'));
@@ -1317,93 +752,16 @@ async function start() {
   app.use('/api/game/net', limitar('game', 300, 60), require('./routes/net-api'));
   // vincular Roblox e a rota de tomada de conta: aperta de verdade.
   app.use('/dashboard/link-roblox', limitar('link', 10, 300));
-  // [21/10 Cidades] tudo daqui pra baixo pertence a UMA cidade. Sem cidade
-  // escolhida: página volta pra tela Cidades, API toma 409. Exceções: vincular
-  // Roblox (é da conta, vale pra todas), o logo público das corps e a
-  // transmissão da apuração (aberta no OBS, sem login).
-  const exige = CID.exigeCidade;
-  app.use('/dashboard', exige({ livres: ['/link-roblox'] }), require('./routes/dashboard'));
-  app.use('/net', exige(), require('./routes/net'));
-  app.use('/api/corps', exige({ livres: [/^\/\d+\/icon$/] }), require('./routes/corps-api'));
-  app.use('/api/admin', exige(), require('./routes/admin-api'));
-  app.use('/admin', exige(), require('./routes/admin'));
-  app.use('/apuracao', exige({ livres: ['/transmissao', '/dados'] }), require('./routes/apuracao'));   // [14/10] eleição
-  app.use('/empresas', exige(), require('./routes/empresas'));   // [30/09] Empresas Oficiais
-  app.use('/organizacoes', exige(), require('./routes/organizacoes'));  // [30/09] vista de staff: corp + faccao + empresa
-  app.use('/faccoes', exige(), require('./routes/faccoes'));
-  // [22/10] regulamentos por cidade: /cidade/:slug/regras (público) + /painel/regras (Dono)
-  app.use(require('./routes/regras'));
-  // [23/10] Loja de Royalties: /royalties + /api/royalties (jogador)
-  app.use(require('./routes/royalties').publico);
-  // [23/10] Governo: /governo + /api/governo
-  app.use(require('./routes/governo'));
-  // [24/10] Facções Vivas: /api/faccao/* (o painel da facção)
-  app.use(require('./routes/faccoes-org').faccao);
-  // [24/10] Rede: /rede + /api/rede (só a conta da plataforma troca o Dono de cada cidade)
-  app.use(require('./routes/rede'));
+  app.use('/dashboard', require('./routes/dashboard'));
+  app.use('/net', require('./routes/net'));
+  app.use('/api/corps', require('./routes/corps-api'));
+  app.use('/api/admin', require('./routes/admin-api'));
+  app.use('/admin', require('./routes/admin'));
+  app.use('/faccoes', require('./routes/faccoes'));
 
-  // [21/10] ENTRADA = tela CIDADES. Mostra as cidades da rede (hoje só o Santa
-  // Fé Oficial), quantos estão jogando em cada uma e o cargo de staff que a
-  // pessoa tem em cada uma.
-  app.get('/', async (req, res) => {
-    try {
-      const [lista, mov, cargos, regras] = await Promise.all([
-        CID.todas(pool), CID.movimento(pool),
-        CID.meusCargos(pool, req.usuarioPlataforma && req.usuarioPlataforma.id),
-        require('./regulamentos').contagem(pool),
-      ]);
-      const perm = require('./permissoes');
-      const plataforma = !!(req.usuarioPlataforma && perm.ehDono(req.usuarioPlataforma));
-      const cidadesVis = lista.filter(c => c.status !== 'fechada').map(c => {
-        let cargo = cargos[c.id] || null;
-        // a conta da plataforma é Dono só na oficial; nas outras, só o dono da cidade
-        if ((plataforma && c.tipo === 'oficial') || (req.usuarioPlataforma && c.dono_user_id === req.usuarioPlataforma.id)) cargo = 'dono';
-        return Object.assign({}, c, {
-          online: (mov[c.id] || {}).online || 0,
-          servidores: (mov[c.id] || {}).servidores || 0,
-          meu_cargo: cargo,
-          regras: regras[c.id] || 0,
-          meu_cargo_nome: cargo ? ((perm.CARGOS[cargo] || {}).nome || cargo) : null,
-        });
-      });
-      res.render('cidades', {
-        cidade: null,   // a placa do topo aqui é a da rede, não a da cidade da sessão
-        user: req.usuarioPlataforma || null,
-        cidades: cidadesVis,
-        atual: req.cidade ? req.cidade.id : null,
-        plataforma,   // [24/10] mostra o atalho "Rede" (tela de Donos) só pra conta da plataforma
-        voltar: CID.voltarSeguro(req.query.voltar) || '',
-      });
-    } catch (err) {
-      console.error('cidades:', err.message);
-      res.status(500).render('error', { message: 'Erro ao carregar as cidades', user: req.user || null });
-    }
-  });
-
-  // Entrar numa cidade: grava na sessão e segue pro painel dela (ou pra onde
-  // a pessoa queria ir). Sem login, vai pro Discord e volta pra cá depois.
-  app.get('/cidade/:slug', async (req, res) => {
-    const c = CID.slugValido(req.params.slug) ? await CID.porSlug(pool, req.params.slug) : null;
-    if (!c || c.status !== 'ativa') return res.redirect('/');
-    req.session.cidadeId = c.id;
-    const voltar = CID.voltarSeguro(req.query.voltar);
-    if (!req.session.userId) {
-      req.session.depoisDoLogin = voltar || '/painel';
-      return req.session.save(() => res.redirect('/auth/discord'));
-    }
-    req.session.save(() => res.redirect(voltar || '/painel'));
-  });
-
-  // O painel da cidade escolhida (a antiga home: corporações, empresas, facções...)
-  app.get('/painel', CID.exigeCidade(), (req, res) => {
-    if (!req.user) return res.redirect('/');
-    let ehDiretor = false;
-    try { ehDiretor = !!require('./permissoes').ehDiretorOuMais(req.user); } catch (_) {}
-    // [23/10] saldo de Royalties no item da home (null = sem vínculo verificado)
-    Promise.all([
-      require('./routes/royalties').saldoDaHome(req),
-      require('./routes/governo').podeVer(req).catch(() => false),   // [23/10] item Governo
-    ]).then(([roy, gov]) => res.render('home', { user: req.user, ehDiretor, royalties: roy, verGoverno: gov }));
+  // Home
+  app.get('/', (req, res) => {
+    res.render('home', { user: req.user || null });
   });
 
   // 404
