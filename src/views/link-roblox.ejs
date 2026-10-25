@@ -43,6 +43,7 @@
         <% if (error === 'sem_roblox_pra_verificar') { %>Primeiro escreva o seu nome de usuário do Roblox e clique em Vincular.<% } %>
         <% if (error === 'nome_nao_achado') { %>Não achei esse nome no Roblox. Confere a escrita (é o nome de usuário, não o apelido).<% } %>
         <% if (error === 'internal') { %>Deu erro aqui do nosso lado. Tenta de novo.<% } %>
+        <% if (error === 'devagar') { %>Muitas tentativas seguidas. Espere 1 minuto e tente de novo.<% } %>
         <% if (error === 'codigo_vencido') { %>Seu código venceu (vale 30 min). Gere outro.<% } %>
         <% if (error === 'bio_sem_codigo') { %>Não achei o código na bio do seu Roblox. Salva a bio e tenta de novo (pode levar 1 minuto pra atualizar).<% } %>
         <% if (error === 'roblox_fora') { %>O Roblox não respondeu agora. Tenta de novo daqui a pouco.<% } %>

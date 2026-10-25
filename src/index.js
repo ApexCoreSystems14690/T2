@@ -1159,10 +1159,11 @@ async function start() {
   // protegida por UMA chave, e dava pra tentar chave a vontade. Balde de fichas em
   // memoria, sem dependencia nova (mexer no package.json e arriscar o deploy).
   const baldes = new Map();
-  function limitar(nome, cap, janelaSeg) {
+  // [25/10] chaveDe (opcional): de quem e o balde (padrao = IP). aoEstourar (opcional): resposta propria.
+  function limitar(nome, cap, janelaSeg, chaveDe, aoEstourar) {
     return function (req, res, next) {
       const ip = req.ip || (req.connection && req.connection.remoteAddress) || '?';
-      const chave = nome + '|' + ip;
+      const chave = nome + '|' + ((chaveDe && chaveDe(req)) || ip);
       const agora = Date.now() / 1000;
       let b = baldes.get(chave);
       if (!b) { b = { fichas: cap, t: agora }; baldes.set(chave, b); }
@@ -1170,6 +1171,7 @@ async function start() {
       b.t = agora;
       if (b.fichas < 1) {
         res.set('Retry-After', String(Math.ceil(janelaSeg / cap)));
+        if (aoEstourar) return aoEstourar(req, res);
         return res.status(429).json({ error: 'Devagar.' });
       }
       b.fichas -= 1;
@@ -1316,7 +1318,15 @@ async function start() {
   app.use('/api/game', limitar('game', 300, 60), require('./routes/game-api'));
   app.use('/api/game/net', limitar('game', 300, 60), require('./routes/net-api'));
   // vincular Roblox e a rota de tomada de conta: aperta de verdade.
-  app.use('/dashboard/link-roblox', limitar('link', 10, 300));
+  // [25/10] Julio: "Quando tentam la gerar o codigo etc, continua assim" ({"error":"Devagar."}).
+  // O limite antigo era 10 pedidos / 5 min POR IP contando ate abrir a pagina: cada acao gasta 2-3
+  // (POST + recarregar), entao na 4a acao a tela virava esse JSON cru. E IP de celular e
+  // compartilhado (varios jogadores atras do mesmo IP da operadora). Agora: so os POSTs contam,
+  // POR CONTA (sessao; sem login cai no IP), 20 a cada 5 min, e
+  // quando estoura volta pra tela com aviso, nada de JSON.
+  const voltarDevagar = (req, res) => res.redirect('/dashboard/link-roblox?error=devagar');
+  const limLink = limitar('link', 20, 300, req => req.session && req.session.userId ? 'u' + req.session.userId : null, voltarDevagar);
+  app.use('/dashboard/link-roblox', (req, res, next) => req.method === 'POST' ? limLink(req, res, next) : next());
   // [21/10 Cidades] tudo daqui pra baixo pertence a UMA cidade. Sem cidade
   // escolhida: página volta pra tela Cidades, API toma 409. Exceções: vincular
   // Roblox (é da conta, vale pra todas), o logo público das corps e a
