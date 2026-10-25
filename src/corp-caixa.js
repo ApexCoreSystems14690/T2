@@ -56,6 +56,8 @@ const DINHEIRO = {
   salario:  { sinal: -1, rotulo: 'Salário pago' },
   // [23/10] emprego civil (gari, uber, pizzaiolo...) pago pelo tesouro do Governo
   salario_emprego: { sinal: -1, rotulo: 'Salário de emprego civil' },
+  // [25/10 Julio] salário de CORPORAÇÃO pública (PM, PC, SAMU...) sai do tesouro do Governo
+  salario_corp: { sinal: -1, rotulo: 'Salário de corporação' },
   // [21/10 Julio] "é possível o cara sacar dinheiro de contas de CNPJ, como do Mercado
   // Fechado". Saque pelo celular (app Banco > Empresa), quem tem o CNPJ saca pro bolso.
   saque:    { sinal: -1, rotulo: 'Saque pelo CNPJ (celular)' },

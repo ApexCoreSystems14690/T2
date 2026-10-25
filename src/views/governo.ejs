@@ -318,10 +318,10 @@
     }).join('') : '<tr><td colspan="5" class="expl">Nenhum pagamento ainda. O primeiro sai quando o primeiro período de 3 dias fechar.</td></tr>';
     if ($('link-cargos')) $('link-cargos').href = '/dashboard/corp/' + D.corporation_id;
 
-    var TIPO = { obra: 'Obra', salario: 'Salário', salario_emprego: 'Emprego civil' };
+    var TIPO = { obra: 'Obra', salario: 'Salário', salario_emprego: 'Emprego civil', salario_corp: 'Salário de corporação' };
     $('extrato').innerHTML = D.extrato.length ? D.extrato.map(function (l) {
       var det = l.detalhe || {};
-      var txt = l.tipo === 'obra' ? (det.descricao || '') + ' <span class="expl">(' + esc(l.por || '') + ')</span>' : l.tipo === 'salario' ? esc((l.quem || '') + ' · ' + (det.cargo || '')) : esc(l.quem || '');
+      var txt = l.tipo === 'obra' ? (det.descricao || '') + ' <span class="expl">(' + esc(l.por || '') + ')</span>' : l.tipo === 'salario' ? esc((l.quem || '') + ' · ' + (det.cargo || '')) : l.tipo === 'salario_corp' ? esc((l.quem || '') + ' · ' + (l.por || det.corp || '') + ' · ' + (det.cargo || '')) : esc(l.quem || '');
       return '<tr><td>' + data(l.criado_em) + '</td><td>' + esc(TIPO[l.tipo] || l.tipo) + (l.tipo === 'obra' ? ': ' + esc(det.obra || l.quem) : '') + '</td><td>' + (l.tipo === 'obra' ? esc(det.descricao || '') + ' <span style="color:var(--tinta-3)">· ' + esc(l.por || '') + '</span>' : txt) + '</td>'
         + '<td class="num ' + (l.valor < 0 ? 'menos' : 'mais') + '" title="' + esc(cheio(l.valor)) + '">' + esc(curto(l.valor)) + '</td><td class="num">' + esc(curto(l.saldo_depois)) + '</td></tr>';
     }).join('') : '<tr><td colspan="5" class="expl">Nenhuma saída ainda.</td></tr>';

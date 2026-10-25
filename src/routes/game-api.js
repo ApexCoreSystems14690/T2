@@ -1755,23 +1755,40 @@ router.post('/corp/salario', async (req, res) => {
 
     // segunda rede contra pagar duas vezes (dois servidores, pedido repetido): o ponto do
     // jogo já tem 40 min de espera; aqui, um salário por pessoa por corp a cada 30 min.
+    // [25/10] [stated] Julio: "Quando alguem pega salario da corp ta descontando no dinheiro DA
+    // corp no painel, era para descontar o dinheiro do governo". Escolheu: "Salário sai do
+    // tesouro". Corporação pública paga pelo TESOURO do Governo da cidade (o caixa da corp não
+    // é mexido). Empresa (Mercado Fechado, lojinhas) continua pagando do caixa dela.
+    const GOV = require('../governo');
+    const pagaGoverno = !['empresa', 'faccao'].includes(c.tipo);
+    let pagador = c.id;
+    if (pagaGoverno) {
+      const cfg = await GOV.config(pool, req._cidadeJogo);
+      if (!cfg || !cfg.corporation_id) return res.json({ ok: false, erro: 'sem_governo', cargo });
+      pagador = cfg.corporation_id;
+    }
     if (novo) {
       const ja = await pool.query(
-        `SELECT 1 FROM corp_lancamentos WHERE corporation_id = $1 AND tipo = 'salario'
-            AND detalhe->>'roblox_id' = $2 AND criado_em > NOW() - INTERVAL '30 minutes' LIMIT 1`, [c.id, String(rid)]);
+        `SELECT 1 FROM corp_lancamentos
+          WHERE detalhe->>'roblox_id' = $2 AND criado_em > NOW() - INTERVAL '30 minutes'
+            AND ((corporation_id = $1 AND tipo = 'salario')
+              OR (corporation_id = $3 AND tipo = 'salario_corp' AND detalhe->>'corp_id' = $4))
+          LIMIT 1`, [c.id, String(rid), pagador, String(c.id)]);
       if (ja.rows[0]) return res.json({ ok: false, erro: 'ja_pago', cargo });
     }
 
-    const r = await caixa.movDinheiro(c.id, 'salario', valor, {
+    const r = await caixa.movDinheiro(pagador, pagaGoverno ? 'salario_corp' : 'salario', valor, {
       quem: String(quem || '').slice(0, 64),
-      por: String(quem || '').slice(0, 64),
-      detalhe: { cargo, roblox_id: rid, minutos, salario },
+      por: pagaGoverno ? String(c.name || c.slug).slice(0, 64) : String(quem || '').slice(0, 64),
+      detalhe: pagaGoverno
+        ? { corp_id: c.id, corp: c.slug, cargo, roblox_id: rid, minutos, salario }
+        : { cargo, roblox_id: rid, minutos, salario },
     });
     if (!r.ok) {
       return res.json({ ok: false, erro: r.erro === 'saldo' ? 'sem_saldo' : r.erro,
                         adicional: valor, salario, falta: r.falta || null, cargo });
     }
-    res.json({ ok: true, corp: c.slug, cargo, salario, minutos, adicional: valor, pago: valor, saldo: r.saldo });
+    res.json({ ok: true, corp: c.slug, cargo, salario, minutos, adicional: valor, pago: valor, saldo: r.saldo, pelo_governo: pagaGoverno });
   } catch (err) {
     console.error('corp/salario:', err.message);
     res.status(500).json({ error: 'Erro interno' });

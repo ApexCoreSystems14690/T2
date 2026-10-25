@@ -964,7 +964,7 @@
       }).join('') || '<tr><td colspan="2" class="empty">Nenhuma obra.</td></tr>';
       document.getElementById('tg-extrato').innerHTML = (d.extrato || []).slice(0, 30).map(function (l) {
         var cor = l.valor < 0 ? '#B91C1C' : '#15803D';
-        return '<tr><td>' + quando(l.criado_em) + '</td><td>' + escT(({ obra: 'Obra', salario: 'Salário', salario_emprego: 'Emprego civil' })[l.tipo] || l.tipo) + '</td><td>' + escT(l.quem || '') +
+        return '<tr><td>' + quando(l.criado_em) + '</td><td>' + escT(({ obra: 'Obra', salario: 'Salário', salario_emprego: 'Emprego civil', salario_corp: 'Salário de corporação' })[l.tipo] || l.tipo) + '</td><td>' + escT(l.quem || '') +
           '</td><td style="text-align:right;color:' + cor + '">' + dinheiro(l.valor) + '</td><td style="text-align:right">' + dinheiro(l.saldo_depois) + '</td></tr>';
       }).join('') || '<tr><td colspan="5" class="empty">Nada ainda.</td></tr>';
     }
@@ -1012,12 +1012,17 @@
       if (elF && d.folha) {
         var f = d.folha;
         elF.style.display = '';
+        if (f.pelo_governo) {   // [25/10] salário de corporação sai do tesouro do Governo
+          elF.innerHTML = '<b style="color:#1D7A45">Folha de salário</b> · últimos 7 dias <b>' + dinheiro(f.semana) + '</b> · ' +
+            f.pagamentos + ' pagamento(s) para ' + f.pessoas + ' pessoa(s)<br>O salário dos membros é pago pelo <b>tesouro do Governo</b>, não sai do caixa da corporação.';
+        } else {
         var cobre = f.cobre_dias === null ? 'ninguém recebeu salário nos últimos 7 dias'
           : (f.cobre_dias < 1 ? '<b style="color:#B91C1C">o caixa cobre menos de 1 dia de salário</b>'
           : 'o caixa cobre <b>' + String(f.cobre_dias).replace('.', ',') + ' dia(s)</b> de salário nesse ritmo');
         elF.innerHTML = '<b style="color:#1D7A45">Folha de salário</b> · últimos 7 dias <b>' + dinheiro(f.semana) + '</b> · ' +
           f.pagamentos + ' pagamento(s) para ' + f.pessoas + ' pessoa(s)<br>' + cobre +
           '. Caixa vazio: o membro recebe só o piso de R$ 500, que não sai do caixa.';
+        }
       }
 
       // [29/09] o seletor lista SO arma e algema -- o resto do vestiario e

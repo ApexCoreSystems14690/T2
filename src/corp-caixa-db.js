@@ -312,6 +312,18 @@ async function painel(corpId, limite = 60) {
 // [23/10] FOLHA: o salário inteiro agora sai do caixa. Soma o que saiu de salário nos últimos
 // 7 dias e diz quantos dias o saldo aguenta nesse ritmo (null = não pagou salário na semana).
 async function folhaSemana(corpId) {
+  // [25/10] corporação pública: o salário sai do TESOURO do Governo (salario_corp com corp_id)
+  const c = (await pool.query(`SELECT tipo, cidade_id FROM corporations WHERE id = $1`, [corpId])).rows[0];
+  if (c && !['empresa', 'faccao', 'governo'].includes(c.tipo)) {
+    const g = (await pool.query(`SELECT corporation_id FROM governo_config WHERE cidade_id = $1`, [c.cidade_id])).rows[0];
+    const q = g ? (await pool.query(
+      `SELECT COALESCE(-SUM(valor), 0)::bigint AS total, COUNT(*)::int AS pagamentos,
+              COUNT(DISTINCT detalhe->>'roblox_id')::int AS pessoas
+         FROM corp_lancamentos WHERE corporation_id = $1 AND tipo = 'salario_corp'
+          AND detalhe->>'corp_id' = $2 AND criado_em > NOW() - INTERVAL '7 days'`, [g.corporation_id, String(corpId)])).rows[0]
+      : { total: 0, pagamentos: 0, pessoas: 0 };
+    return { semana: Number(q.total), pagamentos: q.pagamentos, pessoas: q.pessoas, pelo_governo: true, cobre_dias: null };
+  }
   const r = await pool.query(
     `SELECT COALESCE(-SUM(valor), 0)::bigint AS total, COUNT(*)::int AS pagamentos,
             COUNT(DISTINCT detalhe->>'roblox_id')::int AS pessoas

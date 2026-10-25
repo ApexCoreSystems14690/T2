@@ -1,4 +1,4 @@
-// [23/10] Salário saindo do caixa da corp (minutos trabalhados) + emprego civil pelo tesouro.
+// [23/10 → 25/10] Salário de corporação pelo tesouro do Governo (empresa pelo caixa dela) (minutos trabalhados) + emprego civil pelo tesouro.
 // Rodar com o site no ar: TZ=UTC DATABASE_URL=... BASE=http://localhost:4600 ROBLOX_API_KEY=k123 node teste_salario_caixa.js
 const assert = require('assert');
 const { Pool } = require('pg');
@@ -29,60 +29,87 @@ const setSaldo = (cid, v) => pool.query(`INSERT INTO corp_caixa (corporation_id,
   const a = await u('sc_a', 7701), b = await u('sc_b', 7702), z = await u('sc_z', 7703); await u('sc_fora', 7704);
   await pool.query(`INSERT INTO members (corporation_id, user_id, rank_id) VALUES ($1,$2,$3),($1,$4,$3),($1,$5,$6)`, [CID, a, rCabo, b, z, rZero]);
 
-  console.log('\nSALÁRIO PELO CAIXA DA CORP');
-  await caso('40 de 40 min: paga o ranks.salary inteiro e debita o caixa', async () => {
-    await setSaldo(CID, 10000);
+  // [25/10] Julio escolheu "Salário sai do tesouro": corporação pública paga pelo tesouro do
+  // Governo e o caixa da corp NÃO mexe. Empresa (Mercado Fechado, lojinha) continua pelo caixa dela.
+  const cfg0 = await GOV.config(pool, 1); const GID0 = cfg0.corporation_id;
+  const limpar = async () => {
+    await pool.query(`DELETE FROM corp_lancamentos WHERE corporation_id = $1`, [CID]);
+    await pool.query(`DELETE FROM corp_lancamentos WHERE corporation_id = $1 AND tipo = 'salario_corp' AND detalhe->>'corp_id' = $2`, [GID0, String(CID)]);
+  };
+  await limpar();
+  console.log('\nSALÁRIO DE CORPORAÇÃO PELO TESOURO DO GOVERNO');
+  await caso('40 de 40 min: paga o ranks.salary inteiro, sai do TESOURO e o caixa da corp não mexe', async () => {
+    await setSaldo(CID, 777); await setSaldo(GID0, 10000);
     const r = await jogo('/corp/salario', { corp: 'teste-salcaixa', roblox_id: 7701, quem: 'sc_a', minutos: 40 });
-    assert.strictEqual(r.j.ok, true, JSON.stringify(r.j)); assert.strictEqual(r.j.pago, 4000);
-    assert.strictEqual(await saldo(CID), 6000);
+    assert.strictEqual(r.j.ok, true, JSON.stringify(r.j)); assert.strictEqual(r.j.pago, 4000); assert.strictEqual(r.j.pelo_governo, true);
+    assert.strictEqual(await saldo(GID0), 6000); assert.strictEqual(await saldo(CID), 777);
+    const l = (await pool.query(`SELECT tipo, por, detalhe FROM corp_lancamentos WHERE corporation_id = $1 ORDER BY id DESC LIMIT 1`, [GID0])).rows[0];
+    assert.strictEqual(l.tipo, 'salario_corp'); assert.strictEqual(l.detalhe.corp_id, CID); assert.strictEqual(l.por, 'Teste SalCaixa');
   });
   await caso('pedido repetido em menos de 30 min = ja_pago (não paga 2 vezes)', async () => {
     const r = await jogo('/corp/salario', { corp: 'teste-salcaixa', roblox_id: 7701, quem: 'sc_a', minutos: 40 });
-    assert.strictEqual(r.j.erro, 'ja_pago'); assert.strictEqual(await saldo(CID), 6000);
+    assert.strictEqual(r.j.erro, 'ja_pago'); assert.strictEqual(await saldo(GID0), 6000);
   });
   await caso('20 de 40 min: paga metade', async () => {
     const r = await jogo('/corp/salario', { corp: 'teste-salcaixa', roblox_id: 7702, quem: 'sc_b', minutos: 20 });
-    assert.strictEqual(r.j.pago, 2000); assert.strictEqual(await saldo(CID), 4000);
+    assert.strictEqual(r.j.pago, 2000); assert.strictEqual(await saldo(GID0), 4000);
   });
   await caso('minutos acima de 40 viram 40 (não paga a mais)', async () => {
-    await pool.query(`DELETE FROM corp_lancamentos WHERE corporation_id = $1`, [CID]);
+    await limpar();
     const r = await jogo('/corp/salario', { corp: 'teste-salcaixa', roblox_id: 7702, quem: 'sc_b', minutos: 999 });
     assert.strictEqual(r.j.pago, 4000); assert.strictEqual(r.j.minutos, 40);
   });
   await caso('cargo sem salário = sem_salario; quem não é membro = nao_e_membro; 0 minuto = sem_minutos', async () => {
     assert.strictEqual((await jogo('/corp/salario', { corp: 'teste-salcaixa', roblox_id: 7703, minutos: 40 })).j.erro, 'sem_salario');
     assert.strictEqual((await jogo('/corp/salario', { corp: 'teste-salcaixa', roblox_id: 7704, minutos: 40 })).j.erro, 'nao_e_membro');
-    await pool.query(`DELETE FROM corp_lancamentos WHERE corporation_id = $1`, [CID]);
+    await limpar();
     assert.strictEqual((await jogo('/corp/salario', { corp: 'teste-salcaixa', roblox_id: 7701, minutos: 0 })).j.erro, 'sem_minutos');
   });
-  await caso('caixa sem saldo = sem_saldo e o saldo não mexe', async () => {
-    await setSaldo(CID, 1000);
+  await caso('tesouro sem saldo = sem_saldo, nada mexe (nem tesouro nem caixa da corp)', async () => {
+    await setSaldo(GID0, 1000); await setSaldo(CID, 50000);
     const r = await jogo('/corp/salario', { corp: 'teste-salcaixa', roblox_id: 7701, minutos: 40 });
-    assert.strictEqual(r.j.erro, 'sem_saldo'); assert.strictEqual(await saldo(CID), 1000);
+    assert.strictEqual(r.j.erro, 'sem_saldo'); assert.strictEqual(await saldo(GID0), 1000); assert.strictEqual(await saldo(CID), 50000);
   });
-  await caso('CONCORRÊNCIA: 2 salários ao mesmo tempo, saldo pra 1 só -> exatamente 1 paga, saldo nunca negativo', async () => {
+  await caso('CONCORRÊNCIA: 2 salários ao mesmo tempo, tesouro pra 1 só -> exatamente 1 paga, nunca negativo', async () => {
     for (let k = 0; k < 5; k++) {
-      await pool.query(`DELETE FROM corp_lancamentos WHERE corporation_id = $1`, [CID]);
-      await setSaldo(CID, 5000);
+      await limpar(); await setSaldo(GID0, 5000);
       const [r1, r2] = await Promise.all([
         jogo('/corp/salario', { corp: 'teste-salcaixa', roblox_id: 7701, minutos: 40 }),
         jogo('/corp/salario', { corp: 'teste-salcaixa', roblox_id: 7702, minutos: 40 }),
       ]);
-      const pagos = [r1.j, r2.j].filter(x => x.ok).length;
-      assert.strictEqual(pagos, 1, JSON.stringify([r1.j, r2.j]));
-      assert.strictEqual(await saldo(CID), 1000);
+      assert.strictEqual([r1.j, r2.j].filter(x => x.ok).length, 1, JSON.stringify([r1.j, r2.j]));
+      assert.strictEqual(await saldo(GID0), 1000);
     }
   });
-  await caso('jeito antigo do Mercado Fechado (sem minutos) continua: paga o ranks.salary inteiro, sem trava de 30 min', async () => {
-    await setSaldo(CID, 20000);
-    const r1 = await jogo('/corp/salario', { corp: 'teste-salcaixa', roblox_id: 7701, quem: 'sc_a' });
-    assert.strictEqual(r1.j.ok, true); assert.strictEqual(r1.j.pago, 4000); assert.strictEqual(r1.j.adicional, 4000);
-    assert.strictEqual((await jogo('/corp/salario', { corp: 'teste-salcaixa', roblox_id: 7703 })).j.erro, 'sem_adicional');
-  });
-  await caso('aba Caixa: folha da semana soma os salários e diz quantos dias o caixa cobre', async () => {
+  await caso('aba Caixa da corp: folha da semana conta o que o tesouro pagou e avisa que é pelo Governo', async () => {
     const caixa = require('./src/corp-caixa-db');
     const f = await caixa.folhaSemana(CID);
-    assert.ok(f.semana >= 4000, JSON.stringify(f)); assert.ok(f.cobre_dias > 0);
+    assert.ok(f.semana >= 4000 && f.pelo_governo === true, JSON.stringify(f));
+  });
+
+  console.log('\nEMPRESA CONTINUA PELO CAIXA DELA');
+  let e = (await pool.query(`SELECT id FROM corporations WHERE slug = 'teste-salemp'`)).rows[0];
+  if (!e) e = (await pool.query(`INSERT INTO corporations (name, slug, tipo, cidade_id) VALUES ('Teste SalEmp','teste-salemp','empresa',1) RETURNING id`)).rows[0];
+  const EID = e.id;
+  await pool.query(`DELETE FROM corp_lancamentos WHERE corporation_id = $1`, [EID]);
+  await pool.query(`DELETE FROM members WHERE corporation_id = $1`, [EID]);
+  await pool.query(`DELETE FROM ranks WHERE corporation_id = $1`, [EID]);
+  const rEmp = (await pool.query(`INSERT INTO ranks (corporation_id, name, level, salary) VALUES ($1,'Atendente',1,3000) RETURNING id`, [EID])).rows[0].id;
+  await pool.query(`INSERT INTO members (corporation_id, user_id, rank_id) VALUES ($1,$2,$3)`, [EID, a, rEmp]);
+  await caso('empresa: sai do caixa da empresa, o tesouro não mexe', async () => {
+    await setSaldo(EID, 10000); await setSaldo(GID0, 500);
+    const r = await jogo('/corp/salario', { corp: 'teste-salemp', roblox_id: 7701, quem: 'sc_a', minutos: 40 });
+    assert.strictEqual(r.j.ok, true, JSON.stringify(r.j)); assert.strictEqual(r.j.pelo_governo, false);
+    assert.strictEqual(await saldo(EID), 7000); assert.strictEqual(await saldo(GID0), 500);
+  });
+  await caso('jeito antigo do Mercado Fechado (sem minutos) continua pelo caixa da empresa', async () => {
+    await pool.query(`DELETE FROM corp_lancamentos WHERE corporation_id = $1`, [EID]);
+    const r1 = await jogo('/corp/salario', { corp: 'teste-salemp', roblox_id: 7701, quem: 'sc_a' });
+    assert.strictEqual(r1.j.ok, true); assert.strictEqual(r1.j.pago, 3000); assert.strictEqual(await saldo(EID), 4000);
+  });
+  await caso('empresa: folha diz quantos dias o caixa cobre', async () => {
+    const f = await require('./src/corp-caixa-db').folhaSemana(EID);
+    assert.ok(f.semana >= 3000 && f.cobre_dias > 0 && !f.pelo_governo, JSON.stringify(f));
   });
 
   console.log('\nEMPREGO CIVIL PELO TESOURO');
