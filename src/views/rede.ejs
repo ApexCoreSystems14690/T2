@@ -106,6 +106,7 @@
 
     if (!c.oficial) corpo.appendChild(formTroca(c));
     else corpo.appendChild(el('div', 'num', 'Não dá pra trocar: na oficial o Dono é a conta da plataforma.'));
+    if (!c.oficial) corpo.appendChild(formPlace(c));
 
     var h = el('details', 'hist');
     h.appendChild(el('summary', null, 'Histórico de donos'));
@@ -114,6 +115,25 @@
     corpo.appendChild(h);
     box.appendChild(corpo);
     return box;
+  }
+
+  // [25/10 EVENTO] place do Roblox em que a cidade roda (vazio = a place do jogo)
+  function formPlace(c) {
+    var f = el('div', 'trocar');
+    f.appendChild(el('span', 'rot', 'Place do Roblox'));
+    var inp = el('input'); inp.type = 'text'; inp.inputMode = 'numeric'; inp.placeholder = 'vazio = place do jogo'; inp.value = c.place_id || ''; inp.maxLength = 20;
+    var b = el('button', 'btn', 'Salvar place');
+    b.addEventListener('click', function () {
+      var v = inp.value.trim();
+      if (v && !/^\d{6,20}$/.test(v)) { aviso('Place inválida: só o número da place.', false); return; }
+      fetch('/api/rede/cidades/' + c.id + '/place', { method: 'PUT', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ place_id: v || null }) })
+        .then(function (r) { return r.json().then(function (j) { return { ok: r.ok, j: j }; }); })
+        .then(function (x) { aviso(x.ok ? (x.j.place_id ? 'Place salva. O lobby manda pra ela.' : 'Cidade volta pra place do jogo.') : (x.j.error || 'Erro'), x.ok); if (x.ok) carregar(); })
+        .catch(function () { aviso('Erro de rede.', false); });
+    });
+    f.appendChild(inp); f.appendChild(b);
+    f.appendChild(el('span', 'num', 'Só publique a place DENTRO da experiência Santa Fé; teleporte entre experiências não passa pelo código fixo da cidade.'));
+    return f;
   }
 
   function formTroca(c) {

@@ -42,6 +42,8 @@ router.get('/cidades', async (req, res) => {
         vagas: c.vagas, online: (mov[c.id] || {}).online || 0, aberta: !!(mov[c.id] || {}).servidores,
         lotada: ((mov[c.id] || {}).online || 0) >= c.vagas,
         restrita: !!c.senha_hash, teste: c.tipo === 'teste',
+        // [25/10 EVENTO] place própria (NULL = place do jogo); vai como string pra não perder dígito no JSON
+        place_id: c.place_id ? String(c.place_id) : null, evento: c.tipo === 'evento',
       })),
     });
   } catch (err) { console.error('game/cidades:', err.message); res.status(500).json({ error: 'Erro interno' }); }

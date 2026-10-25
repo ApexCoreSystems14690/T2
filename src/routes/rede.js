@@ -10,6 +10,7 @@
 //   GET  /api/rede/usuarios?q=              busca de conta (nome do Discord/Roblox ou id)
 //   PUT  /api/rede/cidades/:id/dono         { user_id | null, motivo }
 //   GET  /api/rede/cidades/:id/historico    quem foi dono, quem trocou, quando
+//   PUT  /api/rede/cidades/:id/place        { place_id | null }  [25/10] place própria da cidade (evento)
 const express = require('express');
 const pool = require('../db/pool');
 const CID = require('../cidades');
@@ -45,7 +46,7 @@ router.get('/api/rede/cidades', soPlataforma, async (req, res) => {
   try {
     const out = await ISO.global(async () => {
       const cs = (await pool.query(
-        `SELECT c.id, c.slug, c.nome, c.sigla, c.tipo, c.status, c.cor, c.vagas,
+        `SELECT c.id, c.slug, c.nome, c.sigla, c.tipo, c.status, c.cor, c.vagas, c.place_id,
                 u.id AS u_id, u.discord_username AS u_nome, u.roblox_username AS u_roblox, u.discord_id AS u_did,
                 (SELECT COUNT(*)::int FROM cidade_staff s WHERE s.cidade_id = c.id) AS staff,
                 (SELECT MAX(h.em) FROM cidade_donos_hist h WHERE h.cidade_id = c.id) AS trocado_em
@@ -58,6 +59,7 @@ router.get('/api/rede/cidades', soPlataforma, async (req, res) => {
         dono: c.tipo === 'oficial' ? { plataforma: true, nome: req.usuarioPlataforma.discord_username }
                                    : pessoa({ id: c.u_id, discord_username: c.u_nome, roblox_username: c.u_roblox, discord_id: c.u_did }),
         staff: c.staff, online: (mov[c.id] || {}).online || 0, trocado_em: c.trocado_em,
+        place_id: c.place_id ? String(c.place_id) : null,
       }));
     });
     res.json({ cidades: out });
@@ -102,6 +104,23 @@ router.put('/api/rede/cidades/:id/dono', soPlataforma, async (req, res) => {
     res.json({ ok: true });
   } catch (e) {
     console.error('[rede] trocar dono:', e.message);
+    res.status(500).json({ error: 'Erro interno' });
+  }
+});
+
+// [25/10 EVENTO] a place do Roblox em que a cidade roda (NULL = a place do jogo). Depois de
+// publicar a place do evento DENTRO da experiência Santa Fé, a conta da plataforma cola o id aqui
+// e o lobby passa a reservar/teleportar pra ela.
+router.put('/api/rede/cidades/:id/place', soPlataforma, async (req, res) => {
+  const id = Number(req.params.id);
+  if (!Number.isInteger(id) || id <= 0) return res.status(400).json({ error: 'Cidade inválida.' });
+  try {
+    const r = await ISO.global(() => CID.definirPlace(pool, id, (req.body || {}).place_id));
+    if (r.erro) return res.status(r.status || 400).json({ error: r.erro });
+    console.log(`[rede] place da cidade ${id}: ${r.place_id || 'place do jogo'} (por ${req.usuarioPlataforma.discord_username})`);
+    res.json({ ok: true, place_id: r.place_id });
+  } catch (e) {
+    console.error('[rede] place:', e.message);
     res.status(500).json({ error: 'Erro interno' });
   }
 });

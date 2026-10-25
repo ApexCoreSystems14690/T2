@@ -131,6 +131,19 @@ async function garantir(pool) {
             'scrypt$8c41726922ab84004dd6e95fa0ebaa99$4142538eb2056825d83dc9f3e8e93f78e3ffca2a98f16b1eab26910543fb8334')
     ON CONFLICT (slug) DO NOTHING;
 
+    -- [25/10 EVENTO] A cidade pode rodar em OUTRA place do mesmo universo (o mapa destruído do
+    -- Apocalipse). place_id NULL = a place do jogo (todas as cidades normais). O lobby lê isto em
+    -- GET /api/game/cidades e reserva/teleporta pra place certa; a conta da plataforma preenche na
+    -- tela Rede depois de publicar a place dentro da experiência Santa Fé.
+    ALTER TABLE cidades ADD COLUMN IF NOT EXISTS place_id BIGINT;
+    -- [25/10] [stated] Julio: "No site deve ter a cidade (Evento Extinction), e no lobby também".
+    -- Sem senha, sem corporações, sem compras: o evento é só sobrevivência; a loja do Roblox dela
+    -- é EXT_V1_T1 (save separado do Santa Fé dentro do mesmo universo).
+    INSERT INTO cidades (slug, nome, sigla, tipo, status, loja_prefixo, cor, descricao, ordem, vagas)
+    VALUES ('evento-extinction', 'Evento Extinction', 'EXT', 'evento', 'ativa', 'EXT', '#4A1C1C',
+            'Santa Fé depois do fim. Vasculhe, construa, sobreviva — aos zumbis e aos outros jogadores.', 20, 100)
+    ON CONFLICT (slug) DO NOTHING;
+
     CREATE TABLE IF NOT EXISTS cidade_staff (
       cidade_id INTEGER NOT NULL REFERENCES cidades(id) ON DELETE CASCADE,
       user_id INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE,
@@ -486,6 +499,21 @@ async function historicoDono(pool, cidadeId, limite) {
       WHERE h.cidade_id = $1 ORDER BY h.em DESC, h.id DESC LIMIT $2`, [cidadeId, Math.min(Number(limite) || 20, 100)])).rows);
 }
 
+// [25/10] place do Roblox de uma cidade (NULL = a place do jogo). Só a conta da plataforma.
+async function definirPlace(pool, cidadeId, placeId) {
+  const c = await porId(pool, cidadeId);
+  if (!c) return { erro: 'Cidade não existe.', status: 404 };
+  if (c.tipo === 'oficial') return { erro: 'A oficial roda na place do jogo.', status: 400 };
+  let v = null;
+  if (placeId !== null && placeId !== undefined && placeId !== '') {
+    v = Number(placeId);
+    if (!Number.isInteger(v) || v <= 0 || v > 9e15) return { erro: 'Place inválida.', status: 400 };
+  }
+  await pool.query('UPDATE cidades SET place_id = $1 WHERE id = $2', [v, cidadeId]);
+  limparCache();
+  return { ok: true, place_id: v };
+}
+
 module.exports = {
   trocarDono, historicoDono,
   montarCidade, montarTodas, apagarCidadeDeTeste,
@@ -493,4 +521,5 @@ module.exports = {
   slugValido, nomeDaLoja, slugDoJogo, abaTrocada, voltarSeguro, senhaConfere,
   garantir, todas, porId, porSlug, limparCache, movimento, meusCargos,
   contexto, exigeCidade,
+  definirPlace,
 };
