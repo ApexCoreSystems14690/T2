@@ -116,7 +116,7 @@ router.get('/corp/:corpId', async (req, res) => {
 router.get('/link-roblox', (req, res) => {
   // [20/09] o 'error' vinha no querystring mas NUNCA era passado pra view, entao
   // quem errava era redirecionado de volta pra uma tela muda.
-  res.render('link-roblox', { user: req.user, error: req.query.error || undefined, ok: req.query.ok || undefined });
+  res.render('link-roblox', { user: req.user, codigoLegivel: SEG.codigoLegivel, error: req.query.error || undefined, ok: req.query.ok || undefined });
 });
 
 // [14/10 SEGURANCA] PROVA DE POSSE da conta Roblox. Antes bastava digitar o nome de
@@ -148,8 +148,8 @@ router.post('/link-roblox/verificar-bio', async (req, res) => {
     const r = await fetch('https://users.roblox.com/v1/users/' + encodeURIComponent(me.roblox_id));
     if (!r.ok) return res.redirect('/dashboard/link-roblox?error=roblox_fora');
     const j = await r.json();
-    const bio = String((j && j.description) || '').toUpperCase();
-    if (!bio.includes(me.vinculo_codigo)) return res.redirect('/dashboard/link-roblox?error=bio_sem_codigo');
+    // [25/10] compara so as letras (o codigo agora e 3 palavras; espaco/hifen/minuscula na bio passam)
+    if (!SEG.bioTemCodigo(j && j.description, me.vinculo_codigo)) return res.redirect('/dashboard/link-roblox?error=bio_sem_codigo');
     const outro = await pool.query(
       'SELECT id FROM users WHERE roblox_id = $1 AND id <> $2 AND roblox_verificado = true', [me.roblox_id, req.user.id]);
     if (outro.rows.length) return res.redirect('/dashboard/link-roblox?error=already_linked');

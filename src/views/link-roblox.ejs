@@ -72,10 +72,10 @@
       <% if (!_ok) { %>
         <p class="hint" style="margin-bottom:.6rem">Prova que essa conta Roblox é sua. Sem isso ela não conta como sua pro sistema de segurança do servidor.</p>
         <% if (user.vinculo_codigo) { %>
-          <div class="codigo"><%= user.vinculo_codigo %></div>
+          <div class="codigo"><%= (typeof codigoLegivel === 'function') ? codigoLegivel(user.vinculo_codigo) : user.vinculo_codigo %></div>
           <ol class="passos">
-            <li><b>No jogo:</b> digite <code>/vincular <%= user.vinculo_codigo %></code> no chat. Pronto.</li>
-            <li><b>Ou na bio do Roblox:</b> cole o código na sua descrição do perfil, salve e clique em Verificar.</li>
+            <li><b>Na bio do Roblox:</b> cole as 3 palavras na descrição do seu perfil (pode ser com espaço), salve e clique em Verificar.</li>
+            <li><b>Se já estiver dentro do jogo:</b> digite <code>/vincular <%= user.vinculo_codigo %></code> no chat.</li>
           </ol>
           <form method="POST" action="/dashboard/link-roblox/verificar-bio"><button class="btn" type="submit">Verificar pela bio</button></form>
           <form method="POST" action="/dashboard/link-roblox/codigo"><button class="btn sec" type="submit">Gerar outro código</button></form>

@@ -223,13 +223,37 @@ async function confirmarVinculo(pool, userId, rid, nome) {
   } finally { cli.release(); }
 }
 
+// [25/10] CODIGO EM PALAVRAS. Julio: "mesmo estando linkado ngm consegue entrar". Medido no site:
+// de 20 jogadores ativos, so 4 verificados -- 8 linkados SEM verificar. O codigo antigo (8 letras e
+// numeros soltos, tipo K7XQ2M9P) e o tipo de texto que o filtro do Roblox troca por #### na bio:
+// a pessoa cola, salva, e a bio guarda "########" -> "Nao achei o codigo". Agora sao 3 palavras
+// comuns em portugues, SO LETRAS (SOL VERDE PRAIA), que o filtro deixa passar. Guardado sem espaco
+// (SOLVERDEPRAIA): a bio e comparada so pelas letras, entao espaco/hifen/minuscula nao atrapalham,
+// e o /vincular do jogo (que tira tudo que nao e letra/numero) continua batendo.
+const PALAVRAS = ['SOL', 'MAR', 'LUA', 'RIO', 'CEU', 'PRAIA', 'VERDE', 'AZUL', 'BOLA', 'CASA', 'PEIXE', 'GATO',
+  'CAFE', 'PAO', 'FLOR', 'PEDRA', 'NUVEM', 'VENTO', 'CHUVA', 'AREIA', 'PONTE', 'TREM', 'BARCO', 'LIVRO',
+  'MESA', 'PORTA', 'JANELA', 'FOLHA', 'ARVORE', 'CAMPO', 'MORRO', 'ONDA', 'ESTRELA', 'MANGA', 'LIMAO',
+  'UVA', 'MILHO', 'FAROL', 'CANOA', 'TIGRE'];
 function novoCodigo() {
-  const abc = 'ABCDEFGHJKLMNPQRSTUVWXYZ23456789';   // sem 0/O/1/I
-  let s = '';
-  const b = crypto.randomBytes(8);
-  for (let i = 0; i < 8; i++) s += abc[b[i] % abc.length];
-  return s;
+  const b = crypto.randomBytes(3);
+  return PALAVRAS[b[0] % PALAVRAS.length] + PALAVRAS[b[1] % PALAVRAS.length] + PALAVRAS[b[2] % PALAVRAS.length];
+}
+// mostra o codigo com espaco entre as palavras (so pra tela)
+function codigoLegivel(cod) {
+  let s = String(cod || ''), out = [];
+  while (s.length) {
+    const p = PALAVRAS.filter(w => s.startsWith(w)).sort((a, b) => b.length - a.length)[0];
+    if (!p) { out.push(s); break; }
+    out.push(p); s = s.slice(p.length);
+  }
+  return out.join(' ');
+}
+// a bio tem o codigo? compara SO as letras (ignora espaco, hifen, ponto, minuscula, emoji)
+function bioTemCodigo(bio, cod) {
+  const so = x => String(x || '').toUpperCase().normalize('NFD').replace(/[^A-Z0-9]/g, '');
+  const c = so(cod);
+  return c.length >= 4 && so(bio).includes(c);
 }
 
 module.exports = { idadeDiscordDias, decidirContaNova, MAX_CONTAS_POR_IP, JANELA_DIAS, CODIGO_VALIDADE_MIN,
-  normalizarIp, hashIp, migrar, registrarIp, middlewareIp, config, altsDe, novoCodigo, confirmarVinculo };
+  normalizarIp, hashIp, migrar, registrarIp, middlewareIp, config, altsDe, novoCodigo, codigoLegivel, bioTemCodigo, confirmarVinculo };
