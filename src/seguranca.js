@@ -59,6 +59,9 @@ async function migrar(pool) {
     CREATE INDEX IF NOT EXISTS idx_user_ips_hash ON user_ips(ip_hash, ultima DESC);
     ALTER TABLE users ADD COLUMN IF NOT EXISTS roblox_verificado BOOLEAN NOT NULL DEFAULT false;
     ALTER TABLE users ADD COLUMN IF NOT EXISTS vinculo_codigo VARCHAR(12);
+    -- [25/10] o codigo virou 3 palavras (ate 21 letras, ex. ESTRELAJANELAARVORE): VARCHAR(12) estourava
+    -- e o "Gerar codigo"/"Vincular" davam "Deu erro aqui do nosso lado" pra quem sorteava palavra longa.
+    ALTER TABLE users ALTER COLUMN vinculo_codigo TYPE VARCHAR(32);
     ALTER TABLE users ADD COLUMN IF NOT EXISTS vinculo_codigo_em TIMESTAMP;
     -- [22/10] Roblox que a pessoa diz ser dela mas que já aparece em OUTRA conta sem prova
     -- (placeholder da corp ou alguém que digitou o nome). Fica aqui até ela provar.
