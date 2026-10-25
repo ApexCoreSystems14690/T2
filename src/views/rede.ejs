@@ -3,7 +3,7 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>Rede — Donos das cidades</title>
+  <title>Rede — Cidades</title>
   <meta name="theme-color" content="#1C2127">
   <style>
     /* [24/10] Tela da REDE: o Dono de cada cidade. Só a conta da plataforma abre. */
@@ -107,6 +107,7 @@
     if (!c.oficial) corpo.appendChild(formTroca(c));
     else corpo.appendChild(el('div', 'num', 'Não dá pra trocar: na oficial o Dono é a conta da plataforma.'));
     if (!c.oficial) corpo.appendChild(formPlace(c));
+    corpo.appendChild(formSenha(c));
 
     var h = el('details', 'hist');
     h.appendChild(el('summary', null, 'Histórico de donos'));
@@ -133,6 +134,45 @@
     });
     f.appendChild(inp); f.appendChild(b);
     f.appendChild(el('span', 'num', 'Só publique a place DENTRO da experiência Santa Fé; teleporte entre experiências não passa pelo código fixo da cidade.'));
+    return f;
+  }
+
+  // [25/10] senha de entrada (o lobby pede antes de deixar entrar). Só números, 4 a 12 dígitos.
+  // O site guarda só o hash: não dá pra ver a senha atual, só trocar ou tirar.
+  function formSenha(c) {
+    var f = el('div', 'trocar');
+    f.appendChild(el('span', 'rot', 'Senha de entrada'));
+    var est = el('span', c.com_senha ? 'dono-nome' : 'dono-nome sem', c.com_senha ? 'Com senha' : 'Aberta (sem senha)');
+    if (c.com_senha && c.senha_trocada_em) est.appendChild(el('small', null, ' · trocada ' + data(c.senha_trocada_em)));
+    f.appendChild(est);
+    var inp = el('input'); inp.type = 'password'; inp.inputMode = 'numeric'; inp.autocomplete = 'new-password'; inp.maxLength = 12;
+    inp.placeholder = c.com_senha ? 'Nova senha (só números, 4 a 12)' : 'Senha (só números, 4 a 12)';
+    inp.addEventListener('input', function () { var v = inp.value.replace(/\D/g, '').slice(0, 12); if (v !== inp.value) inp.value = v; });
+    var linha = el('div', 'linha');
+    var ver = el('button', 'btn sec', 'Mostrar'); ver.type = 'button';
+    ver.onclick = function () { inp.type = inp.type === 'password' ? 'text' : 'password'; ver.textContent = inp.type === 'password' ? 'Mostrar' : 'Esconder'; };
+    var salvar = el('button', 'btn', c.com_senha ? 'Trocar senha' : 'Pôr senha'); salvar.type = 'button';
+    var tirar = el('button', 'btn sec', 'Tirar senha'); tirar.type = 'button'; tirar.disabled = !c.com_senha;
+    function enviar(v, texto) {
+      if (!confirm(texto)) return;
+      salvar.disabled = tirar.disabled = true;
+      fetch('/api/rede/cidades/' + c.id + '/senha', { method: 'PUT', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ senha: v }) })
+        .then(function (r) { return r.json().then(function (j) { return { ok: r.ok, j: j }; }); })
+        .then(function (x) {
+          if (!x.ok) { aviso(x.j.error || 'Erro', false); salvar.disabled = false; tirar.disabled = !c.com_senha; return; }
+          aviso(x.j.com_senha ? 'Senha de ' + c.nome + ' salva. Quem já destrancou no lobby continua até sair.' : c.nome + ' agora é aberta.', true);
+          carregar();
+        }).catch(function () { aviso('Erro de rede.', false); salvar.disabled = false; tirar.disabled = !c.com_senha; });
+    }
+    salvar.onclick = function () {
+      var v = inp.value.trim();
+      if (!/^\d{4,12}$/.test(v)) { aviso('A senha tem que ser só números, de 4 a 12 dígitos.', false); return; }
+      enviar(v, (c.com_senha ? 'Trocar a senha de ' : 'Pôr senha em ') + c.nome + '?' + (c.oficial ? '\nATENÇÃO: é a cidade oficial — todo mundo vai precisar da senha pra entrar.' : ''));
+    };
+    tirar.onclick = function () { enviar(null, 'Tirar a senha de ' + c.nome + '?\nQualquer um entra pelo lobby.'); };
+    linha.appendChild(salvar); linha.appendChild(tirar); linha.appendChild(ver);
+    f.appendChild(inp); f.appendChild(linha);
+    f.appendChild(el('span', 'num', 'O site guarda só o hash: a senha atual não aparece aqui; anote antes de salvar.'));
     return f;
   }
 

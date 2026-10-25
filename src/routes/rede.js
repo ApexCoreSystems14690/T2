@@ -11,6 +11,7 @@
 //   PUT  /api/rede/cidades/:id/dono         { user_id | null, motivo }
 //   GET  /api/rede/cidades/:id/historico    quem foi dono, quem trocou, quando
 //   PUT  /api/rede/cidades/:id/place        { place_id | null }  [25/10] place própria da cidade (evento)
+//   PUT  /api/rede/cidades/:id/senha        { senha | null }     [25/10] senha de entrada (lobby), null = aberta
 const express = require('express');
 const pool = require('../db/pool');
 const CID = require('../cidades');
@@ -47,6 +48,7 @@ router.get('/api/rede/cidades', soPlataforma, async (req, res) => {
     const out = await ISO.global(async () => {
       const cs = (await pool.query(
         `SELECT c.id, c.slug, c.nome, c.sigla, c.tipo, c.status, c.cor, c.vagas, c.place_id,
+                (c.senha_hash IS NOT NULL) AS com_senha, c.senha_trocada_em,
                 u.id AS u_id, u.discord_username AS u_nome, u.roblox_username AS u_roblox, u.discord_id AS u_did,
                 (SELECT COUNT(*)::int FROM cidade_staff s WHERE s.cidade_id = c.id) AS staff,
                 (SELECT MAX(h.em) FROM cidade_donos_hist h WHERE h.cidade_id = c.id) AS trocado_em
@@ -60,6 +62,7 @@ router.get('/api/rede/cidades', soPlataforma, async (req, res) => {
                                    : pessoa({ id: c.u_id, discord_username: c.u_nome, roblox_username: c.u_roblox, discord_id: c.u_did }),
         staff: c.staff, online: (mov[c.id] || {}).online || 0, trocado_em: c.trocado_em,
         place_id: c.place_id ? String(c.place_id) : null,
+        com_senha: c.com_senha === true, senha_trocada_em: c.senha_trocada_em || null,
       }));
     });
     res.json({ cidades: out });
@@ -121,6 +124,22 @@ router.put('/api/rede/cidades/:id/place', soPlataforma, async (req, res) => {
     res.json({ ok: true, place_id: r.place_id });
   } catch (e) {
     console.error('[rede] place:', e.message);
+    res.status(500).json({ error: 'Erro interno' });
+  }
+});
+
+// [25/10] senha de entrada da cidade (o lobby pede antes de entrar). Vale pra TODAS, oficial incluída.
+// O corpo nunca vai pro log; só "com senha"/"aberta".
+router.put('/api/rede/cidades/:id/senha', soPlataforma, async (req, res) => {
+  const id = Number(req.params.id);
+  if (!Number.isInteger(id) || id <= 0) return res.status(400).json({ error: 'Cidade inválida.' });
+  try {
+    const r = await ISO.global(() => CID.definirSenha(pool, id, (req.body || {}).senha));
+    if (r.erro) return res.status(r.status || 400).json({ error: r.erro });
+    console.log(`[rede] senha da cidade ${id}: ${r.com_senha ? 'trocada' : 'removida (aberta)'} (por ${req.usuarioPlataforma.discord_username})`);
+    res.json({ ok: true, com_senha: r.com_senha });
+  } catch (e) {
+    console.error('[rede] senha:', e.message);
     res.status(500).json({ error: 'Erro interno' });
   }
 });

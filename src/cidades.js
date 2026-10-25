@@ -139,10 +139,16 @@ async function garantir(pool) {
     -- [25/10] [stated] Julio: "No site deve ter a cidade (Evento Extinction), e no lobby também".
     -- Sem senha, sem corporações, sem compras: o evento é só sobrevivência; a loja do Roblox dela
     -- é EXT_V1_T1 (save separado do Santa Fé dentro do mesmo universo).
-    INSERT INTO cidades (slug, nome, sigla, tipo, status, loja_prefixo, cor, descricao, ordem, vagas)
+    -- [25/10] [stated] Julio: "poe senha para entrar na place do extinction". Nasce trancada (hash da
+    -- senha que o Julio recebeu no chat); troca/tira na tela Rede. Só no INSERT: depois de criada,
+    -- quem manda é o painel (um UPDATE aqui trancaria de novo a cada boot).
+    INSERT INTO cidades (slug, nome, sigla, tipo, status, loja_prefixo, cor, descricao, ordem, vagas, senha_hash)
     VALUES ('evento-extinction', 'Evento Extinction', 'EXT', 'evento', 'ativa', 'EXT', '#4A1C1C',
-            'Santa Fé depois do fim. Vasculhe, construa, sobreviva — aos zumbis e aos outros jogadores.', 20, 100)
+            'Santa Fé depois do fim. Vasculhe, construa, sobreviva — aos zumbis e aos outros jogadores.', 20, 100,
+            'scrypt$1c5be7d9fddc21b4cd4d7150d823abcb$b6e8f539777d63455dd13a159f43352216d72f7b232329aa58037fa5e3b72cff')
     ON CONFLICT (slug) DO NOTHING;
+    -- [25/10] quando a senha da cidade foi trocada pela última vez (só pra tela Rede)
+    ALTER TABLE cidades ADD COLUMN IF NOT EXISTS senha_trocada_em TIMESTAMP;
 
     CREATE TABLE IF NOT EXISTS cidade_staff (
       cidade_id INTEGER NOT NULL REFERENCES cidades(id) ON DELETE CASCADE,
@@ -514,6 +520,29 @@ async function definirPlace(pool, cidadeId, placeId) {
   return { ok: true, place_id: v };
 }
 
+// [25/10] SENHA DE ENTRADA de qualquer cidade. [stated] Julio: "poe na real todas as cidades, no painel
+// do site tu poder configurar se tem senha ou não e qual a senha". Só a conta da plataforma (routes/rede.js).
+// null/'' = cidade aberta. Mesmo formato que o lobby aceita: só dígitos, 4 a 12 (LobbyN.senhaFormato).
+// Guarda só o hash (scrypt, sal novo a cada troca) -- a senha em texto não fica em lugar nenhum.
+const SENHA_OK = /^\d{4,12}$/;
+function hashSenha(senha) {
+  const sal = crypto.randomBytes(16).toString('hex');
+  return 'scrypt$' + sal + '$' + crypto.scryptSync(String(senha), sal, 32).toString('hex');
+}
+async function definirSenha(pool, cidadeId, senha) {
+  const c = await porId(pool, cidadeId);
+  if (!c) return { erro: 'Cidade não existe.', status: 404 };
+  let h = null;
+  if (senha !== null && senha !== undefined && senha !== '') {
+    const s = String(senha).trim();
+    if (!SENHA_OK.test(s)) return { erro: 'A senha tem que ser só números, de 4 a 12 dígitos (é o que o teclado do lobby aceita).', status: 400 };
+    h = hashSenha(s);
+  }
+  await pool.query('UPDATE cidades SET senha_hash = $1, senha_trocada_em = NOW() WHERE id = $2', [h, cidadeId]);
+  limparCache();
+  return { ok: true, com_senha: !!h };
+}
+
 module.exports = {
   trocarDono, historicoDono,
   montarCidade, montarTodas, apagarCidadeDeTeste,
@@ -521,5 +550,5 @@ module.exports = {
   slugValido, nomeDaLoja, slugDoJogo, abaTrocada, voltarSeguro, senhaConfere,
   garantir, todas, porId, porSlug, limparCache, movimento, meusCargos,
   contexto, exigeCidade,
-  definirPlace,
+  definirPlace, definirSenha, hashSenha,
 };
