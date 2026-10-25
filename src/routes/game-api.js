@@ -256,9 +256,9 @@ router.post('/vincular', async (req, res) => {
 // ---------------------------------------------------------------------------
 router.get('/temporada', async (req, res) => {
   try {
-    const r = await pool.query(`SELECT value FROM game_config WHERE key = 'temporada'`);
+    const r = await pool.query(`SELECT value FROM game_config WHERE cidade_id = sf_cidade_padrao() AND key = 'temporada'`);
     const n = Math.max(1, parseInt(r.rows[0] && r.rows[0].value && r.rows[0].value.n) || 1);
-    const w = await pool.query(`SELECT value FROM game_config WHERE key = 'wipe_em'`);
+    const w = await pool.query(`SELECT value FROM game_config WHERE cidade_id = sf_cidade_padrao() AND key = 'wipe_em'`);
     res.json({ temporada: n, wipe_em: (w.rows[0] && w.rows[0].value && w.rows[0].value.em) || null });
   } catch (err) {
     console.error('temporada:', err.message);
@@ -278,7 +278,7 @@ router.get('/temporada', async (req, res) => {
 // ------------------------------------------------------------------
 router.get('/ssu', async (req, res) => {
   try {
-    const r = await pool.query(`SELECT value FROM game_config WHERE key = 'ssu'`);
+    const r = await pool.query(`SELECT value FROM game_config WHERE cidade_id = sf_cidade_padrao() AND key = 'ssu'`);
     // A LISTA DE STAFF VEM JUNTO. Motivo: "o jogo nunca decide quem e admin" --
     // quem decide e o site. Mas o jogo precisa saber na hora do JOIN, e uma
     // chamada HTTP por entrada seria lenta e frageis. Entao o jogo guarda esta
@@ -294,7 +294,7 @@ router.get('/ssu', async (req, res) => {
       ok: true,
       // [24/10] game_config é da cidade: ajustes da noite + a GRADE própria dela ('ssu_grade')
       ajustes: Object.assign({}, (r.rows[0] && r.rows[0].value) || {},
-        await (async () => { const g = (await pool.query(`SELECT value FROM game_config WHERE key = 'ssu_grade'`)).rows[0];
+        await (async () => { const g = (await pool.query(`SELECT value FROM game_config WHERE cidade_id = sf_cidade_padrao() AND key = 'ssu_grade'`)).rows[0];
                              const v = (g && g.value) || {}; const o = {};
                              const gr = require('../ssu').validarGrade(v.grade); if (gr) o.grade = gr;
                              if (v.sempre_aberta === true) o.sempre_aberta = true; return o; })()),
@@ -688,7 +688,7 @@ router.post('/heartbeat', async (req, res) => {
       .catch(e => console.error('[royalties] heartbeat:', e.message));
 
     // config persistida (clima etc.) volta no heartbeat: servidor novo já nasce com o estado certo
-    const cfg = await pool.query(`SELECT key, value FROM game_config`);
+    const cfg = await pool.query(`SELECT key, value FROM game_config WHERE cidade_id = sf_cidade_padrao()`);
     const config = {};
     for (const r of cfg.rows) config[r.key] = r.value;
     // [24/10] o jogo lê config.ssu: vai junto a grade própria da cidade

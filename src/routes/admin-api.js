@@ -75,7 +75,7 @@ router.get('/state', async (req, res) => {
       if (!catalog && s.catalog) catalog = s.catalog;
       for (const p of (s.players || [])) players.push(Object.assign({ job_id: s.job_id }, p));
     }
-    const cfgRows = await pool.query(`SELECT key, value FROM game_config`);
+    const cfgRows = await pool.query(`SELECT key, value FROM game_config WHERE cidade_id = sf_cidade_padrao()`);
     const config = {};
     for (const r of cfgRows.rows) config[r.key] = r.value;
     res.json({ servers: servers.rows.map(s => ({ job_id: s.job_id, place_id: s.place_id, n: (s.players || []).length, updated_at: s.updated_at })), players, catalog, config });
@@ -795,7 +795,7 @@ router.post('/registro/wipe', requirePoder('wipe'), async (req, res) => {
     await del('auditoria', 'DELETE FROM admin_audit');
 
     // --- TEMPORADA NOVA: é isto que zera o save de TODO MUNDO, online ou não ---
-    const t = await cli.query(`SELECT value FROM game_config WHERE key = 'temporada' FOR UPDATE`);
+    const t = await cli.query(`SELECT value FROM game_config WHERE cidade_id = sf_cidade_padrao() AND key = 'temporada' FOR UPDATE`);
     const atual = Math.max(1, parseInt(t.rows[0] && t.rows[0].value && t.rows[0].value.n) || 1);
     const nova = atual + 1;
     const agora = new Date().toISOString();
@@ -900,7 +900,7 @@ router.post('/booster/ja-recebeu', requirePoder('admins'), async (req, res) => {
     if (!Number.isFinite(rid) || rid <= 0) return res.status(400).json({ error: 'roblox_id inválido' });
     const u = await pool.query(`SELECT id, discord_id, roblox_username FROM users WHERE roblox_id = $1`, [rid]);
     if (!u.rows[0]) return res.status(404).json({ error: 'Essa conta Roblox não está vinculada a ninguém no site' });
-    const t = await pool.query(`SELECT value FROM game_config WHERE key = 'temporada'`);
+    const t = await pool.query(`SELECT value FROM game_config WHERE cidade_id = sf_cidade_padrao() AND key = 'temporada'`);
     const temporada = Math.max(1, parseInt(t.rows[0] && t.rows[0].value && t.rows[0].value.n) || 1);
     const r = await pool.query(
       `INSERT INTO booster_entregas (cidade_id, temporada, tipo, discord_id, user_id, roblox_id, nome, status, nota, entregue_em)
@@ -1008,7 +1008,7 @@ router.post('/testers/:id/encerrar', requirePoder('testers'), async (req, res) =
 // noite em tudo que decide aberto/fechado. Guardados separados: encerrar/estender reescrevem
 // 'ssu' inteiro e não podem apagar a grade.
 async function lerGrade() {
-  const r = await pool.query(`SELECT value FROM game_config WHERE key = 'ssu_grade'`);
+  const r = await pool.query(`SELECT value FROM game_config WHERE cidade_id = sf_cidade_padrao() AND key = 'ssu_grade'`);
   const v = (r.rows[0] && r.rows[0].value) || {};
   const out = {};
   if (SSU.validarGrade(v.grade)) out.grade = SSU.validarGrade(v.grade);
@@ -1021,7 +1021,7 @@ function comGrade(ajustes, g) {
   return Object.assign(a, g || {});
 }
 async function lerAjustes() {
-  const r = await pool.query(`SELECT value FROM game_config WHERE key = 'ssu'`);
+  const r = await pool.query(`SELECT value FROM game_config WHERE cidade_id = sf_cidade_padrao() AND key = 'ssu'`);
   return comGrade((r.rows[0] && r.rows[0].value) || {}, await lerGrade());
 }
 
@@ -1164,7 +1164,7 @@ router.put('/ssu/grade', requirePoder('ssu'), async (req, res) => {
       `INSERT INTO game_config (key, value, updated_at) VALUES ('ssu_grade', $1, NOW())
        ON CONFLICT (cidade_id, key) DO UPDATE SET value = EXCLUDED.value, updated_at = NOW()`, [JSON.stringify(valor)]);
     await audit(req, 'ssu:grade', valor);
-    const r = await pool.query(`SELECT value FROM game_config WHERE key = 'ssu'`);
+    const r = await pool.query(`SELECT value FROM game_config WHERE cidade_id = sf_cidade_padrao() AND key = 'ssu'`);
     const n = await empurrarPraServidores((r.rows[0] && r.rows[0].value) || {}, req);
     const aj = await lerAjustes(), agora = Math.floor(Date.now() / 1000);
     res.json({ ok: true, servidores: n, grade: SSU.gradeTexto(aj), estado: SSU.estado(agora, aj) });

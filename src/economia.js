@@ -79,7 +79,7 @@ function montar(movs, totalCirculando) {
 async function inicioTemporada() {
   try {
     const r = await pool.query(
-      `SELECT key, value FROM game_config WHERE key IN ('wipe_em','temporada')`);
+      `SELECT key, value FROM game_config WHERE cidade_id = sf_cidade_padrao() AND key IN ('wipe_em','temporada')`);
     let em = null;
     for (const x of r.rows) {
       const v = x.value && x.value.em;

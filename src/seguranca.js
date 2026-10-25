@@ -97,7 +97,7 @@ function middlewareIp(pool) {
 
 async function config(pool) {
   try {
-    const r = await pool.query(`SELECT value FROM game_config WHERE key = 'seguranca'`);
+    const r = await pool.query(`SELECT value FROM game_config WHERE cidade_id = sf_cidade_padrao() AND key = 'seguranca'`);
     const v = (r.rows[0] && r.rows[0].value) || {};
     return {
       exige_vinculo: v.exige_vinculo === true, bloquear_alt_de_banido: v.bloquear_alt_de_banido !== false,
