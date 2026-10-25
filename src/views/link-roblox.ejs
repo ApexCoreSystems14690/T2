@@ -33,8 +33,9 @@
   <div class="card">
     <div style="margin-bottom:1.1rem"><%- include('partials/placa') %></div>
     <h2>Vincular conta Roblox</h2>
-    <p class="hint">É isto que liga a sua conta do site ao seu personagem no jogo. Sem vincular,
-      as corporações em que você já entrou dentro do jogo não aparecem no painel.</p>
+    <p class="hint">É isto que liga a sua conta do site ao seu personagem no jogo. <b>Pra entrar no Santa Fé
+      são 2 passos: 1) Vincular o seu Roblox e 2) Verificar com o código na bio.</b> Só vincular não basta:
+      sem verificar, o jogo não deixa você entrar.</p>
     <% if (typeof error !== 'undefined' && error) { %>
       <div class="error">
         <% if (error === 'already_linked') { %>Esse Roblox já está verificado em outra conta do site. Se é seu, abra um ticket.<% } %>
@@ -47,7 +48,8 @@
         <% if (error === 'roblox_fora') { %>O Roblox não respondeu agora. Tenta de novo daqui a pouco.<% } %>
       </div>
     <% } %>
-    <% if (typeof ok !== 'undefined' && ok === 'verificado') { %><div class="ok">Conta Roblox verificada.</div><% } %>
+    <% if (typeof ok !== 'undefined' && ok === 'verificado') { %><div class="ok">Conta Roblox verificada. Pronto, já pode entrar no jogo. Pode tirar o código da bio.</div><% } %>
+    <% if (typeof ok !== 'undefined' && ok === 'vinculado') { %><div class="error" style="background:#FBF0DD;color:#A86400;border-color:#EDD3A8"><b>Vinculado! Falta 1 passo:</b> verifique lá embaixo colocando o código na bio do Roblox. Sem isso você ainda não entra no jogo.</div><% } %>
     <% if (user.vinculo_pendente_rid) { %>
       <div class="error" style="background:#FBF0DD;color:#A86400;border-color:#EDD3A8">
         <b><%= user.vinculo_pendente_nome || user.vinculo_pendente_rid %></b> já aparece no sistema, mas ninguém provou que é dono.
@@ -70,7 +72,7 @@
     <div class="verif">
       <h2 style="font-size:1rem">Verificação <% var _ok = user.roblox_verificado && !user.vinculo_pendente_rid; %><span class="selo <%= _ok ? 'sim' : 'nao' %>"><%= _ok ? 'verificada' : 'não verificada' %></span></h2>
       <% if (!_ok) { %>
-        <p class="hint" style="margin-bottom:.6rem">Prova que essa conta Roblox é sua. Sem isso ela não conta como sua pro sistema de segurança do servidor.</p>
+        <p class="hint" style="margin-bottom:.6rem"><b>Sem verificar você não consegue entrar no jogo.</b> Isso prova que essa conta Roblox é sua (proteção contra conta falsa e alt).</p>
         <% if (user.vinculo_codigo) { %>
           <div class="codigo"><%= (typeof codigoLegivel === 'function') ? codigoLegivel(user.vinculo_codigo) : user.vinculo_codigo %></div>
           <ol class="passos">

@@ -255,11 +255,15 @@ router.post('/link-roblox', async (req, res) => {
       `UPDATE users SET roblox_id = $1, roblox_username = $2,
               roblox_verificado = (roblox_verificado AND roblox_id IS NOT DISTINCT FROM $1),
               vinculo_pendente_rid = NULL, vinculo_pendente_nome = NULL,
+              vinculo_codigo = $4, vinculo_codigo_em = NOW(),
               updated_at = NOW() WHERE id = $3`,
-      [rid, nomeRoblox || null, req.user.id]
+      [rid, nomeRoblox || null, req.user.id, SEG.novoCodigo()]
     );
     await client.query('COMMIT');
-    res.redirect('/dashboard');
+    // [25/10] antes voltava pro painel e a pessoa achava que tinha acabado ("Roblox: fulano · Alterar"),
+    // sem saber que ainda faltava VERIFICAR -- e sem verificar o jogo nao deixa entrar. Agora fica na
+    // tela de vincular, ja com o codigo gerado, e o aviso "falta 1 passo".
+    res.redirect('/dashboard/link-roblox?ok=vinculado');
   } catch (err) {
     await client.query('ROLLBACK').catch(() => {});
     console.error('link-roblox:', err.message);

@@ -63,13 +63,20 @@
   <div class="main">
     <% if (!user.roblox_id) { %>
       <div class="roblox-link">
-        Você ainda não vinculou seu Roblox. <a href="/dashboard/link-roblox">Vincular agora</a>
+        Você ainda não vinculou seu Roblox — <b>sem vincular e verificar você não entra no jogo</b>. <a href="/dashboard/link-roblox">Vincular agora</a>
       </div>
     <% } else { %>
+      <% if (!user.roblox_verificado) { %>
+      <div class="roblox-link" style="background:#FBE3E1;border-color:#E8A9A3;color:#8A1C12">
+        <b>Falta verificar seu Roblox</b> (<%= user.roblox_username || user.roblox_id %>). Sem verificar você <b>não entra no jogo</b>.
+        &middot; <a href="/dashboard/link-roblox" style="color:#8A1C12;font-weight:700">Verificar agora</a>
+      </div>
+      <% } else { %>
       <div class="roblox-link">
-        Roblox: <strong><%= user.roblox_username || user.roblox_id %></strong> (ID: <%= user.roblox_id %>)
+        Roblox: <strong><%= user.roblox_username || user.roblox_id %></strong> (ID: <%= user.roblox_id %>) &middot; verificado
         &middot; <a href="/dashboard/link-roblox">Alterar</a>
       </div>
+      <% } %>
     <% } %>
 
     <div class="section-title">
