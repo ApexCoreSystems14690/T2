@@ -1,0 +1,111 @@
+# Armadilhas (bug: sintoma, causa REAL, como evitar)
+
+Semeadas da memória em 25/10. Detalhes completos nos arquivos `santa-fe-*` da memória.
+
+- 11/10: Kick "Check your internet connection" (erro 267) — causa real: laço do InventarioHandler disparando o anti-spam de remotes — memória `santa-fe-kick-antispam`.
+- 11/10: Tiro em alvo EM MOVIMENTO não registrava — acerto passou a ser confirmado pelo cliente — memória `santa-fe-armas`.
+- 10/10: Andar e câmera bugados (07–10/10) — causa real: vida = 1 travava o CameraHandler — memória `santa-fe-camera`.
+- 13/10: Jogador invisível (corpo + nome) pra UM outro jogador — causa: StreamingEnabled; conserto PersonagemSempreVisivel — memória `santa-fe-personagem-invisivel`.
+- 15/10: Parede/tampa invisível na rampa da Av. Astorga — causa: Union gigante com CollisionFidelity Default — memória `santa-fe-paredes-invisiveis`.
+- 25/10: "Validar" de script falha na place de desenvolvimento — causa: rascunhos (edição colaborativa) — memória `santa-fe-studio-rascunhos`.
+- 25/10: send_message do Discord falha com "Cannot read properties of undefined (reading 'replace')" — causa: usei `channel_id` — usar `channel`.
+- 25/10: Editar/apagar mensagem que eu postei deu erro — causa: o Julio já tinha apagado a mensagem — conferir com get_message antes; se sumiu, apagar a metade órfã e repostar inteiro.
+- 25/10: Aviso de "tela preta" pós-SSU saiu com explicação genérica — causa real NÃO estava documentada em lugar nenhum — não afirmar causa sem medir; avisar o Julio.
+- 25/10: Shell do PC (`device_bash`) indisponível — hipervisor desligado (virtualização na BIOS) — usar device_list_dir / stage / commit.
+- 25/10: Assinatura de imagem do Ministério mostrava nome real de ministro — não repetir nome de pessoa real em notícia fictícia do jornal.
+- 25/10: Erro 267 na entrada de PC lento — causa real: nosso laço chamava TeleportAsync a cada 6 s; o erro "teleport já em andamento" escondia o motivo real — evitar: ignorar IsTeleporting como falha, no máx. 4 tentativas, esperar o cliente avisar `ProntoProMenu` (mecânica `seguranca-anticheat`).
+- 25/10: Lobby "validando" eterno com senha errada — causa: `local ui` declarado DEPOIS dos closures que o usam (vira global nil, erro silencioso) — declarar `local` antes do uso.
+- 25/10: Código de vínculo Roblox estourava — causa: coluna `users.vinculo_codigo` VARCHAR(12) e código novo de 3 palavras — coluna agora VARCHAR(32).
+- 25/10: Página de vincular mostrava `{"error":"Devagar."}` — causa: limite de 10 req/5 min por IP contando até abrir a página (IP de celular é compartilhado) — limite agora só em POST, por conta.
+- 25/10: Ban do Roblox bloqueia a entrada ANTES de qualquer script — `/acesso` nunca roda pra banido; desban no site não chegava no Roblox — precisa de laço ativo no jogo (UnbanAsync).
+- 25/10: Teste de isca em Studio quase baniu a conta real do Julio — guard `RunService:IsStudio()` em `Seg.isca` (só loga).
+- 25/10: Erro de sintaxe por splice em Python no `index.js` (`});` sobrando) — rodar `node -c` depois.
+- 25/10: Clique simulado do mouse não chega no monitor 3D do lobby — não dá pra testar clique no lobby por Studio.
+- 16/10: cll/janela do celular ficava com ~15% aparecendo mesmo fechada — causa: o aumento do LayoutToque ficava em 1.58 com a janela fechada (posição de fechar foi feita pra escala 1) — janela fechada ou invisível volta à escala 1 em `medir()`.
+- 16/10: UIScale do pai multiplica o MinSize — piso de 72 px virou 155 — dividir MinSize pelas escalas ativas.
+- 12/10: Gás no carro morria em curva no toque — causa: aceleração presa à posição do joystick — agora o ÂNGULO do dedo decide (≤70° total, 70–112° cai a 55%, 112–140° solta, ≥140° freia/ré).
+- 16/10: Heli assistido valeu pro PC também (Settings alterados) — Julio quer o PC difícil — assistência só com `vaAssistido` (toque); Settings dos 5 helis restaurados.
+- 16/10: `Main.Remove` resolve pro método — usar FindFirstChild.
+- 16/10: Clonar backup de ModuleScript e setar `Disabled` dá erro — só BaseScript tem `Disabled`.
+- 16/10: Tela de craft "não dá pra ver" no celular (1 reporte, 12/10) — causa NÃO reproduzida; layout melhorado (aba Craft abaixo das abas, 1.21×, botão Craftar piso 72×30 px).
+- 25/10: `ListKeysAsync` no Studio (Edit) dá throttle e a limpeza morria no meio — causa: `AdvanceToNextPageAsync` sem pcall — sempre pcall + retry; sobram chaves antigas (inofensivas).
+- 25/10: Gravar nil num DataStore falha ("Argument 2 missing or nil") — usar `RemoveAsync` pra apagar.
+- 25/10: "Edit datamodel not available in Play mode" — parar o Play antes de editar.
+- 25/10: Validar do rascunho aparece "(Vazio)" mesmo com o editor tendo a correção — `.Source` não mostra o rascunho; conferir pelo `GetEditorSource` e pedir o Commit ao Julio.
+- 25/10: Prova da CNH reprova "bateu" sem batida — velocidade de carro de dono de rede cliente lida no servidor (ver `Mecanicas/cnh-autoescola.md`).
+- 24/10: Cápsula sem balão de F — nascia sem atributo `Request`; o InteractionHandler só desenha com `Request == ""` — todo ponto de F novo nasce com `Request = ""`.
+- 24/10: E (Key2) num ponto que tem Action local nunca chega no servidor — o dispatch chama a Action local e para — Action declara `SegundaNoServidor = true`.
+- 24/10: Props flutuando 1 stud na mesa — raycast em MeshPart com CollisionFidelity Box mede a CAIXA — conferir fidelity antes de assentar.
+- 24/10: "Não cabe corpo em lugar nenhum" — `GetPartBoundsInBox` usa bounding box (Montanha/Meio-Fio colidem com tudo) — usar `GetPartsInPart`.
+- 24/10: Free model com payload escondido — "Vitamins" 134769853837735 e 82346506512582 (Weld.Runtime/RuntimeInput/ScreenBuilder) — varrer `GetDescendants()` e nunca usar esses.
+- 24/10: Prop do mundo clonado pra Tool trouxe Rope ancorado e AutomaticModel dentro do MeshPart — varrer descendentes (nada ancorado, nada a +3 studs, sem script).
+- 24/10: bbox de modelo da toolbox errado (2,2 de altura numa lima deitada) — `WorldPivot` herdado girado — resetar `WorldPivot` antes de medir.
+- 24/10: Rede recusava com erro "tipo" — argumento opcional precisa de `?` (`"string:40?"`).
+- 24/10: Clique no rótulo errava 36 px — `WorldToViewportPoint`/`GetMouseLocation` x `io.Position`/`IgnoreGuiInset=true` são espaços diferentes — não misturar.
+- 24/10: Câmera da estação voltava pra 3ª pessoa — o jogo devolve `CameraType = Custom` — reafirmar Scriptable a cada quadro.
+- 24/10: Exploit em script acima de 200 mil chars (RemotesHandler) — não dá pra escrever por API — travar em outro serviço (ex.: `ArmaRegistro.aoAtualizar`).
+- 24/10: `RunService:IsEdit()` derruba módulo no servidor (Plugin security) — sempre em pcall.
+- 24/10: Place caiu no meio do trabalho — Team Create tinha salvado tudo — reabrir e conferir marco a marco antes de refazer.
+- 24/10: Teste de sucesso que grava no DataStore de produção (registro de arma) — não rodar na place principal; testar só os caminhos de recusa e avisar.
+- 18/10: `.Source = ...` falhou no SamuService — causa: ~214.595 caracteres (limite 200.000) — usar `multi_edit` pequeno ou mover a lógica pra outro módulo (RemoteFunction `RCPChoque` ficou no CaidoService).
+- 18/10: CaidoService não achado em `Server.Services` — mora em `ServerScriptService.Server.[Armas] Services.CaidoService`.
+- 18/10: `script_read` parcial deu erro — exige start e end (end ≥ start).
+- 18/10: RCP volta "mao_ocupada" — causa: qualquer Tool na mão; a máscara usa o cilindro na mão, então a ordem é máscara (cilindro vai pro chão), mão vazia, RCP.
+- 18/10: Sem apertar ESPAÇO no ritmo a massagem fica abaixo de 60%: a parada anda e a máscara não sobe o O2 — conferir os gomos antes de achar que é bug.
+- 18/10: `user_keyboard_input` falha com foco do CoreGUI — usar `Signals.equip` ou testar só teclas livres (ESPAÇO funciona).
+- 24/10: Tester: "RCP + oxigênio só funciona no boneco" — NÃO reproduzido (AESP real deu RCE em ~21 s). Causa desconhecida; pedir print de Sangue %, O2 % e gomos.
+- 24/10: `start_stop_play` deu timeout de 60 s mas o Play abriu — conferir com `get_studio_state` antes de repetir.
+- 23/10: Mecânica inteira morta no servidor — `RunService:IsEdit()` exige Plugin e derruba o módulo (ArmaRegistro, BalisticaService, BocaService) — só passou porque o teste em Edit roda como plugin. Usar `pcall`; teste em Edit não prova que o módulo carrega no servidor.
+- 23/10: 1 arma em 4 invisível pra investigação — `serialValido` exigia 3 letras no fim, mas o gerador usa 3 e 7 — fim aceita letra ou dígito (26% dos sufixos).
+- 22/10: Microscópio burlável — `laudoPublico`, `estado` e `porEvidencia` mandavam o serial da evidência pro cliente — comparar duas strings dispensava o olho. Antes de mandar estrutura pro cliente: "com isto na mão dá pra pular o minigame?".
+- 22/10: Arma de serviço sem número — vestiário da corp clona Tool direto na Backpack, sem `Inventario` — `ArmaRegistro.fichaDaCorp` + vigia de mochila carimba `Serial`.
+- 22/10: Não existe ponto de vestiário no mapa (armário da corp só abre ao pegar o emprego; F de novo DEMITE) — por isso a gaveta `BAL_Gaveta` da perícia dá saco (F) e placa (E).
+- 23/10: Asset "saquinho de evidência" era pacote de erva com MARCA real estampada — instalado só por nome. Foto antes de aprovar; trocado por saco de papel pardo.
+- 23/10: Props flutuando 1 stud na bancada — raycast em MeshPart com `CollisionFidelity Box` mede a caixa; a caixa também criava degrau invisível — colisão precisa.
+- 23/10: Câmera da estação voltava pra terceira pessoa (CameraType Custom, FOV 82) — algo do jogo devolve — reafirmar `Scriptable` e FOV a cada quadro.
+- 23/10: Boca virava dinheiro automático, frasco inalcançável — NPC levava o último frasco — `F.CLIENTE.RESERVA = 1`.
+- 23/10: Teste em Play expulsou o Julio — `require(DataHandler)` na barra de comando faz ForceLoad e rouba a trava do save — usar os Bindables do módulo vivo.
+- 22/10: Cápsula do chão estourava os pontos de F (MaxParts 24, 4 bolinhas no toque) — ponto único que o cliente move pra cápsula mais perto.
+- 22/10: "Com quem está agora" mostrava gente fora do jogo — empréstimo fantasma (saiu sem devolver) — `faxinaFantasmas` no site (ausente + 5 min).
+- 22/10: Abas do PC ficaram "botão redondinho" — StarterGui tinha o estilo velho e só `pintarAbas` em runtime restilizava — estilo SISPOL gravado no StarterGui.
+- 24/10: Preso fugia da cadeia — `CaidoService.Morrer` teleporta pro hospital sem checar `Preso` — `Server.CercaPrisao` devolve à cela qualquer saída da caixa.
+- 24/10: Paciente na maca + girar levou o empurrador pro void — maca arremessa o jogador; anti-void não resgatava — `Server.TravaArremesso` + `workspace.RedeDoVoid`.
+- 24/10: Lighting.ClockTime deixado em 12 depois de foto; o Julio entrou em Play e viu dia — restaurar pra 6 no mesmo turno ou agendar lembrete.
+- 24/10: `KeyframeSequenceProvider` falha de vez em quando — repetir até 4 vezes.
+- 24/10: Edição não aparecia em `.Source` e "Validar" falhava — rascunhos (QA_AESP com script apagado, Balistica_Autoteste) — descartar os rascunhos; validar RemotesHandler sozinho.
+- 24/10: Backup esquecido antes da edição do Seguro — reconstruí o `_antes` revertendo as edições. Backup é o 1º passo, sempre.
+- 24/10: Drive-by esquerdo "esquisito" — Lerp do TiltHandler (RenderStepped) sobrescrevia o C0 do DriveByAnim (BindToRenderStep roda ANTES de todo RenderStepped) — TiltHandler não escreve com `_G.DriveByLocalAtivo`. Medir antes de culpar o espelho.
+- 14/10: `PlaybackLoudness` dá 0 no Edit — medir volume com AudioAnalyzer (PeakLevel/RmsLevel).
+- 12/10: Studio fechou e reabriu e perdeu edição não salva (VeiculosHandler) — conferir `.Source` depois de reabrir e lembrar Ctrl+S + Publish.
+- 24/10: Gravar memória fora do Project não funciona (só leitura) — gravar em /projects/<id>/areas/.
+- 05/10: Apê com 3 vagas "SEM CHAO" — as 6 unidades têm 2 alturas de pivô (64 e 82); um offset relativo único põe as 3 de baixo 18 studs sob o chão — fila explícita na calçada (ver `Mecanicas/garagem-casa.md`).
+- 05/10: 3 vagas de Casa1 dentro de árvore — empurrar a vaga quebra o offset igual das 16 casas; movi a ÁRVORE (guardei `_CFantesVaga`). O 1º empurrão foi parar no telhado (y 74.1, 12.4 flutuando); só a verificação final pegou. Conferir chão em toda vaga mexida.
+- 05/10: Favela achava rua em só 17/24 — busca curta (40 studs) e 1 passe; com 90 studs e um 2º passe que aceita qualquer chão firme deu 24/24.
+- 05/10: Julio arrastando/segurando peças no Studio não aparece pro MCP (alças liam 0,0 studs movido, grupo sumido) — não propagar de coordenadas duvidosas; pedir pra ele soltar e confirmar.
+- 05/10: Foto de SurfaceGui ficou preta 4 vezes — `AlwaysOnTop = true` impede desenhar no Edit; a Face tem que olhar a câmera; e são 2 capturas. Mock com painel dentro do botão de fundo difere do script real (irmão). ScreenGui 2D ficou sem foto.
+- 05/10: `ZIndexBehavior.Global` — filho com ZIndex ≤ do pai desenha invisível, sem erro — forçar os descendentes do painel clonado a ZIndex ≥ pai+1.
+- 06/10: "Não abre o armário por causa do F da garagem" — `CAS:BindActionAtPriority` com `Sink` faz o `gameProcessedEvent` do `UIS.InputBegan` ficar true pra TODO MUNDO, matando o F do InteractionHandler. Devolver `Pass` quando `MainGui.circulo.Visible` e o texto da bolinha tem `[F]`; só dar `Sink` quando a ação foi sua.
+- 06/10: Shift-lock prende o mouse no meio com ScreenGui aberta — `RenderStepped` forçando `MouseBehavior = Default` enquanto o painel está aberto.
+- 05/10: `POST /link-roblox` apagava conta de jogador (merge de placeholder com `DELETE FROM users`) — virou recusa; nenhuma rota apaga `users` (ver `Mecanicas/site-t2-conta-apagada.md`).
+- 06/10: Desbanir "Parâmetro inválido: roblox_id" — `/api/admin/command` lê os parâmetros de `payload`; eu mandava `roblox_id` no topo.
+- 12/10: Casa financiada retomada com armário cheio "sumia" — o login carrega móveis de UMA casa só e `esvaziarCasa` só vê o mundo (ver `Mecanicas/financiamento-retomada.md`).
+- 06/10: `device_commit_files` recusou `stagedPath` em `/mnt/user-data/uploads/` — só aceita `/mnt/user-data/outputs/`.
+- 29/10: Testar serviço de dano no Edit (require de FerimentoService/EquipamentoService/CaidoService) PLANTA `QA` BindableFunction dentro deles e a Balística cria `workspace.Capsulas` — fotografar bindables antes e apagar os novos depois.
+- 29/10: RemotesHandler ~3986 faz `pcall(require, X["[Armas] Services"].ArmaMotor)` em TODO item: o `.ArmaMotor` é lido antes do pcall; sem o módulo, comida/algema/corda travam. O `ArmaMotor` mínimo tem que existir.
+- 30/10: `Model:PivotTo` usa o PivotOffset do PrimaryPart; o Handle de arma pode ter PivotOffset próprio e a peça vai parar fora do lugar calculado. Zerar `PivotOffset` no clone.
+- 30/10: Tool guardada no ServerStorage pode estar deitada: "cima" e "frente" da arma saem do `tool.Grip` (UpVector/LookVector), não da vertical do mundo nem da linha empunhadura->cano (a empunhadura fica abaixo do eixo do cano: arma inclinava ~25°).
+- 30/10: Conferir posição por número da CONTA engana; conferir pela peça REAL (raiz.CFrame) ou por foto.
+- 30/10: Desvio de câmera aplicado DEPOIS do PlayerModule (balanço/recuo) acumula: o PlayerModule lê `camera.CFrame` no quadro seguinte e a mira foi pro céu numa rajada. Desfazer o desvio num RenderStep ANTES do PlayerModule (Camera-1) — `TiroBodycamDesfaz`.
+- 30/10: O ECS devolve `CameraMaxZoomDistance` pra 3 depois que a 1ª pessoa põe 0,5: a câmera ficava atrás da cabeça. Segurar o zoom a cada quadro enquanto o viewmodel está ligado.
+- 30/10: Tool montada com WeldConstraint no Edit: em Play o Handle ficou ~1900 studs longe das outras peças (offset errado). Usar Weld com C0 explícito (h:ToObjectSpace(peça)).
+- 30/10: C0 do RightGrip mexido pelo cliente do dono REPLICA pro servidor. Pose por código nunca pode escrever C0 calculado de peça fora do lugar (checar distância antes).
+- 30/10: Arma tem 2 juntas no Handle: RightGrip (Roblox) + Motor6D com o nome da arma (CharacterHandler). Mudou o modelo da arma, ajustar o C0 do motor também.
+- 30/10: Motor6D.Transform escrito no RenderStep é sobrescrito pela animação antes de valer (braço não seguia a mira). Ajuste por cima da animação: no Stepped. E não ler posição de peça pra corrigir (vem do quadro anterior = tremor); calcular pela conta das juntas.
+- 30/10: RightGrip da Tool volta a ligar depois do equip; se a arma é animada por Motor6D próprio, manter RightGrip desligado enquanto a arma está na mão.
+- 30/10: Arquivo do vault VOLTA pra versão anterior depois do commit (aconteceu com Indice.md e Mecanicas/tiro-novo-2.md; antes com tiro-novo.md): sempre re-stage e conferir se a linha que escrevi ainda está lá antes de escrever de novo.
+- 30/10: Pack da Toolbox trazia Script "Runtime" escondido DENTRO das poses de KeyframeSequence (e em attachments), só roda no Studio e injeta GUI no PlayerGui. 11 achados e apagados no Garimpo_Tiro_2910. Toda inserção da Toolbox: varrer LuaSourceContainer dentro de KeyframeSequence/Pose/Attachment e apagar.
+- 30/10: Animação de arma com pose de Torso/pernas pisa na postura (agachar/deitar): o agachar sumia mirando. Nas cópias, Pose.Weight = 0 em Torso, pernas e cabeça; a de prioridade menor (postura) aparece. Medido: tronco -1,0 agachado mirando.
+- 30/10: Atributo setado no personagem pelo cliente (Agachado/Deitado) não replica: pros outros jogadores, detectar postura pela peça (tronco deitado = UpVector.Y < 0,5).
+- 31/10: Place de dev (75467790232298) é OUTRA experiência (universo 10768960641): o lobby não reserva servidor nela (fila com erro) e, entrando direto, o RegistroCidade expulsava ("entre pelo menu de cidades"). Servidor reservado só funciona dentro do mesmo universo.
+- 31/10: Cidade 'testes' presa na fila: no painel o place_id estava 10765010471 = ID da EXPERIÊNCIA (universo), não da place. Place de testers = 107528339216841. Painel pede ID de PLACE.
+- 31/10: Rede_Cidades guardava cidade_<slug> SEM o campo place (registro antigo): o lobby reaproveita esse código pra qualquer place nova -> falha. Ao trocar a place de uma cidade, apagar cidade_<slug> (backup_<chave>_<data> antes) pro lobby reservar de novo.

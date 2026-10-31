@@ -1,0 +1,61 @@
+# Regras do Julio (valem pra qualquer tarefa)
+
+Fonte: ditas pelo Julio, copiadas da memória em 25/10.
+
+- 20/09: Testar no Roblox Studio SEM dar Play. Proibido ligar/desligar o Play. Método em `Metodos.md`.
+- 22/09: Gauntlet loop roda SEM pausas. Ação reversível (renomear peça, backup, medir): faz, mede e conta depois. Só sobe pro Julio: formato de dado já gravado, migração, ou algo que não dá pra medir.
+- 30/09: Nada de "safe". Sistema novo nasce ATIVO, sem chave desligada nem flag esperando aprovação.
+- 03/10: Mecânica nova se define VISUAL (o que o jogador vê) e MECÂNICA (o que ele faz), simples. O efeito fica DENTRO da área da mecânica. Não vaza pra NPC, preço de loja, Uber ou outros sistemas do RP.
+- 03/10: Mecânica boa = LOOP COM MEMÓRIA (estado que muda no tempo, etapas em lugares físicos diferentes, consequência que sobrevive ao login). Verbo solto (uma ação nova) ele acha "simples demais". Padrão: Ficha/Perícia/Pátio da PC e SAMU.
+- 07/10: Nunca usar o MCP do Windsor.ai. Dados do YouTube: pedir print do Studio.
+- Sempre: não usar equipe de agentes pra tudo (gasta o plano). Resolver direto quando der.
+- Sempre: dizer na prática o que fazer (qual arquivo abrir, onde escrever, o que entregar).
+- Sempre: salvar cada decisão de mecânica por mecânica (`Mecanicas/<nome>.md`).
+- Sempre: português do Brasil, leve, curto e direto, sem tom formal e sem cobrança.
+- 25/10: Post no Discord no "estilo Julio": `# TÍTULO`, seções em negrito CAIXA ALTA, listas curtas com `-`, separador `━━━━━━━━━━━━━━━━━━━━`, ping do cargo, sem emoji (só se ele pedir), sem falar "IA", sem passo numerado.
+- 25/10: Quando ele diz "me manda primeiro aqui", mando o rascunho no chat e só publico depois do "pode publicar".
+- 25/10: Texto de notícia/anúncio que avisa a comunidade leva o ping do cargo na mensagem ("Deve marcar na msg").
+- 25/10: Nunca colar o token do bot do Discord no chat; nunca mandar o e-mail dele pra serviço nenhum; git push fica com ele.
+- 25/10: Sem clique de computer-use no PC dele pra testar.
+- 25/10: Texto que explica falha pra comunidade: não afirmar causa nem "nenhum save afetado" sem medir; avisar o Julio do que não foi verificado.
+- 25/10: Escrever em D:\T2 só via `device_commit_files` com `expectedMtimeMs`; antes re-stage e compare (outros chats editam o mesmo arquivo). Backup antes de mexer.
+- 25/10: Nunca apagar geometria nem dado do mapa. Backup antes de editar.
+- 25/10: O Julio publica as places e faz o `git push`; eu só deixo pronto e aviso o que depende de publicar/push.
+- 25/10: Nunca digitar senha nem credencial. Nunca desligar ScreenGui do StarterGui (só PostEffects, com atributo `_EnAntes`).
+- 25/10: Ele liberou editar a place de PRODUÇÃO 78083733455249. Evitar Play, a menos que seja necessário.
+- 16/10: Heli: no PC é pra ser difícil mesmo (potência manual ~50% pra pairar). Facilitação só no celular, nunca no PC.
+- 12/10: Qualquer ajuda de mobile (mira, voo, volante) vale SÓ pra toque verdadeiro; PC fica intacto.
+- 16/10: Janela/tela do celular que se adapta (cll, inventário) tem que voltar ao normal ao fechar e sair da tela como no PC.
+- 16/10: Abriu HUD na casa (tecla B): todo o resto sobe pra não atrapalhar escolher o móvel.
+- 16/10: Mobile precisa conseguir fazer TUDO que o PC faz (votar na urna, craft, SISPOL): garantir por contrato, não supor.
+- 25/10: Nunca usar ProximityPrompt em mecânica nova.
+- 25/10: Lobby "Salão" 14099214532 NÃO mexer.
+- 25/10: Depois de testar, apagar bonecos/peças de teste e restaurar Lighting.ClockTime.
+- 25/10: Teste em Play é permitido quando não dá pra provar de outro jeito (substitui a regra "nunca Play" de 20/09 só nesse caso).
+- 24/10: Prop sempre da Toolbox ("método híbrido"): pega pronto e só modifica coisinha. Nada feito na mão, nada quadrado ("tão FEIOS DEMAIS, MINÚSCULO").
+- 24/10: Texto/rótulo em prop vai NA superfície do próprio prop, nunca numa peça colada por cima ("colou por cima... feião, tá repreendido").
+- 24/10: Mecânica só é "pronta" depois de auditores + um cético testarem o CAMINHO DO JOGADOR (do spawn, sem admin, sem /set). Compilar não basta.
+- 24/10: Antes de publicar: conferir que não há BindableFunction `QA*` dentro de ModuleScript.
+- 24/10: Nunca clicar no selo vermelho "Falha na atualização" do Studio (fecha a place).
+- 24/10: Nunca clonar+destruir script pra limpar cache do `require` (cria rascunho órfão que trava o Validar).
+- 24/10: Facção não tem vestiário dentro do jogo.
+- 24/10: Item consumível que mexe na mira (Mira Fina) puxa a mira no PC também — é efeito de item, não ajuda de mobile (não contraria a regra de 12/10).
+- 19/10: Modelagem híbrida: peças do toolbox + peças próprias.
+- 19/10: Interação nova usa o F do jogo (InteractionHandler), nunca ProximityPrompt (reforça a regra de 25/10).
+- 19/10: Nunca publicar sozinho; ao mexer no Studio, avisar que ele precisa dar Ctrl+S (e publicar).
+- 19/10: Manual/Guia da SAMU têm que ficar 100% alinhados com o jogo atual; mexeu na mecânica, atualiza os docs.
+- 24/10: Interação no jogo é SEMPRE o InteractionHandler (as "bolinhas", tecla F). Nunca ProximityPrompt.
+- 24/10: Não mexer no rótulo de maturidade do jogo (marca real, álcool, etc.).
+- 24/10: Nunca vazar a chave de API do SiteConfig (chat, arquivo, print).
+- 24/10: Não inventar hipótese de bug. Medir e analisar o caminho físico da mecânica ("comprou em X, chega em Y a tempo?").
+- 22/10: Backup antes de editar (`ServerStorage.Backups_<nome>_<DDMM>`). Depois lembrar o Julio de Ctrl+S + Publish.
+- 22/10: Depois de editar script com menos de 200k de caracteres, copiar o texto do editor pra `.Source`. Não deixar script de QA na place. Avisar o Julio pra validar rascunhos de RemotesHandler/SamuService (passam de 200k).
+- 23/10: RP imersivo: nada de painel de sistema no mundo. Informação do mundo vira coisa do mundo (tinta na parede, objeto). Prop: "nada quadrado demais", usar toolbox.
+- 24/10: Guia/post pra comunidade: número só medido ou lido do código ("Não invente número"). O que só existe na place de dev entra marcado "em breve". Rascunho vai pro Julio antes de postar.
+- 29/10: (regra antiga, registrada hoje) Nunca reescrever o sistema de outra pessoa: mexer só no ponto necessário, com backup.
+- 29/10: (antiga) Diagnosticar ANTES de agir. Trabalho visual/mapa: uma mudança por vez, com foto entre cada.
+- 29/10: (antiga) Não declarar sucesso só por número: comparar visualmente.
+- 29/10: (antiga) Busca global no Studio é PROIBIDA (`script_grep` no jogo todo). Varrer com `execute_luau` escopado à pasta do assunto.
+- 29/10: (antiga) Nunca editar pixels da textura/imagem fonte. Consertar só no grafo de nós.
+- 05/10: Nunca mandar `DATABASE_URL` nem segredo no chat: ele roda o script e manda só a saída. Chave de API em variável de ambiente, nunca em arquivo; backup de perfil nunca no git.
+- 05/10: Quando ele aponta uma tela/objeto que já existe ("usa igual oque to selecionando"), CLONAR aquele em vez de desenhar um novo. Painel inventado foi reprovado duas vezes ("feiao"; "c viajou").

@@ -1,0 +1,69 @@
+# Métodos (como medir, testar e validar)
+
+Formato: nome — o que faz — como rodar — quando usar.
+
+- 20/09: Núcleo puro sem Play — testa a lógica fora do jogo — `loadstring(modulo.Source)()` no modo Edit — qualquer regra/cálculo que dá pra separar da UI.
+- 20/09: UI sem Play — vê a tela sem entrar no jogo — monta a tela numa SurfaceGui numa peça do workspace (BillboardGui NÃO renderiza no `screen_capture`, medido 05/10; substitui o antigo) e tira foto com `screen_capture` (ScreenGui NÃO renderiza no Edit, SurfaceGui sim) — qualquer mudança visual.
+- 14/10: Volume de áudio sem Play — mede o volume de um som — AudioAnalyzer (detalhes na memória `santa-fe-sons-veiculos`) — mixagem de sons.
+- 22/09: Gauntlet loop — repete fazer, medir e corrigir até bater o resultado — sem pausar pra pedir permissão em ação reversível — tarefa com meta mensurável.
+- 25/10: Discord por servidor — manda post/arquivo — MCP `discord-cidade` (principal), `discord-devs`, `discord-governo`, `discord-faccoes`; parâmetro é `channel` (ID ou nome), NÃO `channel_id`; `send_message_with_file` aceita caminho local D:\ — qualquer post.
+- 25/10: Post longo — Discord corta em 2000 caracteres — divide em 2 mensagens e põe o ping só na última — notícia/regulamento.
+- 25/10: Regulamento por cidade na API do site — publica regras sem abrir o painel — header `X-Cidade-Pagina: <id da cidade>`; `GET /api/regras`; `PUT /api/regras/:slug` (JSON titulo, versao, status, vigente_desde, ordem, subtitulo, aviso, meta); `PUT /api/regras/:slug/texto` (text/plain: `## Capítulo N · Título`, `**Art. X.Y** — texto`, tabela com `|`, `> nota`) — rodar no browser embutido logado (aba "seed").
+- 25/10: Rede de cidades na API — `GET /api/rede/cidades`; `PUT /api/rede/cidades/:id/dono` {user_id, motivo}; `PUT /api/rede/cidades/:id/place` {place_id}; `GET /api/rede/usuarios?q=` — trocar dono ou ligar place de uma cidade.
+- 25/10: Ler imagem do Discord — o curl no CDN dá 403 no proxy — abrir a imagem no browser embutido e ler por screenshot.
+- 25/10: Salvar arquivo no PC dele — escrever em /mnt/user-data/outputs e `device_commit_files` pro caminho D:\ (shell do PC não sobe: "hypervisor not running").
+- 25/10: Teste do site sem subir servidor — roda `node teste_<nome>.js` em D:\T2 (ex.: `teste_conta_nova.js` 12/12, `teste_salario_caixa.js` 16/16) — rodar após qualquer mudança em regra do site e reescrever o teste quando a regra muda.
+- 25/10: Checar se bait/ban de teste pegou conta real — ler o DataStore `BanidosDB-CampoBeloRP.2` pela chave `<uid>_Banido` — antes de testar qualquer ban no Studio.
+- 25/10: Validar sintaxe de JS editado — `node -c arquivo.js` — depois de qualquer splice/edição em `index.js`.
+- 12/10: Foto de UI com SurfaceGui — capturar 2 vezes o `screen_capture` (1ª sai preta/velha) — toda prova visual.
+- 12/10: Tela em celular deitado na foto — montar o layout via `LayoutToque.aplicar` dentro da SurfaceGui e medir escala aberta/fechada — conferir UIScale por janela.
+- 16/10: Prova de "volta ao normal" — abrir→fechar→reabrir→fechar medindo escala e posição — qualquer janela que cresce no toque.
+- 16/10: Controle por intenção testado sem Play — núcleo puro (`Entrada.N.volante`, `VooAssistido`, `MiraAssistida`) por `loadstring` com entradas simuladas — toda regra de controle de toque.
+- 16/10: Edição grande em script — `multi_edit` com JSON grande falha no parse; usar `execute_luau` com troca de string (`rep()`) e backup antes (ServerStorage.Backups_Mobile_1110) — edits grandes.
+- 25/10: Achar a place certa — lista os Studios abertos — `list_roblox_studios` antes de qualquer edição (o studio_id muda toda vez que reabre; placas: dev 75467790232298, principal 78083733455249, Evento 79350872057761).
+- 25/10: Script >200.000 caracteres (RemotesHandler ~340 KB) — `.Source` falha — editar só via `multi_edit`; fica como rascunho até Validar/Commit no painel "Rascunhos"; ler o rascunho com `ScriptEditorService:GetEditorSource`.
+- 25/10: Copiar dados dev → principal — exporta chaves dos stores (CBRP_V1.2, _T2, _T3 + DataStores por cidade) pra JSON e importa na outra place com `StudioService:PromptImportFileAsync` (precisa de clique do Julio) — migração de perfis.
+- 25/10: Mouse no Studio — `user_mouse_input` com `action: "mouseButtonClick"` e `mouse_button` — clicar em UI do Studio.
+- 25/10: Editar arquivo do site sem shell — `device_stage_files` → editar no container → `device_commit_files` com `expectedMtimeMs`.
+- 24/10: Checar compilação — `loadstring(ScriptEditorService:GetEditorSource(s))` (`.Source` e script_grep atrasam) — depois de toda edição.
+- 24/10: Testar módulo editado sem reiniciar — `loadstring(GetEditorSource(mod))()` no Edit (o `require` fica em cache na sessão) — núcleo puro novo.
+- 24/10: Varrer scripts — sempre `gmatch`/`gsub`; NUNCA `src:sub(1,i)` em laço (travou o Studio 5 min) — buscas no jogo inteiro.
+- 24/10: Alcance de ponto de F — Part do tamanho do corpo + `workspace:GetPartsInPart` (não `GetPartBoundsInBox`); raycast de chão excluindo o veículo; caixa do F = HRP−(1.5,4.5,1.5) a HRP+(2.8,8.5,2.8) e servidor ≤ 9 — ponto de F "inalcançável".
+- 24/10: Superfície real de MeshPart — cópia por `AssetService:CreateMeshPartAsync(meshId, {CollisionFidelity = PreciseConvexDecomposition})` + raycast em grade (CollisionFidelity não é gravável por script) — assentar prop/texto em malha.
+- 24/10: Grip de Tool R6 — mão = X direita, Y cima, Z pra trás; `Grip = Handle.CFrame:ToObjectSpace(V)` (V = pegada no mundo da montagem); objeto 0,5–0,6 à frente do punho — conferir em Play pela `UpVector` do Handle — item novo na mão.
+- 24/10: Foto em Play — `screen_capture` sem câmera captura a visão do cliente; forçar câmera com `BindToRenderStep` (prioridade Last+50) no datamodel Client — ver item na mão/tela em jogo.
+- 24/10: Foto de prop em Edit — montar numa plataforma no céu (y 600+), `ClockTime` 14 (guardar e devolver o antigo) e apagar tudo no fim.
+- 24/10: Conferidor de blocos — ordem: blocos longos → escapes → aspas duplas → aspas simples → `--` — validar script grande editado.
+- 18/10: QA de servidor com Play — planta o script QA em ServerScriptService ANTES do Play, comanda por uma BindableFunction no workspace e apaga o QA depois — `execute_luau` durante o Play cai num datamodel diferente e `require` pega cópia separada do módulo.
+- 18/10: Hotbar quando o teclado é bloqueado (tecla "One" é do CoreGUI) — dispara o BindableEvent `PlayerScripts.Client.Signals.equip` com "One" — teste de equipar item em Play.
+- 18/10: Núcleo puro de RCP — `loadstring(Source)` do `Shared.RCPCompassoN` no Edit (20 testes) — qualquer mudança na conta do compasso.
+- 19/10: Claude Docs → PDF — `mcp__Claude_Docs__export` devolve base64 num arquivo de resultado; decodar com python pra /mnt/user-data/outputs — entrega de Manual/Guia.
+- 19/10: Edit pequeno em script gigante (SamuService ~214k) — `multi_edit` com trecho curto; lógica nova vai pra outro módulo — script >200.000 caracteres.
+- 24/10: `execute_luau` do Studio exige `datamodel_type: "Edit"`. `script_grep` usa `query`; `script_read` usa `target_file`.
+- 24/10: Ler código real depois de `multi_edit` — `ScriptEditorService:GetEditorSource(script)`. `.Source` mostra a versão velha por alguns segundos. Se o script tem menos de 200k, escrever o texto do editor de volta em `.Source`.
+- 22/10: Medir o tamanho do script ANTES de planejar gancho — `#script.Source`. Acima de 200.000 não aceita escrita (RemotesHandler 340k, SamuService 215k, GuiHandler 166k). Saída: serviço novo escutando o mesmo remote, ou vigia de mochila.
+- 22/10: Prova de núcleo puro com cobertura — `loadstring(GetEditorSource(modulo))()` e rodar casos (ex.: `SuspeitaNucleo.avaliar` para mola/insumo) — antes de afirmar peso/limite num texto.
+- 23/10: Validador x gerador — gerar 3.000 seriais e validar todos (0 reprovados) — todo formato com gerador e validador.
+- 23/10: Prop sobre MeshPart — conferir `CollisionFidelity` da peça de apoio antes de assentar por raycast (Box mede a caixa, não a malha). Conferir por foto de 3 ângulos.
+- 23/10: Asset de toolbox — aprovar só depois de FOTO (nome e bounding box não bastam). Apagar todos os scripts do asset.
+- 23/10: A/B de luz — desligar só as próprias luzes e fotografar o mesmo enquadramento — antes de aceitar "a luz é sua".
+- 22/10: "É possível de verdade?" — `PathfindingService` (ex.: cadeira da perícia ao PC da Ficha = 15 studs, 6 waypoints) e distância entre pontos de F — toda mecânica com deslocamento ou compra.
+- 24/10: Foto de SurfaceGui — colocar a SurfaceGui dentro de uma Part do workspace (adornee em StarterGui não renderizou), Face Front, câmera em -Z.
+- 24/10: Peça com WeldConstraint no Edit — mover todas as partes da Tool pelo mesmo delta ANTES de soldar; pose só por C0.
+- 24/10: Núcleo com dinheiro — porcentagem em inteiro (`87500*0.7` deu 61249).
+- 23/10: Teste em Play (só quando o Julio mandar) — perfil por `DataHandler.requestData/updateData` e ações por `RedeCliente.chamar`; remotes `Interact/Notify` chegam sem nome (marcar por atributo).
+- 24/10: Bancada de drive-by sem Play — rig R6 (StarterPlayer.StarterCharacter) numa peça em y=600, x/z 9000, `Animator:StepAnimations` e foto com `screen_capture` — conferir pose por C0 e simetria E/D.
+- 24/10: Ordem de frame — rodar 4 conectores (BindToRenderStep 1, 301, 2000 e RenderStepped) gravando a ordem — saber quem escreve por último num Motor6D.
+- 24/10: Foto diurna em Edit — `Lighting.ClockTime=13` e devolver o valor no mesmo turno — foto noturna sai preta.
+- 13/10: Medir LinhaJanela e parede do carro — raio horizontal na altura da janela, de fora pra dentro — antes de definir blindagem de carro novo.
+- 05/10: Propagar a posição de 1 exemplo pra todas as casas do tipo — guarda o alvo relativo ao pivô da casa-modelo (`pivô:ToObjectSpace`) e aplica `pivô:ToWorldSpace` em cada casa do tipo; depois confere CADA resultado (chão ≤7 studs, `GetPartsInPart` sem cruzar, PlotId único, índices sem repetir). Onde há 2 alturas de pivô, usar fila explícita medida no chão — vagas/pontos por tipo de casa.
+- 05/10: Teste de carro numa vaga/rua — Part temporário do tamanho do carro (8.1×6×12.8) + `GetPartsInPart`, ignorando peças com `Size.X>60 or Size.Z>60` (Union/Montanha dão falso positivo) — spawn de carro.
+- 06/10: Provar UI 2D sem foto possível (ScreenGui não renderiza no Edit) — compila (`loadstring`), varredura "zero Part/MeshPart/Interact2" no Source e teste do trecho puro; dizer ao Julio que NÃO há prova visual — tela em ScreenGui.
+- 05/10: Perícia de conta apagada no Postgres — `npm install` e `node auditoria_sumico.js` em D:\T2, com `DATABASE_URL` em variável de ambiente (só leitura): buracos na sequência de `users.id`, membership mais velha que a conta dona (`joined_at < created_at - 1 min`), corps sem dono — suspeita de sumiço ou invasão. Antes de confiar, testar o script num Postgres descartável com ataque simulado.
+- 12/10: "Item sumiu" — achar quem chama a função que devolve (`esvaziarCasa`) e o que ela enxerga (mundo x perfil) antes de supor dupe ou roubo; os dados costumam estar no save do plot e em `Data.ArmarioBackup` — perda de item em retomada/cancelar.
+- 29/10: Censo do mapa — conta BaseParts por pasta de topo, quantas têm nome genérico (Part/Model/MeshPart/Union/Meshes/) e quantas soltas na raiz — `execute_luau` lendo `workspace:GetChildren()` — antes de qualquer edição grande de mapa.
+- 29/10: Impressão digital de Model — assinatura = contagem de classes + bounding box arredondada e ordenada; agrupa cópias do mesmo objeto e herda o nome de uma cópia nomeada pras sem nome — Model "de topo" é o que não tem Model acima até o `workspace` (o próprio `workspace` é Model: `FindFirstAncestorWhichIsA("Model")` sempre acha ele) — nomear mapa sem nome.
+- 30/10: Foto no Edit quando o `screen_capture` com câmera falha ("CameraType is not a valid member of Part Workspace.Camera"): tem uma Part chamada "Camera" no workspace da dev; renomear temporária, OU pôr `CurrentCamera.CameraType = Scriptable` + `CFrame` na mão e capturar SEM parâmetros de câmera; devolver tudo no fim.
+- 29/10: Testar o servidor de tiro sem Play: `require(TiroServer)`, jogador falso (tabela com Name/UserId/Character/GetAttribute) e trocar `T._enviarConfirma`, `T._enviarFX`, `T._jogadores` por gravadores.
+- 30/10: Testar lógica presa em animação SEM Play: dummy clonado + `Animator:LoadAnimation` + esperar `Length>0` + `Animator:StepAnimations(dt)` em laço, lendo a junta pela conta (`C0*Transform*C1:Inverse()`) — as peças podem não andar no Edit.
+- 30/10: Conferir se áudio da Creator Store carrega sem Play: criar Sounds numa pasta do SoundService, esperar `IsLoaded`, ler `TimeLength`, apagar a pasta.

@@ -1,0 +1,55 @@
+# Indice (só acrescentar no FIM; 1 linha por arquivo)
+
+- LEIAME.md — regras de leitura e escrita do vault — sempre primeiro
+- Regras.md — regras e preferências do Julio — antes de propor ou mexer em qualquer coisa
+- Metodos.md — como testar/medir sem Play, UI por foto, núcleo puro — antes de testar algo
+- Armadilhas.md — bugs já vistos: sintoma, causa real, como evitar — ao investigar bug
+- Mecanicas/_modelo.md — modelo de arquivo por mecânica — ao criar mecânica nova
+- Chats/_modelo.md — modelo de resumo de chat — ao encerrar um chat
+- Mecanicas/evento-extinction.md — decisões, regulamento v1.0 e pendências do Evento Extinction (25/10) — antes de mexer no evento, na cidade evento-extinction ou na campanha de amigo
+- Mecanicas/jornal-sf01.md — arco fictício do fungo SF-01 no #notícias, ids de canais e mensagens — antes de postar nova parte do arco ou em qualquer canal do Discord principal
+- Chats/evento-hype-jornal-sf01.md — resumo do chat de 24–28/10 (comunicados, evento, jornal) — ao retomar o evento ou o jornal
+- Mecanicas/seguranca-anticheat.md — anticheat, anti-alt, iscas, ban/desban Roblox, erro 267, lobby (24–25/10) — antes de mexer em segurança, ban, entrada ou lobby
+- Mecanicas/salario-corp-tesouro.md — salário das corps públicas sai do tesouro do Governo (25/10) — antes de mexer em salário/caixa de corp
+- Chats/seguranca-anticheat-antialt.md — resumo do chat de segurança (24–25/10) — ao retomar anticheat ou ao ver o que falta publicar
+- Mecanicas/mobile-toque.md — motor Entrada/bolinhas, volante por ângulo, HUD/telas, casa, craft, urna no celular (12–16/10) — antes de mexer em controle ou tela no celular
+- Mecanicas/mobile-heli.md — voo assistido só no toque (rotorKit.Controller + VooAssistido) — antes de mexer em heli no celular
+- Mecanicas/mobile-mira-assistida.md — puxada da mira pro tronco/cabeça só no toque (ArmaMotor) — antes de mexer em tiro no celular
+- Chats/mobile-toque-engine.md — resumo do chat do motor de toque e o que falta publicar (12–16/10) — ao retomar mobile ou conferir publish
+- Mecanicas/vinculo-roblox.md — código de 3 palavras e fluxo de 2 passos do vínculo site↔Roblox (25/10) — ao mexer em entrada/vínculo/"exige vínculo"
+- Mecanicas/ssu.md — SSU com grade por cidade e fim do aviso sem fechar (25/10) — ao mexer em horário/fechamento do servidor
+- Mecanicas/escudo-bope.md — escudo do BOPE inquebrável (25/10) — ao mexer em escudo/tiro no escudo
+- Mecanicas/corp-itens-samu.md — desequipar item de corp e limpeza ao sair da SAMU (25/10) — ao mexer em Tool de corp, saída de serviço ou RemotesHandler
+- Mecanicas/mobile-toque-hud.md — (junto com mobile-toque.md) abas Craft/Inventário, corda e chat no mobile; drop pendente (25/10) — ao mexer em UI de toque
+- Mecanicas/cnh-autoescola.md — prova da CNH: diagnóstico e plano (sem aplicar) (25/10) — antes de mexer na auto escola/Gol Auto
+- Chats/bug-geral-16.md — resumo do chat "-16" (25/10) — ao retomar bugs gerais ou ver o que falta publicar
+- Mecanicas/balistica-serial.md — registro de arma no balcão (4.4C), porte com números (4.4B), integração PC/Ficha, estojo na rajada, projétil SAMU (24/10) — antes de mexer em serial, porte, PC da PC ou estojo
+- Mecanicas/boca-laboratorio.md — itens da boca refeitos da toolbox, prancheta, rack, Mira Fina puxando mira, nível da facção, trava do CompraTool (24/10) — antes de mexer na boca, produtos ou itens de facção
+- Chats/balistica-boca-itens-2410.md — resumo do chat de balística/boca/itens (24–29/10) — ao retomar balística ou boca
+- Mecanicas/evento-apocalipse-jogo.md — sistemas da place do evento (menu, morte, saque, zumbis, horda, fôlego, casas, vidro, som) e onde moram (25/10) — antes de mexer em qualquer coisa dentro da place do evento
+- Chats/evento-apocalipse-place-2510.md — resumo do chat da place do evento (25/10) — ao retomar o evento no Studio
+- Mecanicas/samu-rcp-compasso.md — RCP no compasso (ESPAÇO), choque com E, rig Desfibrilador_Choque, docs da SAMU, pendência do tester RCP+O2 (18–24/10) — antes de mexer em RCP, desfibrilador ou parada na SAMU
+- Mecanicas/samu-bolsa-sangue.md — guardar bolsa de volta na geladeira, números da bolsa (19/10) — antes de mexer em sangue/transfusão/geladeira
+- Chats/samu-rcp-compasso-docs.md — resumo do chat de SAMU RCP/bolsa/docs (18–25/10) — ao retomar a SAMU ou ver o que falta publicar
+- Mecanicas/balistica-faccoes.md — cápsula, perícia, serial, boca, produtos, contrabandista, Suspeitas: decisões, números medidos e pendências (17–24/10) — antes de mexer em Balística ou Facções Vivas
+- Mecanicas/guia-pc-balistica.md — Guia da Polícia Civil (rascunho 24/10) e os 8 achados do código que o Julio precisa decidir — antes de postar ou atualizar o guia
+- Mecanicas/escudo-bope.md — Escudo do BOPE: bloqueio de tiro, física só com jogador, ruptura em 40 pontos, 31 rigs do animador (22/10) — antes de mexer no escudo
+- Mecanicas/seguro-sf.md — SF Seguros no cll: 3% por 72 h, carência 30 min, indeniza 70% (24/10) — antes de mexer em seguro, desmanche ou financiamento
+- Mecanicas/antivoid.md — RedeDoVoid, TravaArremesso e o caso da maca (24/10) — antes de mexer em void, respawn ou maca
+- Mecanicas/prisao-cerca.md — CercaPrisao e como o preso escapava (24/10) — antes de mexer em prender, cela ou teleporte do preso
+- Mecanicas/estoque-fantasmas.md — faxina de empréstimo fantasma do "Com quem está agora" (22/10) — antes de mexer no estoque/devolução da corp
+- Chats/escudo-seguro-void-prisao-guia-pc.md — resumo do chat de 22–24/10 (escudo, seguro, void, prisão, Balística, guia da PC) e o que falta publicar — ao retomar qualquer um desses
+- Mecanicas/driveby-viaturas.md — drive-by nas viaturas: P2, offset por banco, banco traseiro esquerdo, pendências (12–24/10) — antes de mexer em drive-by, TiltHandler ou DriveByAnim
+- Mecanicas/mecanico.md — emprego de mecânico: oficina C, plataformas, carro apoiado (12/10) — antes de mexer em MecanicaHandler ou oficina
+- Mecanicas/blindagem-viaturas.md — blindagem das viaturas: vidro/janela furada, Blindado, moto sempre pega (13/10) — antes de mexer em tiro em veículo ou BalaVeiculo
+- Mecanicas/sons-veiculos.md — sons proporcionais de batida/atropelo/vidro/ônibus, ids e RMS medidos (14/10) — antes de mexer em som de veículo
+- Chats/driveby-mecanico-blindagem-sons.md — resumo do chat de viaturas (12–24/10) e o que falta publicar — ao retomar qualquer um desses
+- Mecanicas/garagem-casa.md — 58 vagas por tipo de casa, favela na rua, crachá [F] Garagem 2D só pro dono, F que cede ao F do mundo, brecha de co-proprietário (05–06/10) — antes de mexer em garagem, vaga, SpawnarCarro ou GaragemCasa
+- Mecanicas/financiamento-retomada.md — retomada de casa financiada devolve o armário (carrega a casa + resgate do ArmarioBackup) e a denúncia do 2 AK + 2 MP5 (12/10) — antes de mexer em retomada, cancelar financiamento ou armário
+- Mecanicas/site-t2-conta-apagada.md — ameaça de apagar contas, buraco do link-roblox, desbanir, auditoria_sumico.js (05–06/10) — antes de mexer em link-roblox, merge de conta ou ao suspeitar de sumiço no Postgres
+- Chats/garagem-vagas-hack-site-retomada.md — resumo do chat de garagem/vagas, hack no site e armário sumido (05/10–29/10) e o que falta publicar — ao retomar qualquer um desses
+- Mecanicas/planta-mapa-ia.md — censo do mapa sem nome, impressão digital de Model e plano da planta pra IA editar (29/10) — antes de editar/organizar o mapa ou nomear peças
+- Mecanicas/divulgacao.md — marketing e divulgação: calendário fechamento→evento→reabertura, mensagem central, vídeo de apresentação (29/10) — antes de planejar post, vídeo, Short ou campanha
+- Mecanicas/tiro-novo.md — sistema de tiro refeito do zero: decisões, levantamento do velho, ganchos a religar, plano (29/10) — antes de mexer em arma, tiro, FX ou som de tiro
+- Mecanicas/tiro-novo-2.md — continuação do tiro novo: conjuntos de animação (F7), agachar/deitar/rastejar com arma, deslize ao pegar a arma (30/10) — antes de mexer em animação de arma, postura ou entrada da 1ª pessoa
+- Mecanicas/passada-camera-som.md — passada única: pisada pela perna, som por material/chuva, balanço da câmera preso no pé (30/10) — antes de mexer em som de passo, balanço de câmera ou respiração

@@ -11,10 +11,14 @@
             "id": "5e2d2170cfbbd28a",
             "type": "leaf",
             "state": {
-              "type": "graph",
-              "state": {},
-              "icon": "lucide-git-fork",
-              "title": "Visualização em gráfico"
+              "type": "markdown",
+              "state": {
+                "file": "00_Indice/Entrega_Julio.md",
+                "mode": "source",
+                "source": false
+              },
+              "icon": "lucide-file",
+              "title": "Entrega_Julio"
             }
           }
         ]
@@ -181,36 +185,38 @@
       "bases:Criar nova base": false
     }
   },
-  "active": "5e2d2170cfbbd28a",
+  "active": "da7ccc2e8401346f",
   "lastOpenFiles": [
+    "Mecanicas/planta-mapa-ia.md",
+    "Chats/garagem-vagas-hack-site-retomada.md",
+    "Mecanicas/site-t2-conta-apagada.md",
+    "Mecanicas/financiamento-retomada.md",
+    "Mecanicas/garagem-casa.md",
+    "Chats/driveby-mecanico-blindagem-sons.md",
+    "Mecanicas/sons-veiculos.md",
+    "Mecanicas/blindagem-viaturas.md",
+    "Mecanicas/mecanico.md",
+    "Mecanicas/driveby-viaturas.md",
+    "_INDEX.md",
+    "Chats/_modelo.md",
+    "Chats",
+    "Mecanicas/_modelo.md",
+    "Mecanicas",
+    "Armadilhas.md",
+    "Metodos.md",
+    "Regras.md",
+    "Indice.md",
+    "LEIAME.md",
     "01_Especificacoes/Iluminacao.md",
     "02_Sistemas_Studio/QA_Veredito.md",
     "01_Especificacoes/Skill_UI_Roblox.md",
     "02_Sistemas_Studio/Hud.md",
     "01_Especificacoes/Minimapa.md",
-    "_INDEX.md",
     "01_Especificacoes/UI_Design_System.md",
     "Bem-vindo.md",
     "03_Logs/Log.md",
     "03_Logs",
-    "02_Sistemas_Studio/Celular_GUI.md",
-    "02_Sistemas_Studio/Telas.md",
-    "02_Sistemas_Studio/GuiHandler.md",
-    "02_Sistemas_Studio/Deepweb_Client.md",
-    "02_Sistemas_Studio/Banco_Client.md",
-    "02_Sistemas_Studio/RoZap.md",
-    "02_Sistemas_Studio/DataTemplate.md",
-    "02_Sistemas_Studio/DataHandler.md",
-    "02_Sistemas_Studio/SiteCelular.md",
-    "02_Sistemas_Studio/CelularService.md",
-    "02_Sistemas_Studio/Rede_Server.md",
-    "02_Sistemas_Studio/RedeCliente.md",
-    "02_Sistemas_Studio/Chaves.md",
     "02_Sistemas_Studio",
-    "01_Especificacoes/Assets_Julio.md",
-    "01_Especificacoes/Fases.md",
-    "01_Especificacoes/Limites.md",
-    "01_Especificacoes/Colete.md",
     "01_Especificacoes"
   ]
 }

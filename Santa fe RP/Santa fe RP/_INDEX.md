@@ -1,3 +1,5 @@
+> ⚠️ VAULT ANTIGO (setembro), desatualizado. NÃO LER. Vault novo: comece por `LEIAME.md` e `Indice.md`.
+
 # 🧠 CÉREBRO DO JOGO — Santa Fé RP
 
 > Índice mestre. Consulte SEMPRE este arquivo antes de qualquer ação.
