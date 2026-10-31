@@ -1258,6 +1258,12 @@ async function start() {
   // Row-Level Security em toda tabela de cidade. Depois de TODAS as tabelas existirem.
   try { await require('./isolamento').garantir(pool); }
   catch (e) { console.error('[isolamento] garantir:', e.message); throw e; }
+  // [31/10] prova o corte entre cidades a cada boot (só leitura); falha vira alarme grande no log
+  try {
+    const t = await require('./isolamento').testeDoCorte(pool);
+    if (t.ok) console.log(`[isolamento] ✅ TESTE DO CORTE: ${t.cidades} cidades x ${t.tabelas} tabelas, nenhuma enxerga a outra`);
+    else console.error('❌❌ [isolamento] TESTE DO CORTE FALHOU:\n - ' + t.falhas.join('\n - '));
+  } catch (e) { console.error('[isolamento] teste do corte:', e.message); }
   // [24/10] pré-modelo: toda cidade ativa tem as corporações, cargos, Governo e regulamentos
   try { await CID.montarTodas(pool); }
   catch (e) { console.error('[cidades] pré-modelo:', e.message); }

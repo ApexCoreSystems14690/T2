@@ -61,6 +61,10 @@
       (staff, SSU, wipe, regras, economia) e não enxerga nenhuma outra. Na cidade oficial o Dono é sempre você.
       Toda troca fica no histórico da cidade.
     </div>
+    <div class="aviso" id="corte">
+      <button type="button" id="corte-btn">Testar o corte entre as cidades</button>
+      <span id="corte-res" style="margin-left:.6rem">Confere no banco que nenhuma cidade enxerga dados de outra.</span>
+    </div>
     <div class="lista" id="lista"><p class="num">Carregando…</p></div>
   </main>
   <div class="msg" id="msg"></div>
@@ -249,6 +253,15 @@
   }
 
   carregar();
+  var cb = document.getElementById('corte-btn'), cr = document.getElementById('corte-res');
+  cb.addEventListener('click', function () {
+    cr.textContent = 'Testando…'; cr.style.color = '';
+    fetch('/api/rede/teste-corte').then(function (r) { return r.json(); }).then(function (t) {
+      if (t.error) { cr.textContent = t.error; cr.style.color = '#B23227'; return; }
+      if (t.ok) { cr.textContent = '✅ Corte 100%: ' + t.cidades + ' cidades × ' + t.tabelas + ' tabelas, nenhuma enxerga a outra.'; cr.style.color = '#1D7A45'; }
+      else { cr.textContent = '❌ FALHOU: ' + t.falhas.join(' | '); cr.style.color = '#B23227'; }
+    }).catch(function () { cr.textContent = 'Erro ao testar.'; cr.style.color = '#B23227'; });
+  });
 })();
 </script>
 </body>

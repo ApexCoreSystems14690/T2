@@ -95,3 +95,9 @@ dump*.sql
 
 # [15/10] copias de seguranca locais dos arquivos antes de cada mexida (nao vao pro GitHub)
 _backup_*/
+
+# [31/10] Julio: "deixe so o site" no GitHub. Tudo que NAO e o site mora em _fora_do_github/
+# (backups, Claude outputs, docs/PDFs do Discord, icones, .rbxm, scripts soltos).
+_fora_do_github/
+# vault do Obsidian (memoria do Julio): fica no disco, nao vai pro GitHub
+Santa fe RP/

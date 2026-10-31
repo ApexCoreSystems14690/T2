@@ -72,6 +72,12 @@ router.get('/api/rede/cidades', soPlataforma, async (req, res) => {
   }
 });
 
+// [31/10] Prova no banco que as cidades não se enxergam (ver ISO.testeDoCorte). Só leitura.
+router.get('/api/rede/teste-corte', soPlataforma, async (req, res) => {
+  try { res.json(await ISO.testeDoCorte(pool)); }
+  catch (e) { console.error('[rede] teste-corte:', e.message); res.status(500).json({ error: 'Erro interno' }); }
+});
+
 router.get('/api/rede/usuarios', soPlataforma, async (req, res) => {
   const q = String(req.query.q || '').trim().slice(0, 64);
   if (q.length < 2) return res.json({ usuarios: [] });

@@ -221,5 +221,68 @@ async function garantir(pool) {
   });
 }
 
+// ------------------------------------------------------------------ [31/10] TESTE DO CORTE
+// [stated] Julio 31/10: "precisa GARANTIR O CORTE 100% entre cada uma [cidade]". Este teste PROVA
+// no banco de verdade (não confia no código): pra cada cidade, vira sf_app naquela cidade e confere
+// que, em TODA tabela travada, ele enxerga exatamente as linhas dela e nenhuma de outra; sem cidade
+// no contexto, enxerga zero (falha fechada). Só leitura. Também acusa tabela SEM trava e papel
+// sf_app com poder de furar (superuser / BYPASSRLS).
+async function testeDoCorte(pool) {
+  return global(async () => {
+    const out = { ok: true, rls_ligado: !semPapel, cidades: 0, tabelas: 0, falhas: [], sem_trava: [], aviso: [] };
+    const falha = (m) => { out.ok = false; out.falhas.push(m); };
+    if (semPapel) falha('o banco NÃO deixa o site virar sf_app: a leitura não está travada por cidade');
+    const papel = (await pool.query(`SELECT rolsuper, rolbypassrls FROM pg_roles WHERE rolname = 'sf_app'`)).rows[0];
+    if (!papel) falha('papel sf_app não existe');
+    else if (papel.rolsuper || papel.rolbypassrls) falha('sf_app tem superuser/BYPASSRLS: o corte não vale');
+    const cidades = (await pool.query(`SELECT id, slug FROM cidades ORDER BY id`)).rows;
+    out.cidades = cidades.length;
+    const tabs = (await pool.query(`
+      SELECT c.relname AS t, c.relrowsecurity AS rls,
+             EXISTS (SELECT 1 FROM information_schema.columns k WHERE k.table_schema='public' AND k.table_name=c.relname AND k.column_name='cidade_id') AS cid,
+             EXISTS (SELECT 1 FROM information_schema.columns k WHERE k.table_schema='public' AND k.table_name=c.relname AND k.column_name='corporation_id') AS corp
+        FROM pg_class c JOIN pg_namespace n ON n.oid = c.relnamespace
+       WHERE n.nspname = 'public' AND c.relkind = 'r' ORDER BY c.relname`)).rows;
+    const travadas = [];
+    for (const x of tabs) {
+      if (GLOBAIS.has(x.t)) continue;
+      if (!x.rls) { out.sem_trava.push(x.t); continue; }
+      travadas.push(x);
+    }
+    if (out.sem_trava.length) falha('tabelas SEM trava de cidade: ' + out.sem_trava.join(', '));
+    out.tabelas = travadas.length;
+    const cli = await pool.connect();   // contexto global: conexão crua, dono do banco
+    try {
+      for (const x of travadas) {
+        // esperado por cidade, lido como dono (sem RLS)
+        let esperado;
+        if (x.cid) esperado = (await cli.query(`SELECT cidade_id AS c, COUNT(*)::int AS n FROM ${x.t} GROUP BY cidade_id`)).rows;
+        else if (x.corp) esperado = (await cli.query(`SELECT co.cidade_id AS c, COUNT(*)::int AS n FROM ${x.t} t JOIN corporations co ON co.id = t.corporation_id GROUP BY co.cidade_id`)).rows;
+        else continue;   // governo_votos (regra por proposta): conferida só na falha fechada abaixo
+        const esp = {}; for (const r of esperado) esp[r.c] = r.n;
+        for (const c of cidades) {
+          await cli.query(`SELECT set_config('sf.cidade', $1, false), set_config('role', 'sf_app', false)`, [String(c.id)]);
+          let vis;
+          try { vis = (await cli.query(`SELECT COUNT(*)::int AS n FROM ${x.t}`)).rows[0].n; }
+          finally { await cli.query(`RESET ROLE; RESET sf.cidade`); }
+          if (vis !== (esp[c.id] || 0)) falha(`${x.t} vista da cidade ${c.slug}: enxerga ${vis}, deveria ${esp[c.id] || 0}`);
+        }
+      }
+      // sem cidade no contexto = nada visível (só tabelas com linhas)
+      await cli.query(`SELECT set_config('sf.cidade', '', false), set_config('role', 'sf_app', false)`);
+      try {
+        for (const x of travadas) {
+          const n = (await cli.query(`SELECT COUNT(*)::int AS n FROM ${x.t}`)).rows[0].n;
+          if (n !== 0) falha(`${x.t} sem cidade no contexto enxerga ${n} linhas (deveria 0)`);
+        }
+      } finally { await cli.query(`RESET ROLE; RESET sf.cidade`); }
+    } catch (e) {
+      try { await cli.query(`RESET ROLE; RESET sf.cidade`); } catch (_) {}
+      falha('o teste quebrou: ' + e.message);
+    } finally { cli.release(); }
+    return out;
+  });
+}
+
 function rlsLigado() { return !semPapel; }
-module.exports = { rlsLigado, als, run, global, atual, middleware, instalar, porCidade, chaves, garantir, GLOBAIS, CHAVES };
+module.exports = { rlsLigado, testeDoCorte, als, run, global, atual, middleware, instalar, porCidade, chaves, garantir, GLOBAIS, CHAVES };
