@@ -17,6 +17,8 @@
 - 25/10: Lobby: `StarterPlayerScripts.LobbyUI` corrigido (senha errada travava).
 - 25/10: Anúncio de desculpas postado no #avisos (msg 1563709495299940354).
 
+- 31/10: `Seg.banRoblox` retorna sem banir quando `game.PlaceId == 107528339216841` (place de testadores): lá só vale o ban nosso. Editado no place de testadores; backup `ServerStorage.Backups_AntiCheat_2410.Seguranca_antes_testadores_3110`. Falta copiar pra produção e publicar.
+
 ## Falta
 - Publicar place de produção 78083733455249 e o Lobby; `git push` do site.
 - Testar em servidor real: falso positivo de noclip/subida (portas, elevador, trampolim), IrProMenu, RegistroCidade, laço de desban, senha do lobby.

@@ -54,3 +54,6 @@
 - Mecanicas/tiro-novo-2.md — continuação do tiro novo: conjuntos de animação (F7), agachar/deitar/rastejar com arma, deslize ao pegar a arma (30/10) — antes de mexer em animação de arma, postura ou entrada da 1ª pessoa
 - Mecanicas/passada-camera-som.md — passada única: pisada pela perna, som por material/chuva, balanço da câmera preso no pé (30/10) — antes de mexer em som de passo, balanço de câmera ou respiração
 - Mecanicas/admin-god.md — /god com cura completa (caído, sangue/O2, ferimentos, sequelas, faixas, tela escura) (31/10) — antes de mexer no /god ou em cura de admin
+- Mecanicas/granadas.md — granadas (M67, fumaça, luz no armário das corps; molotov e bomba caseira no craft), GranadaService e números (31/10) — antes de mexer em granada, explosão ou craft de molotov
+- Armadilhas-2.md — continuacao das armadilhas (bugs) — ler junto com Armadilhas.md em bug
+- Mecanicas/armas-novas.md — 12 armas novas de 31/10 (fontes, calibragem, conversor, laser) — ler ao mexer em arma nova

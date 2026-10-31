@@ -1,0 +1,5 @@
+- 31/10: PlatformStand no cliente = expulso pelo anti-cheat (erro 267). Pra derrubar/empurrar jogador use _G.Desmaiar ou _G.DerrubarMoto (AcidenteServer, ragdoll do servidor).
+- 31/10: carro estacionado/viatura de garagem fica todo Anchored: ApplyImpulse nao faz nada. Use PivotTo pra tremer.
+- 31/10: atributo de estado gravado com os.time() (CaiuMoto, Desmaiado) NAO e "== true". Checar com "~= nil and ~= false". O AntiCheat errava isso e puxava de volta quem voava no ragdoll.
+- 31/10: screen_capture falha com "CameraType is not a valid member of Part Workspace.Camera" quando existe uma Part chamada Camera no workspace. Renomear a Part durante a foto e voltar o nome depois.
+- 31/10: ViewportFrame dentro de SurfaceGui não renderiza no Edit; ícone 3D (IconesModelos) só se confere por medida ou em Play.

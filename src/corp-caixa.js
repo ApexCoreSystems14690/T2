@@ -75,6 +75,8 @@ const ESTOQUE = {
   morreu:   { estoque:  0, emprestado: -1, perda: true,  rotulo: 'Perdida na morte' },
   // [22/10] Escudo do BOPE rompido a tiro: perda (mesma linha em Regras.Estoque do jogo)
   quebrou:  { estoque:  0, emprestado: -1, perda: true,  rotulo: 'Rompido a tiro' },
+  // [31/10 Julio] granada do armário lançada em serviço: saiu da mão e não volta (perda).
+  usou:     { estoque:  0, emprestado: -1, perda: true,  rotulo: 'Usada em serviço (granada lançada)' },
   // [29/09] CONTRABANDO NÃO TEM MOTIVO PRÓPRIO, DE PROPÓSITO. Quando o policial
   // desvia a arma dele, o que entra aqui é `roubada` -- igual a quem foi
   // assaltado de verdade. O comandante "tem que descobrir" (Julio); um rótulo
