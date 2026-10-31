@@ -1,5 +1,9 @@
 > **Como ler este documento.** Cada regra é um artigo numerado. Quando houver quadro VALE / NÃO VALE, a lista é completa: o que não estiver em "vale" não é permitido. Em caso de dúvida, vale o texto do artigo, e a staff decide pela prova.
 
+> **O que mudou na versão 2.7.** Entram **Forçar RP** e **Autoridade como arma** (Art. 2.19 a 2.21), com a punição no Art. 11.1.
+
+> **O que mudou na versão 2.6.** Entram a **cena de tiro e a perícia** (Art. 4.4E a 4.4G), a **boca das facções** e a facção **sem vestiário no jogo** (Art. 7.2 e 7.13), o papel investigativo da **Polícia Civil** (Art. 8.1A) e a regra de **equipamento de corporação** só para membro ativo (Art. 8.5A e 11.1).
+
 > **O que mudou na versão 2.5.** O **Presidente da República** também abre projeto na Câmara, e o projeto agora pode mudar o salário de qualquer **cargo de corporação** e o **teto dos empregos civis** pagos pelo tesouro (Art. 10.11).
 
 > **O que mudou na versão 2.4.** Entram as **disposições gerais** sobre o alto comando, a staff e a decisão final dos donos (Art. 1.10 a 1.13); o **número de série** das armas, a **Adulteração de arma** e a evidência ensacada (Art. 4.4A a 4.4D, 4.13 e 9.5); **banco e sequestro** pelos números aprovados na votação das Facções (Art. 4.8A, 4.9 e 4.10); a facção sem salário da organização e com contrabandista (Art. 7.2 e 7.3); o **salário político a cada 3 dias** pago pelo tesouro e a **Câmara no site**, com sanção, veto e derrubada do veto (Art. 10.8, 10.11, 10.11A, 10.11B e 10.12); e o novo poder do **Responsável das Corporações** (Art. 10.13).
@@ -92,6 +96,22 @@
 **Art. 2.17** [ALTERADO] — **Efeito.** Com a resposta ON RP, a Polícia Civil pode usar o print como prova de celular: anexar em denúncia de PD (Art. 6.5), em denúncia de crime investigado (Art. 13.8), pedir mandado (Art. 5.6) e registrar na ficha. Também vale como prova em processo eleitoral ou civil (Art. 13.21). Conta como prova para o Art. 1.8.
 
 **Art. 2.18** — **Sem declaração, não vale.** Usar no jogo um print do Discord antes da resposta ON RP, ou depois de RECUSADO, é Metagaming (Art. 2.2). O print só passa a valer a partir do horário da resposta da staff, nunca antes.
+
+### Forçar RP e autoridade como arma
+
+**Art. 2.19** [NOVO] — **Forçar RP.** Decidir pelo outro jogador o que o personagem dele faz, sente ou sofre, ou prender o personagem dele numa cena sem meio no jogo para isso. É um tipo de Powergaming (Art. 2.3).
+
+| VALE | NÃO VALE |
+|---|---|
+| • Dar ordem durante uma ação em andamento (Cap. 3) e deixar o outro obedecer ou reagir • Usar o próprio sistema do jogo (algemar, revistar, render, sequestrar) quando ele permite • Anunciar o assalto ou a abordagem e dar tempo de resposta (Art. 4.6) • Propor uma cena e aceitar a recusa | • Escrever no chat o resultado da ação no lugar do outro (ex.: "você cai morto", "você entrega tudo") • Dizer que algemou, revistou, matou ou sequestrou sem a ação existir no jogo • Exigir que o outro fique parado, não reaja, não fuja ou não chame ninguém, sem ação em andamento • Manter alguém na cena contra a vontade sem meio no jogo (algema, corda, veículo, arma apontada) • Continuar a cena depois que o outro saiu dela por um meio válido do jogo |
+
+**Art. 2.20** [NOVO] — **Autoridade como arma.** Polícia, SAMU e demais corporações existem para o RP, não para matar, prender ou atacar alguém por você. É proibido acionar a autoridade para provocar morte, prisão ou ataque contra quem não fez o que foi dito.
+
+| VALE | NÃO VALE |
+|---|---|
+| • Chamar a polícia por crime que o seu personagem viu ou sofreu no jogo • Denunciar pelo celular do jogo, com os fatos verdadeiros • Pedir reforço dentro do jogo, pelos meios do Art. 3.5 | • Chamar a autoridade com crime inventado ou aumentado (dizer que há arma, refém ou tiroteio que não existe) para ela atirar no alvo • Passar o alvo como "armado" ou "perigoso" sem ser verdade, para a polícia atirar • Armar a cena (soltar arma, provocar a polícia) para o alvo morrer na abordagem • Combinar com membro da corporação, por Discord ou call, quem será morto ou preso • Usar personagem de corporação para eliminar um alvo pessoal • Chamar socorrista da SAMU para atrair e atacar, sequestrar ou matar (Art. 8.9) |
+
+**Art. 2.21** [NOVO] — **Punição.** Forçar RP é punido como PG, nível Médio (Art. 11.1). Autoridade como arma é punida como RDM de quem acionou a autoridade, e a morte provocada assim conta como RDM para o Art. 6.15. Se quem fez isso é membro da corporação acionada, vale também a punição de abuso de cargo, nível Grave.
 
 ## Capítulo 3 · Ações, Reforços, Desmaio e Saque
 
@@ -189,6 +209,16 @@ Numa abordagem válida, arma Sem registro, RASPADA ou registrada no nome de outr
 **Art. 4.4C** [NOVO] — **Registro até o wipe.** Até 20/11/2026, quem tem Porte de Armas pode registrar no balcão da DP a arma curta que já tinha antes do número de série. Registrada, ela passa a constar no nome dele e no Porte.
 
 **Art. 4.4D** [NOVO] — **Adulteração de arma.** Raspar o número de série é crime próprio: 10 minutos de pena, **somados** à pena de porte ilegal (Art. 9.5). A Polícia Civil pode revelar o número na bancada de balística da DP.
+
+**Art. 4.4E** [NOVO] — **Cena de tiro.** Todo disparo de pistola, fuzil ou escopeta deixa uma **cápsula** no chão, ao lado de quem atirou. Revólver não deixa cápsula. A cápsula guarda o número de série da arma que disparou.
+
+| PODE | NÃO PODE |
+|---|---|
+| • Polícia Civil e Polícia Federal recolhem a cápsula com o **Saco de evidência**, e marcam a cena com a **Placa numerada** • O criminoso cata as cápsulas da cena antes da polícia chegar (é RP, não é crime à parte) • A SAMU retira o **projétil** do ferido e entrega na perícia | • PM, BOPE, CHOQUE e ROTAM recolherem ou catarem cápsula: eles **isolam a área e chamam a Polícia Civil** • Mexer na cena de tiro fora do RP (staff, admin ou jogador fora da ação) • Usar bug para apagar ou duplicar evidência (Gravíssimo, Art. 11.1) |
+
+**Art. 4.4F** [NOVO] — **Evidência ensacada.** Recolhida, a cápsula vira evidência numerada (Placa 1, Placa 2...), com lugar e hora. A evidência ensacada **não se perde**: não cai na morte e não sai na revista (Art. 4.13). Ela só se perde enquanto ainda está no chão.
+
+**Art. 4.4G** [NOVO] — **Laudo balístico.** Na bancada da DP, o perito compara a cápsula com o disparo de teste de uma arma e assina o laudo: **bate** ou **não bate**. O laudo fica preso à arma no registro nacional e é **prova de investigação** (Art. 13.6): vai na denúncia, nunca vira flagrante sozinho. Laudo assinado sem fazer a comparação é prova falsificada (Gravíssimo, Art. 11.1).
 
 ### Assalto
 
@@ -304,7 +334,7 @@ Numa abordagem válida, arma Sem registro, RASPADA ou registrada no nome de outr
 
 **Art. 7.1** — Facção é uma organização criminosa com nome, hierarquia, território e membros registrados no painel.
 
-**Art. 7.2** [ALTERADO] — A facção possui cargos e hierarquia no site, vestiário com uniforme, máscara e rádio, e rádio próprio. A facção **não** possui armas no vestiário, estoque no painel nem salário pago pela organização: salário de membro, se existir, é decisão da liderança e é pago em mãos (Regulamento das Facções, Art. 5.6).
+**Art. 7.2** [ALTERADO] — A facção possui cargos e hierarquia no site e rádio próprio. A facção **não tem vestiário no jogo**: uniforme e máscara são roupa comprada pelos membros. Ela também **não** possui armas da organização, estoque no painel nem salário pago pela organização: salário de membro, se existir, é decisão da liderança e é pago em mãos (Regulamento das Facções, Art. 5.6).
 
 **Art. 7.3** [ALTERADO] — Arma de facção vem do crime: fabricação, compra na deepweb, compra no contrabandista (facção a partir do Nível 2, Regulamento das Facções, Art. 5.7), roubo ou desvio de policial corrupto.
 
@@ -326,9 +356,13 @@ Numa abordagem válida, arma Sem registro, RASPADA ou registrada no nome de outr
 
 **Art. 7.12** — Usar o Ferro Velho contra quem não se encaixa no Art. 6.10 resulta em PD de quem executou, sem direito a reversão.
 
+**Art. 7.13** [NOVO] — **Boca.** A boca do armazém da favela grande é de quem chegar e segue o Regulamento das Facções (Cap. 5). Ela é ponto comercial, não casa: a polícia entra em **flagrante** (venda ou fabricação vista por policial, ou os casos do Art. 5.2) ou com **mandado** (Art. 5.5 a 5.8). Na apreensão, produto e insumo são destruídos, a arma vai para a custódia e metade do cofre vai para o caixa da corporação que apreendeu.
+
 ## Capítulo 8 · Corporações e SAMU
 
 **Art. 8.1** — Abordagem, blitz e prisão em flagrante são decisões do responsável in game, dentro deste regulamento. A staff só intervém em quebra de regra OOC, abuso fora do RP, busca ilegal ou contestação de PD.
+
+**Art. 8.1A** [NOVO] — **Polícia Civil.** A Polícia Civil é a polícia de **investigação**: não faz patrulha nem blitz. Ela atende cena de crime, faz perícia, consulta o PC da DP, emite mandado de procurado, monta denúncia ao STF (Art. 13.8) e cumpre mandado de prisão. Pode prender em flagrante quando presencia o crime.
 
 **Art. 8.2** — Toda abordagem segue o rito: identificação, motivo e só então revista pessoal. Revista pessoal sem motivo é abuso de autoridade. Revista de **imóvel** segue o Cap. 5.
 
@@ -337,6 +371,8 @@ Numa abordagem válida, arma Sem registro, RASPADA ou registrada no nome de outr
 **Art. 8.4** — Ordem de superior deve ser cumprida e questionada depois. O comando responde pelos erros de seus membros.
 
 **Art. 8.5** — O equipamento pertence à corporação. Apenas arma e algema saem do estoque. Ao sair de serviço, tudo é devolvido automaticamente.
+
+**Art. 8.5A** [NOVO] — **Só membro ativo.** Entrar em serviço, vestir uniforme ou retirar arma e equipamento de uma corporação da qual você não faz parte é proibido, **mesmo que o sistema deixe** (ex-membro ainda cadastrado por engano, por exemplo). É uso de falha a seu favor (Art. 2.3), punido no nível Grave, e todo o equipamento retirado é apreendido. Quem perceber que continua cadastrado depois de sair deve avisar por ticket.
 
 **Art. 8.6** — O caixa da corporação é gerido pelo comandante no site, e toda movimentação fica registrada. Retirada sem justificativa é peculato.
 
@@ -507,9 +543,9 @@ Nenhum salário do Governo pode passar de 2 vezes o valor da tabela do Art. 10.8
 | Nível | Exemplos | Punição |
 |---|---|---|
 | Leve | Fail RP pequeno, OOC no chat, Vida Leve | Advertência |
-| Médio | RDM, VDM, MG, QRR off game, PG, Combat Log, saque irregular | 2ª advertência, depois 2 dias de banimento |
-| Grave | Reincidência, abuso de cargo, busca ilegal, triagem por lado, desvio grande, juiz que julga impedido | 3 a 7 dias de banimento |
-| Gravíssimo | Exploit, duplicação, conta alternativa, venda por fora, prova falsificada | Permanente |
+| Médio | RDM, VDM, MG, QRR off game, PG, Forçar RP, Autoridade como arma, Combat Log, saque irregular | 2ª advertência, depois 2 dias de banimento |
+| Grave | Reincidência, abuso de cargo, busca ilegal, triagem por lado, desvio grande, juiz que julga impedido, usar serviço ou equipamento de corporação da qual não faz parte (Art. 8.5A) | 3 a 7 dias de banimento |
+| Gravíssimo | Exploit, duplicação, conta alternativa, venda por fora, prova falsificada (inclui laudo sem comparação e evidência apagada por bug) | Permanente |
 | Imediato | Racismo, homofobia, xenofobia, assédio, ameaça real | Permanente, sem advertência |
 
 **Art. 11.2** — Advertências expiram após 30 dias sem nova infração.

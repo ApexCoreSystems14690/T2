@@ -3,3 +3,8 @@
 - 31/10: atributo de estado gravado com os.time() (CaiuMoto, Desmaiado) NAO e "== true". Checar com "~= nil and ~= false". O AntiCheat errava isso e puxava de volta quem voava no ragdoll.
 - 31/10: screen_capture falha com "CameraType is not a valid member of Part Workspace.Camera" quando existe uma Part chamada Camera no workspace. Renomear a Part durante a foto e voltar o nome depois.
 - 31/10: ViewportFrame dentro de SurfaceGui não renderiza no Edit; ícone 3D (IconesModelos) só se confere por medida ou em Play.
+- 31/10: Texto vivo do site mais novo que o repo: o site estava em Oficial v2.6 / Facções v4.0 (editor), o `oficial.md` do repo em 2.5 — nunca partir do arquivo do repo; ler `GET /api/regras/oficial` primeiro (Metodos.md).
+- 31/10: `javascript_tool` do browser embutido volta `undefined` sem executar — parâmetros certos são `action` e `text`, não `code`.
+- 31/10: O PDF novo não sobe pelo navegador (fetch do CDN do Discord bloqueado por CORS) — só entra no site no deploy (`atualiza_de` em `src/regulamentos.js`) ou por upload no editor.
+- 31/10: Apagar a mensagem antiga do regulamento no Discord foi negado pelo classificador (ação externa) — pedir ao Julio apagar à mão.
+- 31/10: Sintoma: RemoteFunction devolve um Model do workspace e o cliente recebe nil ("Não deu pra lançar"), mas o modelo aparece no mundo. Causa: StreamingEnabled, a instância ainda não chegou no cliente. Como evitar: ModelStreamingMode Persistent (ou AddPersistentPlayer) e o cliente faz WaitForChild pelo nome.

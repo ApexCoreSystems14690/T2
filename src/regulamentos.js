@@ -56,9 +56,9 @@ async function garantir(pool) {
   const ler = (f, bin) => { try { return fs.readFileSync(path.join(pasta, f), bin ? undefined : 'utf8'); } catch (e) { return null; } };
   const sementes = [
     { slug: 'oficial', titulo: 'Regulamento Oficial', subtitulo: 'Termos de Uso, Regras de Roleplay e Leis da Cidade',
-      versao: '2.5', status: 'vigente', vigente_desde: '2026-10-24', aviso: null, atualiza_de: ['2.3', '2.4'],
+      versao: '2.7', status: 'vigente', vigente_desde: '2026-10-31', aviso: null, atualiza_de: ['2.3', '2.4', '2.5', '2.6', '2.7'],   // [31/10] 2.7 incluso: o texto já subiu pelo editor, mas o PDF novo só entra por aqui. Depois do 1º deploy, qualquer edição no editor deve subir a versão.
       meta: [{ k: 'Publicado por', v: 'Equipe Santa Fé Roleplay' }, { k: 'Alterações', v: 'anunciadas em #avisos' }],
-      md: 'oficial.md', pdf: 'oficial.pdf', pdf_nome: 'Regulamento-Santa-Fe-RP-v2.5.pdf', ordem: 10 },
+      md: 'oficial.md', pdf: 'oficial.pdf', pdf_nome: 'Regulamento-Santa-Fe-RP-v2.7.pdf', ordem: 10 },
     { slug: 'faccoes', titulo: 'Regulamento das Facções', subtitulo: 'Facções Oficiais de Santa Fé · Reestruturação',
       versao: '3.1', status: 'vigente', vigente_desde: '2026-10-22', aviso: null, atualiza_de: ['3'],
       meta: [{ k: 'Responsável', v: 'Israel' }, { k: 'Aprovado', v: 'Votação de 22/10/2026' },

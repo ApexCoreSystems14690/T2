@@ -57,3 +57,5 @@
 - Mecanicas/granadas.md — granadas (M67, fumaça, luz no armário das corps; molotov e bomba caseira no craft), GranadaService e números (31/10) — antes de mexer em granada, explosão ou craft de molotov
 - Armadilhas-2.md — continuacao das armadilhas (bugs) — ler junto com Armadilhas.md em bug
 - Mecanicas/armas-novas.md — 12 armas novas de 31/10 (fontes, calibragem, conversor, laser) — ler ao mexer em arma nova
+- Mecanicas/drone.md — drone do BOPE/PC estilo Ghost Recon (31/10): modelo, controles, servidor, marca, painel 25k — ler ao mexer no drone
+- Mecanicas/regulamento-oficial.md — Oficial v2.7 (forçar RP, autoridade como arma), como editar site/PDF/#termos, o que falta (31/10) — antes de mexer no regulamento ou postar nos termos
