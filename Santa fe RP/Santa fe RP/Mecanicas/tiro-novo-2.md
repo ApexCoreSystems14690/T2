@@ -27,6 +27,9 @@
 
 - 31/10: Testers: Cidade trata a place de dev (servidor público, fora do Studio) como cidade "testes" com status "testers" — entra direto pela página da experiência de dev, não vai pro lobby, save separado; RegistroCidade não redireciona. Testado o núcleo sem Play (dev = testes/testers; principal = sem-cidade/publico; Studio = santa-fe/estudio). Backups Cidade/RegistroCidade_antes_testers_3110.
 
+- 31/10: Postura x corrida: agachado trava em 8 e deitado em 3 todo quadro; corrida não liga agachado/deitado/caído. Caído/morto solta a anim de agachar/deitar na hora. Backups em ServerStorage.Backups_Morte_3110.
+- 31/10: Queda/morte: membros colidem desde o 1º instante e o corpo é erguido se afundou (Ragdoll.desafundar). Testado no Play com RagdollEmEtapas em pé e agachado: corpo deitado no chão, pernas fora do piso.
+
 ## Falta
 - Julio testar os 4 conjuntos (F7) e escolher; publicar os escolhidos + "Postura | deitar" e mandar os IDs.
 - Deitar no celular (hoje só tecla).

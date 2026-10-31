@@ -31,3 +31,4 @@ Histórico completo antes daqui: memória do Project `santa-fe-balistica` e `san
 
 ## Armadilhas
 - 24/10: Key2 em ponto com Action local nunca chega no servidor → `SegundaNoServidor = true` na Action.
+- 31/10: Julio: limite de 4 cápsulas por jogador num raio (atirou mais, apaga as antigas e entram as novas; perícia igual). Feito no BalisticaService.tiroSaiu: cápsula guarda Dono e Ordem; num raio de 30 studs ficam só as 4 mais novas do mesmo jogador (de outros não contam). Teto geral 12 e rajada (1 a cada 3) continuam. Backup ServerStorage.Backups_ACS_3110.BalisticaService_antes_limite4. Não testado em Play.

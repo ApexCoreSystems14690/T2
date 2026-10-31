@@ -53,3 +53,4 @@
 - Mecanicas/tiro-novo.md — sistema de tiro refeito do zero: decisões, levantamento do velho, ganchos a religar, plano (29/10) — antes de mexer em arma, tiro, FX ou som de tiro
 - Mecanicas/tiro-novo-2.md — continuação do tiro novo: conjuntos de animação (F7), agachar/deitar/rastejar com arma, deslize ao pegar a arma (30/10) — antes de mexer em animação de arma, postura ou entrada da 1ª pessoa
 - Mecanicas/passada-camera-som.md — passada única: pisada pela perna, som por material/chuva, balanço da câmera preso no pé (30/10) — antes de mexer em som de passo, balanço de câmera ou respiração
+- Mecanicas/admin-god.md — /god com cura completa (caído, sangue/O2, ferimentos, sequelas, faixas, tela escura) (31/10) — antes de mexer no /god ou em cura de admin
