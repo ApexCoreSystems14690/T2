@@ -51,7 +51,6 @@ const NOME_DIA = ['domingo', 'segunda', 'terça', 'quarta', 'quinta', 'sexta', '
 function validarGrade(g) {
   if (!g || typeof g !== 'object' || Array.isArray(g)) return null;
   const out = {};
-  let algum = false;
   for (let w = 0; w <= 6; w++) {
     const d = g[w] !== undefined ? g[w] : g[String(w)];
     if (d === null || d === undefined || d === false) continue;
@@ -59,9 +58,10 @@ function validarGrade(g) {
     if (!Number.isInteger(abre) || !Number.isInteger(fecha)) return null;
     if (abre < 0 || abre > 23 || fecha <= abre || fecha > 24) return null;
     out[w] = { abre, fecha };
-    algum = true;
   }
-  return algum ? out : null;
+  // [02/11] grade EXPLICITAMENTE vazia ({} ou todos os dias null) = ZERO momentos abertos (hiato).
+  // Antes devolvia null e a cidade caía na grade padrão do Santa Fé. Ausente/inválida continua null.
+  return out;
 }
 function gradeDe(ajustes) {
   return (ajustes && validarGrade(ajustes.grade)) || GRADE;

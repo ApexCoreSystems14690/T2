@@ -1013,7 +1013,7 @@ async function lerGrade() {
   const out = {};
   if (SSU.validarGrade(v.grade)) out.grade = SSU.validarGrade(v.grade);
   if (v.sempre_aberta === true) out.sempre_aberta = true;
-  if (v.hiato === true) out.hiato = true;   // [02/11] cidade em hiato: 100% fechada
+  if (v.hiato === true) { out.hiato = true; out.grade = {}; }   // [02/11] hiato = grade com ZERO momentos abertos (o jogo já obedece a grade)
   return out;
 }
 function comGrade(ajustes, g) {
@@ -1167,7 +1167,12 @@ router.put('/ssu/grade', requirePoder('ssu'), async (req, res) => {
        ON CONFLICT (cidade_id, key) DO UPDATE SET value = EXCLUDED.value, updated_at = NOW()`, [JSON.stringify(valor)]);
     await audit(req, 'ssu:grade', valor);
     const r = await pool.query(`SELECT value FROM game_config WHERE cidade_id = sf_cidade_padrao() AND key = 'ssu'`);
-    const n = await empurrarPraServidores((r.rows[0] && r.rows[0].value) || {}, req);
+    let ajNoite = (r.rows[0] && r.rows[0].value) || {};
+    if (valor.hiato) {   // [02/11] entrar em hiato derruba também o que estava aberto na mão (avulsa, início, extensão)
+      ajNoite = Object.assign({}, ajNoite); delete ajNoite.avulsa; delete ajNoite.iniciadaAs; delete ajNoite.estendidaAte;
+      await salvarAjustes(ajNoite);
+    }
+    const n = await empurrarPraServidores(ajNoite, req);
     const aj = await lerAjustes(), agora = Math.floor(Date.now() / 1000);
     res.json({ ok: true, servidores: n, grade: SSU.gradeTexto(aj), estado: SSU.estado(agora, aj) });
   } catch (err) { console.error('ssu/grade:', err.message); res.status(500).json({ error: 'Erro interno' }); }
