@@ -1013,11 +1013,12 @@ async function lerGrade() {
   const out = {};
   if (SSU.validarGrade(v.grade)) out.grade = SSU.validarGrade(v.grade);
   if (v.sempre_aberta === true) out.sempre_aberta = true;
+  if (v.hiato === true) out.hiato = true;   // [02/11] cidade em hiato: 100% fechada
   return out;
 }
 function comGrade(ajustes, g) {
   const a = Object.assign({}, ajustes || {});
-  delete a.grade; delete a.sempre_aberta;
+  delete a.grade; delete a.sempre_aberta; delete a.hiato;
   return Object.assign(a, g || {});
 }
 async function lerAjustes() {
@@ -1057,7 +1058,7 @@ router.get('/ssu', requirePoder('ssu'), async (req, res) => {
     res.json({
       ok: true, agora, souDono: ehDono,
       grade: SSU.gradeTexto(ajustes),
-      grade_cfg: { grade: ajustes.grade || null, sempre_aberta: ajustes.sempre_aberta === true, padrao: SSU.GRADE },
+      grade_cfg: { grade: ajustes.grade || null, sempre_aberta: ajustes.sempre_aberta === true, hiato: ajustes.hiato === true, padrao: SSU.GRADE },
       estado: SSU.estado(agora, ajustes),
       acoes: SSU.acoesPossiveis(agora, ajustes, ehDono),
       ajustes,
@@ -1077,6 +1078,7 @@ router.post('/ssu', requirePoder('ssu'), async (req, res) => {
     // unica acao que NAO depende de haver sessao -- o sentido dela e que nao ha nenhuma.
     if (acao === 'abrir') {
       if (!ehDono) return res.status(403).json({ error: 'So o Dono abre SSU fora da grade' });
+      if (ajustes.hiato === true) return res.status(400).json({ error: 'Cidade em hiato: saia do hiato antes de abrir' });
       if (!podem.abrirAgora) return res.status(400).json({ error: 'Ja tem SSU acontecendo agora' });
       const novoAv = {
         por: req.user.discord_username || ('user#' + req.user.id), em: agora,
@@ -1154,7 +1156,7 @@ router.put('/ssu/grade', requirePoder('ssu'), async (req, res) => {
   try {
     if (!perm.ehDonoAqui(req.user)) return res.status(403).json({ error: 'Só o Dono da cidade muda a grade do SSU' });
     const b = req.body || {};
-    const valor = { sempre_aberta: b.sempre_aberta === true };
+    const valor = { sempre_aberta: b.sempre_aberta === true, hiato: b.hiato === true };   // [02/11] hiato
     if (b.grade !== null && b.grade !== undefined) {
       const g = SSU.validarGrade(b.grade);
       if (!g) return res.status(400).json({ error: 'Grade inválida: cada dia é {abre 0-23, fecha até 24, depois de abrir} ou vazio' });

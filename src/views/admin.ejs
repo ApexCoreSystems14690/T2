@@ -229,6 +229,11 @@
           <b>Grade desta cidade</b> — roda sozinha. Cada cidade tem a sua.
           <div id="ssu-grade" style="margin-top:.3rem"></div>
         </div>
+        <%# [02/11] HIATO: só o Dono da cidade (o back também barra). Larga a grade e fecha 100% %>
+        <div id="ssu-hiato" style="display:none;margin-top:.7rem">
+          <button class="btn danger" id="ssu-hiato-on" onclick="ssuHiato(true)" style="display:none"><svg class="ic" aria-hidden="true"><use href="/icones.svg#cadeado-aberto"/></svg>Entrar em hiato (fechar 100%)</button>
+          <button class="btn" id="ssu-hiato-off" onclick="ssuHiato(false)" style="display:none"><svg class="ic" aria-hidden="true"><use href="/icones.svg#play"/></svg>Sair do hiato (volta pra grade)</button>
+        </div>
         <%# [24/10] grade própria por cidade: só o Dono da cidade edita (o back também barra) %>
         <div id="ssu-editor" style="display:none;margin-top:.7rem;border-top:1px solid var(--linha);padding-top:.6rem">
           <label style="display:flex;gap:.4rem;align-items:center;font-size:.85rem;font-weight:600"><input type="checkbox" id="ssu-sempre"> Sempre aberta (sem grade, ex.: servidor de testes)</label>
@@ -807,7 +812,9 @@
           + (e.aberto ? '<span class="ponto ok"></span>Aberto' : '<span class="ponto"></span>Fechado') + '</span>'
           + (e.estendida ? ' <span class="muted" style="font-size:.8rem">(estendido)</span>' : '');
         let quando = '';
-        if (e.motivo === 'sempre_aberta') {
+        if (e.motivo === 'hiato') {
+          quando = 'Cidade em HIATO: 100% fechada, sem grade, ninguém entra até o Dono sair do hiato.';
+        } else if (e.motivo === 'sempre_aberta') {
           quando = 'Esta cidade fica sempre aberta (sem grade).';
         } else if (e.aberto && e.sessao && e.sessao.avulsa) {
           // [05/10] SSU avulsa: o fim nao e hora de grade, e um instante. Mostro a hora dele.
@@ -824,6 +831,12 @@
         $('ssu-quando').textContent = quando;
         $('ssu-grade').innerHTML = (d.grade || []).map(l => '• ' + l).join('<br>');
         if (d.souDono && d.grade_cfg && !ssuEditando) ssuMontaEditor(d.grade_cfg);
+        // [02/11] botões do hiato (só o Dono)
+        ssuCfg = d.grade_cfg || {};
+        $('ssu-hiato').style.display = d.souDono ? '' : 'none';
+        $('ssu-hiato-on').style.display = (d.souDono && !ssuCfg.hiato) ? '' : 'none';
+        $('ssu-hiato-off').style.display = (d.souDono && ssuCfg.hiato) ? '' : 'none';
+        if (e.motivo === 'hiato') $('ssu-estado').innerHTML = '<span style="color:#B23227"><span class="ponto"></span>Fechado · em hiato</span>';
         const a = d.acoes || {};
         // [05/10] 'Abrir SSU agora' so existe pro DONO -- o back tambem barra (403).
         $('ssu-abrir').style.display    = a.abrirAgora ? '' : 'none';
@@ -839,6 +852,22 @@
             + String(a.estenderAte % 24).padStart(2, '0') + ':00';
         }
       } catch (err) {}
+    }
+    // [02/11] entrar/sair do hiato: reenvia a config atual da grade com o hiato ligado/desligado
+    let ssuCfg = {};
+    async function ssuHiato(ligar) {
+      const aviso = ligar
+        ? 'ENTRAR EM HIATO?\n\nA cidade larga a grade e fica 100% FECHADA (nada de SSU avulsa, extensão ou início). Quem está dentro é expulso. Só volta quando você sair do hiato.'
+        : 'SAIR DO HIATO?\n\nA cidade volta a seguir a grade normal.';
+      if (!confirm(aviso)) return;
+      $('ssu-msg').textContent = 'mandando…';
+      try {
+        const corpo = { sempre_aberta: !!ssuCfg.sempre_aberta, grade: ssuCfg.grade || null, hiato: ligar };
+        const r = await fetch('/api/admin/ssu/grade', { method: 'PUT', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(corpo) });
+        const j = await r.json();
+        $('ssu-msg').textContent = r.ok ? ((ligar ? 'Cidade em hiato. ' : 'Hiato desligado. ') + (j.servidores || 0) + ' servidor(es) avisado(s) na hora.') : ('Não deu: ' + (j.error || 'erro'));
+      } catch (e) { $('ssu-msg').textContent = 'Não deu: sem resposta do site.'; }
+      ssuCarrega();
     }
     // [24/10] editor da grade da cidade (Dono)
     let ssuEditando = false;
@@ -861,7 +890,7 @@
       $('ssu-tab').querySelectorAll('tr[data-w]').forEach(tr => {
         if (tr.querySelector('.tem').checked) grade[tr.dataset.w] = { abre: Number(tr.querySelector('.abre').value), fecha: Number(tr.querySelector('.fecha').value) };
       });
-      const corpo = { sempre_aberta: $('ssu-sempre').checked, grade: Object.keys(grade).length ? grade : null };
+      const corpo = { sempre_aberta: $('ssu-sempre').checked, hiato: !!ssuCfg.hiato, grade: Object.keys(grade).length ? grade : null };   // [02/11] salvar grade não tira do hiato
       $('ssu-msg').textContent = 'salvando…';
       try {
         const r = await fetch('/api/admin/ssu/grade', { method: 'PUT', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(corpo) });

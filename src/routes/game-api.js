@@ -297,7 +297,9 @@ router.get('/ssu', async (req, res) => {
         await (async () => { const g = (await pool.query(`SELECT value FROM game_config WHERE cidade_id = sf_cidade_padrao() AND key = 'ssu_grade'`)).rows[0];
                              const v = (g && g.value) || {}; const o = {};
                              const gr = require('../ssu').validarGrade(v.grade); if (gr) o.grade = gr;
-                             if (v.sempre_aberta === true) o.sempre_aberta = true; return o; })()),
+                             if (v.sempre_aberta === true) o.sempre_aberta = true;
+                             if (v.hiato === true) o.hiato = true;   // [02/11] cidade em hiato: o jogo fecha tudo
+                             return o; })()),
       staff: st.rows.map(x => Number(x.roblox_id)),
       agora: Math.floor(Date.now() / 1000),
     });
@@ -694,7 +696,7 @@ router.post('/heartbeat', async (req, res) => {
     // [24/10] o jogo lê config.ssu: vai junto a grade própria da cidade
     if (config.ssu_grade) {
       const gr = require('../ssu').validarGrade(config.ssu_grade.grade);
-      config.ssu = Object.assign({}, config.ssu || {}, gr ? { grade: gr } : {}, config.ssu_grade.sempre_aberta === true ? { sempre_aberta: true } : {});
+      config.ssu = Object.assign({}, config.ssu || {}, gr ? { grade: gr } : {}, config.ssu_grade.sempre_aberta === true ? { sempre_aberta: true } : {}, config.ssu_grade.hiato === true ? { hiato: true } : {});
     }
     res.json({ ok: true, config, entregas });
   } catch (err) {

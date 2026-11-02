@@ -156,6 +156,9 @@ function proximaSessao(epoch, ajustes) {
 }
 function estado(epoch, ajustes) {
   ajustes = (ajustes && typeof ajustes === 'object') ? ajustes : {};
+  // [02/11] HIATO: a cidade larga a grade e fica 100% fechada (sem avulsa, sem extensão, sem nada)
+  // até o Dono tirar do hiato. Ganha de tudo, inclusive de `sempre_aberta`.
+  if (ajustes.hiato === true) return { aberto: false, motivo: 'hiato', sessao: null, proxima: null, abreEm: null };
   if (ajustes.sempre_aberta === true) return { aberto: true, motivo: 'sempre_aberta', sessao: null, fechaEm: null, estendida: false };
   const s = sessaoVigente(epoch, ajustes);
   if (s) {
@@ -178,6 +181,7 @@ function acoesPossiveis(epoch, ajustes, ehDono) {
   const s = sessaoVigente(epoch, ajustes);
   const acoes = { encerrar: false, reabrir: false, estender: false, estenderAte: null,
                   iniciarAgora: false, abrirAgora: false, abrirAte: null, estenderAvulsaAte: null };
+  if (ajustes.hiato === true) return acoes;           // [02/11] em hiato: nenhuma ação de SSU (nem abrir avulsa)
   if (ajustes.sempre_aberta === true) return acoes;   // [24/10] cidade sem grade: nada pra abrir/fechar
 
   // ABRIR AGORA: so o DONO, e so quando NAO tem nada acontecendo.
@@ -222,6 +226,7 @@ function hhmm(seg) {
 }
 function gradeTexto(ajustes) {
   // [24/10] a grade DA CIDADE (ou a padrão); dia sem SSU aparece como "sem SSU"
+  if (ajustes && ajustes.hiato === true) return ['Em hiato: cidade 100% fechada, sem grade, até o Dono reabrir'];
   if (ajustes && ajustes.sempre_aberta === true) return ['Sempre aberta: esta cidade não tem grade de SSU'];
   const G = gradeDe(ajustes);
   return [1, 2, 3, 4, 5, 6, 0].map(w => {
