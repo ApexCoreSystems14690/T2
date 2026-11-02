@@ -1013,7 +1013,7 @@ async function lerGrade() {
   const out = {};
   if (SSU.validarGrade(v.grade)) out.grade = SSU.validarGrade(v.grade);
   if (v.sempre_aberta === true) out.sempre_aberta = true;
-  if (v.hiato === true) { out.hiato = true; out.grade = {}; }   // [02/11] hiato = grade com ZERO momentos abertos (o jogo já obedece a grade)
+  if (v.hiato === true) { out.hiato = true; out.grade = SSU.GRADE_HIATO; }   // [02/11] hiato = grade mínima (quarta 04-05h): o jogo já obedece a grade
   return out;
 }
 function comGrade(ajustes, g) {

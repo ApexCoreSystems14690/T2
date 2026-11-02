@@ -63,6 +63,11 @@ function validarGrade(g) {
   // Antes devolvia null e a cidade caía na grade padrão do Santa Fé. Ausente/inválida continua null.
   return out;
 }
+// [02/11] GRADE DO HIATO. [stated] Julio: o hiato é "uma grade que abre por quase nada, num dia absurdamente
+// específico". O jogo (Regras.SSU, Luau) já obedece grade e não aceita grade vazia, então o hiato manda
+// ESTA: quarta 04:00-05:00 (BRT), a menor janela que a grade permite (hora inteira). O site mostra
+// "fechado" o tempo todo (estado() olha o hiato antes); só o jogo enxerga essa 1h de quarta de madrugada.
+const GRADE_HIATO = { 3: { abre: 4, fecha: 5 } };
 function gradeDe(ajustes) {
   return (ajustes && validarGrade(ajustes.grade)) || GRADE;
 }
@@ -235,5 +240,5 @@ function gradeTexto(ajustes) {
   });
 }
 
-module.exports = { validarGrade, gradeDe, FUSO, GRADE, EXTENSAO_MAX, AVULSA_HORAS, AVULSA_MAX, NOME_DIA, calendario, chaveDia, sessaoDoDia, sessaoAvulsa, sessaoVigente,
+module.exports = { GRADE_HIATO, validarGrade, gradeDe, FUSO, GRADE, EXTENSAO_MAX, AVULSA_HORAS, AVULSA_MAX, NOME_DIA, calendario, chaveDia, sessaoDoDia, sessaoAvulsa, sessaoVigente,
   proximaSessao, estado, acoesPossiveis, horaTexto, hhmm, gradeTexto };
